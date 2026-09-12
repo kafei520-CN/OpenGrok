@@ -1107,6 +1107,61 @@ html.opengrok #app.og-settings-on .composer-wrap {
   display: none !important;
 }
 
+html.opengrok #app.og-review-on {
+  grid-template-rows: var(--og-title) minmax(0, 1fr);
+}
+
+html.opengrok #app.og-review-on #og-rail {
+  grid-row: 1 / -1;
+}
+
+html.opengrok #app.og-review-on #grok-header,
+html.opengrok #app.og-review-on .topbar {
+  display: flex !important;
+}
+
+html.opengrok #app.og-review-on #grok-body,
+html.opengrok #app.og-review-on #composer-wrap,
+html.opengrok #app.og-review-on .composer-wrap,
+html.opengrok #app.og-review-on #og-settings,
+html.opengrok #app.og-review-on #og-dash {
+  display: none !important;
+}
+
+html.opengrok #og-review {
+  grid-column: 2;
+  grid-row: 2 / -1;
+  z-index: 8;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+html.opengrok .og-review-frame {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--bg);
+}
+
+html.opengrok .og-review-stat {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 550;
+  font-style: normal;
+}
+
+html.opengrok .og-review-stat .add {
+  color: #16a34a;
+  margin-right: 6px;
+}
+
+html.opengrok .og-review-stat .del {
+  color: #e11d48;
+}
+
 html.opengrok #og-settings {
   grid-column: 2;
   grid-row: 2 / -1;

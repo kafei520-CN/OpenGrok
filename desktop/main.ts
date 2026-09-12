@@ -415,7 +415,7 @@ async function runHost(method: string, params: Record<string, unknown>): Promise
     case 'refresh':
       return true;
     case 'showDiff':
-      openDiffWindow(params);
+      sendUi({ type: 'workspaceDiff', ...params });
       return true;
     default:
       throw new Error(`unknown host method ${method}`);
@@ -524,99 +524,7 @@ app.on('before-quit', () => {
   stopSidecar();
 });
 
-type DiffSession = {
-  payload: Record<string, unknown>;
-  messageId?: string;
-};
-
-const diffWindows = new Map<number, DiffSession>();
-
-function openDiffWindow(params: Record<string, unknown>): void {
-  const payload = {
-    locale: params['locale'],
-    files: params['files'],
-    messageId: params['messageId'],
-    theme: params['theme'],
-  };
-  const existing = [...diffWindows.entries()].find(([, row]) => row.messageId === params['messageId']);
-  if (existing) {
-    const win = BrowserWindow.fromId(existing[0]);
-    if (win && !win.isDestroyed()) {
-      diffWindows.set(win.id, {
-        payload,
-        messageId: typeof params['messageId'] === 'string' ? params['messageId'] : undefined,
-      });
-      win.webContents.send('grok-host', { type: 'diff', payload });
-      win.show();
-      win.focus();
-      return;
-    }
-  }
-  const chrome = readThemeChrome();
-  const win = new BrowserWindow({
-    width: 1000,
-    height: 760,
-    minWidth: 640,
-    minHeight: 420,
-    title: params['locale'] === 'zh-CN' ? '审查' : 'Review',
-    autoHideMenuBar: true,
-    backgroundColor: chrome.background,
-    icon: path.join(rootDir(), 'resources', 'icon.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-    },
-  });
-  diffWindows.set(win.id, {
-    payload,
-    messageId: typeof params['messageId'] === 'string' ? params['messageId'] : undefined,
-  });
-  win.on('closed', () => {
-    diffWindows.delete(win.id);
-  });
-  void win.loadFile(path.join(rootDir(), 'plugin', 'media', 'diff.html'));
-  win.webContents.on('did-finish-load', () => {
-    win.webContents.send('grok-host', { type: 'diff', payload });
-  });
-}
-
-function diffMessage(raw: unknown): { type?: string; path?: string } | undefined {
-  if (!raw || typeof raw !== 'object') {
-    return undefined;
-  }
-  const row = raw as { source?: unknown; message?: unknown; type?: unknown; path?: unknown };
-  const inner = row.source === 'grok-diff' ? row.message : raw;
-  if (!inner || typeof inner !== 'object') {
-    return undefined;
-  }
-  const msg = inner as { type?: unknown; path?: unknown };
-  return {
-    type: typeof msg.type === 'string' ? msg.type : undefined,
-    path: typeof msg.path === 'string' ? msg.path : undefined,
-  };
-}
-
-ipcMain.on('grok-ui', (event, message: { type?: string }) => {
-  const sender = BrowserWindow.fromWebContents(event.sender);
-  const session = sender ? diffWindows.get(sender.id) : undefined;
-  if (session && sender && !sender.isDestroyed()) {
-    const msg = diffMessage(message);
-    if (msg?.type === 'ready') {
-      sender.webContents.send('grok-host', { type: 'diff', payload: session.payload });
-      return;
-    }
-    if (msg?.type === 'revert') {
-      sendSidecar({ type: 'ui', message: { type: 'undoEdits', messageId: session.messageId } });
-      return;
-    }
-    if (msg?.type === 'openFile' && msg.path) {
-      void shell.openPath(msg.path);
-      return;
-    }
-    return;
-  }
+ipcMain.on('grok-ui', (_event, message: { type?: string }) => {
   if (message?.type === 'pickProject') {
     void pickProject();
     return;

@@ -13,6 +13,7 @@ import {
   iconSun,
 } from '../icons';
 import { listedSessions, sessionButton } from './sessions';
+import { closeDesktopReview, reviewBack, reviewNav, reviewOpen } from './reviewStage';
 import { openDeskTab, settingsNavItems } from './settingsStage';
 import { escapeHtml } from '../transcript/markdown';
 
@@ -41,6 +42,8 @@ export function patchRail(parent: HTMLElement): void {
   el.classList.remove('og-rail-dash');
   if (ui.state.settingsOpen) {
     el.append(settingsBack(), settingsSearch(), settingsNav());
+  } else if (reviewOpen()) {
+    el.append(reviewBack(), reviewNav());
   } else {
     el.append(brand(), newChat(), nav(), projects(), recents(), footer());
     applyRailFilter();
@@ -63,6 +66,7 @@ function railKey(): string {
     ui.state.locale ?? 'en',
     ui.state.status ?? '',
     ui.state.settingsOpen ? `set:${ui.deskTab}:${ui.state.settingsPage ?? 'main'}` : 'chat',
+    ui.review ? `rev:${ui.review.active ?? 'all'}:${(ui.review.files ?? []).length}` : '',
     ui.state.drawer ?? '',
     (ui.state.roster ?? []).map((row) => `${row.id}:${row.activity}:${row.title}`).join('|'),
     (ui.state.subagents ?? []).map((row) => row.id).join('|'),

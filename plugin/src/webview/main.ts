@@ -6,6 +6,7 @@ import { applyThemeTo } from '../settings/theme';
 import { bindRender, isBooting, isDesktop, isRemoteWeb, normalizeState, persistUi, post, root, ui } from './app';
 import { patchRail } from './shell/rail';
 import { patchDesktopDash } from './shell/dashboard';
+import { closeDesktopReview, openDesktopReview, patchReviewStage, reviewOpen } from './shell/reviewStage';
 import { patchSettingsStage } from './shell/settingsStage';
 import { patchHeader, renderDrawer, renderLightbox } from './chrome';
 import { mountComposer, patchComposer } from './chrome/composer';
@@ -122,6 +123,19 @@ function onHostMessage(data: HostMsg | null | undefined): void {
   }
   if (data.type === 'tail' && data.message) {
     applyTail(data as StreamTail);
+    return;
+  }
+  if (isDesktop() && (data.type === 'workspaceDiff' || data.type === 'diff')) {
+    const payload =
+      data.type === 'diff' && data.payload && typeof data.payload === 'object'
+        ? data.payload
+        : {
+            locale: typeof data.locale === 'string' ? data.locale : undefined,
+            files: Array.isArray(data.files) ? data.files : undefined,
+            messageId: typeof data.messageId === 'string' ? data.messageId : undefined,
+            theme: data.theme,
+          };
+    openDesktopReview(payload);
     return;
   }
   if (!isDesktop() && data.type === 'workspaceDiff') {
@@ -262,18 +276,19 @@ function render(): void {
       patchRail(root);
     }
     const settingsOn = isDesktop() && Boolean(ui.state.settingsOpen);
+    const reviewing = reviewOpen();
     root.classList.toggle('og-settings-on', settingsOn);
     if (!settingsOn || isDesktop()) {
       patchHeader(root);
     }
-    if (!settingsOn) {
+    if (!settingsOn && !reviewing) {
       patchBody(root);
     }
     const booting = isBooting();
-    if (!settingsOn && !booting && !document.getElementById('composer-wrap')) {
+    if (!settingsOn && !reviewing && !booting && !document.getElementById('composer-wrap')) {
       mountComposer(root);
     }
-    if (!settingsOn) {
+    if (!settingsOn && !reviewing) {
       patchComposer();
       syncDropHint();
     }
@@ -283,11 +298,11 @@ function render(): void {
     }
     const body = document.getElementById('grok-body');
     if (body) {
-      body.hidden = settingsOn;
+      body.hidden = settingsOn || reviewing;
     }
     const composer = document.getElementById('composer-wrap');
     if (composer) {
-      composer.hidden = settingsOn || booting;
+      composer.hidden = settingsOn || reviewing || booting;
     }
     const workspaceOn =
       !isDesktop() &&
@@ -301,7 +316,7 @@ function render(): void {
     } else {
       hideWorkspace();
     }
-    const deskDash = isDesktop() && ui.state.drawer === 'dashboard' && !settingsOn;
+    const deskDash = isDesktop() && ui.state.drawer === 'dashboard' && !settingsOn && !reviewing;
     root.classList.toggle('og-dash-on', deskDash);
     patchDesktopDash(root, settingsOn);
     if (ui.state.drawer && !settingsOn && !deskDash) {
@@ -311,6 +326,7 @@ function render(): void {
     }
     if (isDesktop()) {
       patchSettingsStage(root);
+      patchReviewStage(root);
     } else {
       patchSettings(root);
     }
@@ -343,6 +359,7 @@ function boot(): void {
         event.preventDefault();
         post({ type: 'closeSettings' });
         post({ type: 'closeDrawer' });
+        closeDesktopReview();
         ui.wantFocus = true;
         post({ type: 'newSession' });
         return;
@@ -370,6 +387,10 @@ function boot(): void {
       }
     }
     if (event.key !== 'Escape') {
+      return;
+    }
+    if (closeDesktopReview()) {
+      event.preventDefault();
       return;
     }
     if (hideRemoteOverlays()) {

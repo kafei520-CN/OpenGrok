@@ -211,6 +211,9 @@ function remoteViewSeg(): HTMLElement {
 }
 
 function desktopHeaderTitle(): string {
+  if (ui.review) {
+    return tr('reviewTitle');
+  }
   if (ui.state.settingsOpen) {
     return tr('settingsTitle');
   }

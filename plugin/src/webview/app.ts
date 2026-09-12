@@ -91,6 +91,15 @@ export const ui = {
   wsChatPx: readPx(vscode.getState(), 'wsChatPx', 360),
   deskTab: 'account' as DeskTab,
   heatGranularity: 'day' as 'day' | 'week' | 'cumul',
+  review: undefined as
+    | {
+        locale?: string;
+        files?: unknown[];
+        messageId?: string;
+        theme?: unknown;
+        active?: string;
+      }
+    | undefined,
 };
 
 export type DeskTab =
