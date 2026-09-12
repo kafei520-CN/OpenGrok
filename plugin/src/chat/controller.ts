@@ -903,11 +903,14 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     this.pendingModelId = modelId;
     this.persistPicker();
+    if (this.catalogModels) {
+      this.catalogModels = { ...this.catalogModels, currentId: modelId };
+    }
     if (this.models) {
       this.models = { ...this.models, currentId: modelId };
       const effort = this.selectedEffort();
       if (effort) {
-        this.patchCurrentEffort(effort);
+        this.applyEffortToModels(effort);
       }
       this.emit();
     }
@@ -2002,6 +2005,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   emit(): void {
     this.models = this.overlayModels();
+    this.syncPickerOntoModels();
     this.dropUnknownPicker();
     this.flushEmitTimer();
     if (this.status === 'streaming') {
@@ -2124,7 +2128,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     await runSlashAction(this, action);
   }
 
-  private patchCurrentEffort(level: string): void {
+  private applyEffortToModels(level: string): void {
     if (!this.models) {
       return;
     }
@@ -2134,6 +2138,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         model.id === this.models?.currentId ? { ...model, currentEffort: level } : model,
       ),
     };
+  }
+
+  private patchCurrentEffort(level: string): void {
+    this.applyEffortToModels(level);
     this.emit();
   }
 
@@ -2539,6 +2547,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   private applyPendingModelSelection(): void {
     this.models = this.overlayModels();
+    this.syncPickerOntoModels();
+  }
+
+  private syncPickerOntoModels(): void {
     if (!this.models) {
       return;
     }
@@ -2554,7 +2566,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     const effort = this.selectedEffort();
     if (effort) {
-      this.patchCurrentEffort(effort);
+      this.applyEffortToModels(effort);
     }
   }
 

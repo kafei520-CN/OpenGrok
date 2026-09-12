@@ -10,6 +10,8 @@
   --link: var(--vscode-textLink-foreground);
   --error: var(--vscode-errorForeground);
   --ok: #3fb950;
+  --add: #3fb950;
+  --del: #f85149;
   --warn: #d29922;
   --font: var(--vscode-font-family);
   --mono: var(--vscode-editor-font-family, ui-monospace, monospace);
@@ -1753,11 +1755,11 @@ textarea:focus-visible {
 }
 
 .live-edits-stats .add {
-  color: var(--ok);
+  color: var(--add);
 }
 
 .live-edits-stats .del {
-  color: #f85149;
+  color: var(--del);
 }
 
 .live-edits-stats .tick {
@@ -1958,12 +1960,12 @@ textarea:focus-visible {
 
 .changes-diff .add,
 .change-stat .add {
-  color: var(--ok);
+  color: var(--add);
 }
 
 .changes-diff .del,
 .change-stat .del {
-  color: var(--error, #f85149);
+  color: var(--del);
 }
 
 .steps-card {
@@ -4550,11 +4552,11 @@ html.ws-dragging .ws-chat {
 }
 
 .ws-tab-stat .add {
-  color: var(--ok);
+  color: var(--add);
 }
 
 .ws-tab-stat .del {
-  color: var(--error);
+  color: var(--del);
 }
 
 .ws-tab-close {

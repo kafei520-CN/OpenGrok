@@ -13,7 +13,7 @@ import {
   iconSun,
 } from '../icons';
 import { listedSessions, sessionButton } from './sessions';
-import { closeDesktopReview, reviewBack, reviewNav, reviewOpen } from './reviewStage';
+import { reviewBack, reviewNav, reviewOpen, reviewSearch } from './reviewStage';
 import { openDeskTab, settingsNavItems } from './settingsStage';
 import { escapeHtml } from '../transcript/markdown';
 
@@ -43,7 +43,7 @@ export function patchRail(parent: HTMLElement): void {
   if (ui.state.settingsOpen) {
     el.append(settingsBack(), settingsSearch(), settingsNav());
   } else if (reviewOpen()) {
-    el.append(reviewBack(), reviewNav());
+    el.append(reviewBack(), reviewSearch(), reviewNav());
   } else {
     el.append(brand(), newChat(), nav(), projects(), recents(), footer());
     applyRailFilter();

@@ -164,6 +164,7 @@ export function settingsTabs(): Array<{ id: DeskTab; label: string }> {
 
 export function openDeskTab(tab: DeskTab): void {
   ui.deskTab = tab;
+  ui.review = undefined;
   if (tab === 'models') {
     post({ type: 'openApis' });
     return;

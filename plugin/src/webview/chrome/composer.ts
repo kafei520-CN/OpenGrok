@@ -243,15 +243,18 @@ function fillComposerBar(bar: HTMLElement, input: HTMLTextAreaElement): void {
 
 function composerBarKey(): string {
   const model = ui.state.models;
-  const current = model?.available.find((item) => item.id === model.currentId);
+  const currentId = ui.chosenModelId ?? model?.currentId;
+  const current = model?.available.find((item) => item.id === currentId);
+  const effort = ui.chosenEffort ?? current?.currentEffort ?? '';
   return [
     ui.state.status,
     ui.state.modeId ?? '',
-    model?.currentId ?? '',
-    current?.currentEffort ?? '',
+    currentId ?? '',
+    effort,
     current?.efforts?.join(',') ?? '',
     ui.picker ?? '',
     pendingEffortModel ?? '',
+    ui.chosenModelId ?? '',
     ui.state.locale ?? '',
     canType() ? '1' : '0',
     (model?.available.length ?? 0).toString(),
@@ -376,7 +379,8 @@ function fillContextTip(
 }
 
 function currentModel(): ModelOption | undefined {
-  return ui.state.models?.available.find((m) => m.id === ui.state.models?.currentId);
+  const id = ui.chosenModelId ?? ui.state.models?.currentId;
+  return ui.state.models?.available.find((m) => m.id === id);
 }
 
 function modelById(id?: string): ModelOption | undefined {
@@ -409,6 +413,9 @@ function currentModeLabel(): string {
 
 function currentEffortValue(model?: ModelOption): string {
   const target = model ?? currentModel();
+  if (ui.chosenEffort && (!target || target.id === (ui.chosenModelId ?? ui.state.models?.currentId))) {
+    return ui.chosenEffort;
+  }
   if (target?.currentEffort) {
     return target.currentEffort;
   }
@@ -433,7 +440,9 @@ function displayEffort(level?: string): string {
 
 function combinedModelEffortLabel(): string {
   const model = modelById(pendingEffortModel) ?? currentModel();
-  const name = modelDisplayName(model?.id ?? ui.state.models?.currentId, model?.name) || 'Grok';
+  const name =
+    modelDisplayName(model?.id ?? ui.chosenModelId ?? ui.state.models?.currentId, model?.name) ||
+    'Grok';
   const effort = displayEffort(currentEffortValue(model));
   return effort ? `${name} · ${effort}` : name;
 }
@@ -483,7 +492,7 @@ function modelEffortPicker(): HTMLElement {
       pendingEffortModel = undefined;
     } else {
       ui.picker = 'model';
-      pendingEffortModel = ui.state.models?.currentId;
+      pendingEffortModel = ui.chosenModelId ?? ui.state.models?.currentId;
     }
     ui.moreOpen = false;
     ui.menu = undefined;
@@ -506,6 +515,7 @@ function modelEffortPicker(): HTMLElement {
       (item) => {
         ui.picker = undefined;
         pendingEffortModel = undefined;
+        ui.chosenEffort = item.id;
         if (!item.selected) {
           post({ type: 'setEffort', level: item.id });
         }
@@ -522,10 +532,12 @@ function modelEffortPicker(): HTMLElement {
     models.map((model) => ({
       id: model.id,
       label: modelDisplayName(model.id, model.name) || model.id,
-      selected: model.id === (pendingEffortModel ?? ui.state.models?.currentId),
+      selected: model.id === (pendingEffortModel ?? ui.chosenModelId ?? ui.state.models?.currentId),
     })),
     (item) => {
       pendingEffortModel = item.id;
+      ui.chosenModelId = item.id;
+      ui.chosenEffort = undefined;
       if (ui.state.models) {
         ui.state.models = { ...ui.state.models, currentId: item.id };
       }
@@ -533,7 +545,8 @@ function modelEffortPicker(): HTMLElement {
         post({ type: 'setModel', modelId: item.id });
       }
       const picked = modelById(item.id);
-      ui.picker = effortChoices(picked).length ? 'effort' : undefined;
+      const listed = (picked?.efforts ?? []).filter((level) => level.trim().length > 0);
+      ui.picker = listed.length ? 'effort' : undefined;
       if (ui.picker !== 'effort') {
         pendingEffortModel = undefined;
       }

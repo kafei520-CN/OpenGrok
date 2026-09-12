@@ -1,7 +1,9 @@
 import type { FileDiff } from '../../edits/diff';
+import type { ThemeColors } from '../../core/types';
 import { isDesktop, post, render, tr, ui } from '../app';
-import { iconBack } from '../icons';
+import { iconBack, iconSearch } from '../icons';
 import { escapeHtml } from '../transcript/markdown';
+import { mountDiffView } from '../editor/diffView';
 
 export type ReviewPayload = {
   locale?: string;
@@ -10,7 +12,7 @@ export type ReviewPayload = {
   theme?: unknown;
 };
 
-let hooked = false;
+let reviewQuery = '';
 
 export function openDesktopReview(payload: ReviewPayload): void {
   if (!isDesktop()) {
@@ -21,6 +23,8 @@ export function openDesktopReview(payload: ReviewPayload): void {
     files: Array.isArray(payload.files) ? payload.files : [],
     active: 'all',
   };
+  reviewQuery = '';
+  ui.state = { ...ui.state, settingsOpen: false, drawer: undefined };
   post({ type: 'closeSettings' });
   post({ type: 'closeDrawer' });
   render();
@@ -31,6 +35,7 @@ export function closeDesktopReview(): boolean {
     return false;
   }
   ui.review = undefined;
+  reviewQuery = '';
   render();
   return true;
 }
@@ -54,19 +59,16 @@ export function patchReviewStage(parent: HTMLElement): void {
   }
   const files = reviewFiles();
   const active = ui.review?.active ?? 'all';
-  const key = `${ui.review?.messageId ?? ''}:${active}:${files.map((row) => row.path).join('|')}`;
+  const key = `${ui.review?.messageId ?? ''}:${active}:${files.map((row) => row.path).join('|')}:${ui.state.locale ?? ''}`;
   if (el.dataset.key === key) {
     return;
   }
   el.dataset.key = key;
   el.replaceChildren();
-  hookFrame();
-  const frame = document.createElement('iframe');
-  frame.className = 'og-review-frame';
-  frame.title = tr('reviewTitle');
-  frame.src = '../plugin/media/diff.html';
-  frame.addEventListener('load', () => pushDiff(frame));
-  el.append(frame);
+  const pane = document.createElement('div');
+  pane.className = 'og-set-pane';
+  pane.append(reviewDeck(files, active));
+  el.append(pane);
 }
 
 export function reviewBack(): HTMLElement {
@@ -83,16 +85,99 @@ export function reviewBack(): HTMLElement {
   return row;
 }
 
+export function reviewSearch(): HTMLElement {
+  const wrap = document.createElement('label');
+  wrap.className = 'og-search-wrap';
+  wrap.innerHTML = iconSearch();
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.className = 'og-search og-set-search';
+  input.placeholder = tr('reviewSearch');
+  input.value = reviewQuery;
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.addEventListener('input', () => {
+    reviewQuery = input.value;
+    applyReviewFilter();
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && input.value) {
+      event.stopPropagation();
+      reviewQuery = '';
+      input.value = '';
+      applyReviewFilter();
+    }
+  });
+  wrap.append(input);
+  return wrap;
+}
+
 export function reviewNav(): HTMLElement {
   const el = document.createElement('nav');
-  el.className = 'og-nav';
+  el.className = 'og-nav og-set-rail-nav';
+  const kicker = document.createElement('div');
+  kicker.className = 'og-kicker';
+  kicker.textContent = tr('reviewTitle');
+  el.append(kicker);
   const active = ui.review?.active ?? 'all';
   el.append(fileBtn('all', tr('reviewAll'), active === 'all', 0, 0));
   for (const file of reviewFiles()) {
     const name = file.path.replace(/\\/g, '/').split('/').pop() ?? file.path;
     el.append(fileBtn(file.path, name, active === file.path, file.added, file.removed));
   }
+  queueMicrotask(() => applyReviewFilter());
   return el;
+}
+
+function reviewDeck(files: FileDiff[], active: string): HTMLElement {
+  const pages = [
+    { id: 'all', label: tr('reviewAll') },
+    ...files.map((file) => ({
+      id: file.path,
+      label: file.path.replace(/\\/g, '/').split('/').pop() ?? file.path,
+    })),
+  ];
+  const front = pages.find((row) => row.id === active) ?? pages[0];
+  const deck = document.createElement('div');
+  deck.className = 'og-deck';
+  deck.style.setProperty('--og-stack', String(Math.max(0, pages.length - 1)));
+  const tabs = document.createElement('div');
+  tabs.className = 'og-deck-tabs';
+  for (const page of pages) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = page.id === front.id ? 'og-deck-tab on' : 'og-deck-tab';
+    btn.textContent = page.label;
+    btn.title = page.label;
+    btn.addEventListener('click', () => selectReview(page.id));
+    tabs.append(btn);
+  }
+  const layers = document.createElement('div');
+  layers.className = 'og-deck-layers';
+  layers.setAttribute('aria-hidden', 'true');
+  for (let i = pages.length - 1; i >= 1; i -= 1) {
+    const layer = document.createElement('span');
+    layer.style.setProperty('--i', String(i));
+    layers.append(layer);
+  }
+  const sheet = document.createElement('div');
+  sheet.className = 'og-deck-sheet og-review-sheet';
+  const body = document.createElement('div');
+  body.className = 'og-diff';
+  const shown = front.id === 'all' ? files : files.filter((row) => row.path === front.id);
+  mountDiffView(body, {
+    locale: ui.review?.locale,
+    files: shown,
+    messageId: ui.review?.messageId,
+    theme: ui.review?.theme as ThemeColors | undefined,
+  }, {
+    embedded: true,
+    onRevert: () => post({ type: 'undoEdits', messageId: ui.review?.messageId }),
+    onOpenFile: (path) => post({ type: 'openFile', path }),
+  });
+  sheet.append(body);
+  deck.append(tabs, layers, sheet);
+  return deck;
 }
 
 function fileBtn(id: string, label: string, on: boolean, added: number, removed: number): HTMLElement {
@@ -100,19 +185,36 @@ function fileBtn(id: string, label: string, on: boolean, added: number, removed:
   btn.type = 'button';
   btn.className = on ? 'og-nav-item on' : 'og-nav-item';
   btn.title = label;
+  btn.dataset.label = label;
   const stats =
     id === 'all'
       ? ''
       : `<em class="og-review-stat"><span class="add">+${added}</span><span class="del">−${removed}</span></em>`;
   btn.innerHTML = `<span>${escapeHtml(label)}</span>${stats}`;
-  btn.addEventListener('click', () => {
-    if (!ui.review || ui.review.active === id) {
-      return;
-    }
-    ui.review = { ...ui.review, active: id };
-    render();
-  });
+  btn.addEventListener('click', () => selectReview(id));
   return btn;
+}
+
+function selectReview(id: string): void {
+  if (!ui.review || ui.review.active === id) {
+    return;
+  }
+  ui.review = { ...ui.review, active: id };
+  render();
+}
+
+function applyReviewFilter(): void {
+  const q = reviewQuery.trim().toLowerCase();
+  const nav = document.querySelector('#og-rail .og-set-rail-nav');
+  if (!nav) {
+    return;
+  }
+  for (const child of Array.from(nav.children) as HTMLElement[]) {
+    if (child.classList.contains('og-kicker')) {
+      continue;
+    }
+    child.hidden = Boolean(q) && !(child.dataset.label ?? '').toLowerCase().includes(q);
+  }
 }
 
 function reviewFiles(): FileDiff[] {
@@ -123,58 +225,4 @@ function reviewFiles(): FileDiff[] {
   return rows.filter((row): row is FileDiff => {
     return Boolean(row && typeof row === 'object' && typeof (row as FileDiff).path === 'string');
   });
-}
-
-function hookFrame(): void {
-  if (hooked) {
-    return;
-  }
-  hooked = true;
-  window.addEventListener('message', onFrameMessage);
-}
-
-function pushDiff(frame: HTMLIFrameElement): void {
-  const payload = ui.review;
-  if (!payload || !frame.contentWindow) {
-    return;
-  }
-  const files = reviewFiles();
-  const active = payload.active ?? 'all';
-  const shown = active === 'all' ? files : files.filter((row) => row.path === active);
-  frame.contentWindow.postMessage(
-    {
-      type: 'diff',
-      payload: {
-        locale: payload.locale,
-        files: shown,
-        messageId: payload.messageId,
-        theme: payload.theme,
-      },
-    },
-    '*',
-  );
-}
-
-function onFrameMessage(
-  event: MessageEvent<{ source?: string; message?: { type?: string; path?: string } }>,
-): void {
-  if (event.data?.source !== 'grok-diff' || !event.data.message) {
-    return;
-  }
-  const msg = event.data.message;
-  if (msg.type === 'ready') {
-    const frame = document.querySelector('#og-review iframe.og-review-frame');
-    if (frame instanceof HTMLIFrameElement) {
-      pushDiff(frame);
-    }
-    return;
-  }
-  if (msg.type === 'revert') {
-    post({ type: 'undoEdits', messageId: ui.review?.messageId });
-    return;
-  }
-  if (msg.type === 'openFile' && msg.path) {
-    post({ type: 'openFile', path: msg.path });
-    return;
-  }
 }

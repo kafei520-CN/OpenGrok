@@ -91,6 +91,8 @@ export const ui = {
   wsChatPx: readPx(vscode.getState(), 'wsChatPx', 360),
   deskTab: 'account' as DeskTab,
   heatGranularity: 'day' as 'day' | 'week' | 'cumul',
+  chosenModelId: undefined as string | undefined,
+  chosenEffort: undefined as string | undefined,
   review: undefined as
     | {
         locale?: string;

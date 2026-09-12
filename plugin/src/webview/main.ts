@@ -79,6 +79,27 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     } else if (resolved.live) {
       incoming.restoringSession = false;
     }
+    if (incoming.currentSessionId !== ui.state.currentSessionId) {
+      ui.chosenModelId = undefined;
+      ui.chosenEffort = undefined;
+    }
+    if (ui.review) {
+      incoming.settingsOpen = false;
+    }
+    if (
+      ui.chosenModelId &&
+      incoming.models?.available.some((model) => model.id === ui.chosenModelId)
+    ) {
+      incoming.models = {
+        ...incoming.models,
+        currentId: ui.chosenModelId,
+        available: incoming.models.available.map((model) =>
+          model.id === ui.chosenModelId && ui.chosenEffort
+            ? { ...model, currentEffort: ui.chosenEffort }
+            : model,
+        ),
+      };
+    }
     ui.state = incoming;
     persistUi();
     const cue = ui.state.notify;
@@ -275,7 +296,7 @@ function render(): void {
     if (isDesktop()) {
       patchRail(root);
     }
-    const settingsOn = isDesktop() && Boolean(ui.state.settingsOpen);
+    const settingsOn = isDesktop() && Boolean(ui.state.settingsOpen) && !ui.review;
     const reviewing = reviewOpen();
     root.classList.toggle('og-settings-on', settingsOn);
     if (!settingsOn || isDesktop()) {
@@ -318,7 +339,7 @@ function render(): void {
     }
     const deskDash = isDesktop() && ui.state.drawer === 'dashboard' && !settingsOn && !reviewing;
     root.classList.toggle('og-dash-on', deskDash);
-    patchDesktopDash(root, settingsOn);
+    patchDesktopDash(root, settingsOn || reviewing);
     if (ui.state.drawer && !settingsOn && !deskDash) {
       replaceSlot('grok-drawer', renderDrawer(), root);
     } else {
@@ -366,6 +387,7 @@ function boot(): void {
       }
       if (key === ',') {
         event.preventDefault();
+        ui.review = undefined;
         if (ui.state.settingsOpen) {
           post({ type: 'closeSettings' });
         } else {
