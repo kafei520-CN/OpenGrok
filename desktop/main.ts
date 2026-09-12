@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 
 const electron = resolveElectron();
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } = electron;
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } = electron;
 
 function resolveElectron(): typeof import('electron') {
   const mod = ElectronNS as typeof import('electron') & { default?: typeof import('electron') };
@@ -41,6 +41,8 @@ let sidecar: ChildProcessWithoutNullStreams | undefined;
 let promptWindow: BrowserWindow | undefined;
 let promptConfig: unknown;
 let promptResolve: ((value: unknown) => void) | undefined;
+let tray: InstanceType<typeof Tray> | undefined;
+let isQuitting = false;
 
 function rootDir(): string {
   return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
@@ -117,7 +119,7 @@ function createWindow(): BrowserWindow {
     alwaysOnTop: false,
     backgroundColor: chrome.background,
     title: APP_NAME,
-    icon: path.join(rootDir(), 'resources', 'icon.png'),
+    icon: iconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -128,12 +130,81 @@ function createWindow(): BrowserWindow {
   win.setAlwaysOnTop(false);
   win.setMenuBarVisibility(false);
   void win.loadFile(path.join(rootDir(), 'desktop', 'index.html'));
-  win.on('close', () => {
-    writeState({ bounds: win.getBounds() });
+  win.on('close', (event) => {
+    if (!win.isDestroyed()) {
+      writeState({ bounds: win.getBounds() });
+    }
+    if (isQuitting) {
+      return;
+    }
+    event.preventDefault();
+    hideToTray();
   });
   win.on('maximize', () => win.webContents.send('grok-maximized', true));
   win.on('unmaximize', () => win.webContents.send('grok-maximized', false));
   return win;
+}
+
+function iconPath(): string {
+  return path.join(rootDir(), 'resources', 'icon.png');
+}
+
+function hideToTray(): void {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  win.hide();
+  win.setSkipTaskbar(true);
+}
+
+function showMainWindow(): void {
+  let win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    win = createWindow();
+    mainWindow = win;
+    win.webContents.on('did-finish-load', () => {
+      if (!sidecar) {
+        startSidecar(readState().cwd || defaultCwd());
+      }
+    });
+  }
+  win.setSkipTaskbar(false);
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  win.focus();
+}
+
+function quitApp(): void {
+  isQuitting = true;
+  const win = mainWindow;
+  if (win && !win.isDestroyed()) {
+    writeState({ bounds: win.getBounds() });
+  }
+  stopSidecar();
+  tray?.destroy();
+  tray = undefined;
+  app.quit();
+}
+
+function createTray(): void {
+  if (tray) {
+    return;
+  }
+  const source = nativeImage.createFromPath(iconPath());
+  const image = source.isEmpty() ? source : source.resize({ width: 16, height: 16 });
+  tray = new Tray(image.isEmpty() ? iconPath() : image);
+  tray.setToolTip(APP_NAME);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: '打开 OpenGrok', click: () => showMainWindow() },
+      { type: 'separator' },
+      { label: '退出', click: () => quitApp() },
+    ]),
+  );
+  tray.on('click', () => showMainWindow());
 }
 
 function sendUi(payload: unknown): void {
@@ -506,21 +577,40 @@ async function pickProject(): Promise<void> {
   startSidecar(folder);
 }
 
-app.whenReady().then(() => {
-  writeState({ cwd: defaultCwd() });
-  seedTheme();
-  mainWindow = createWindow();
-  mainWindow.webContents.on('did-finish-load', () => {
-    startSidecar(readState().cwd || defaultCwd());
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    showMainWindow();
   });
-});
+  void app.whenReady().then(() => {
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('cn.mckafei.opengrok');
+    }
+    writeState({ cwd: defaultCwd() });
+    seedTheme();
+    createTray();
+    mainWindow = createWindow();
+    mainWindow.webContents.on('did-finish-load', () => {
+      startSidecar(readState().cwd || defaultCwd());
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
-  stopSidecar();
-  app.quit();
+  if (isQuitting) {
+    stopSidecar();
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  showMainWindow();
 });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   stopSidecar();
 });
 
@@ -567,7 +657,7 @@ ipcMain.on('grok-window', (_event, action: 'min' | 'max' | 'close') => {
     }
     return;
   }
-  win.close();
+  hideToTray();
 });
 
 ipcMain.handle('grok-maximized', () => Boolean(mainWindow?.isMaximized()));
