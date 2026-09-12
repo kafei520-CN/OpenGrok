@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "types": ["node"]
+  },
+  "include": ["desktop/**/*.ts", "plugin/src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "plugin/dist", "plugin/src/extension.ts", "plugin/src/chat/chatView.ts"]
+}

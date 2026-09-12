@@ -1,0 +1,49 @@
+<!doctype html>
+<html class="opengrok" lang="zh-CN" data-version="0.3.0">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob: file: https:; media-src 'self' blob: file:; font-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https: http://127.0.0.1:* http://localhost:*;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>OpenGrok</title>
+    <link rel="stylesheet" href="../plugin/media/chat.css" />
+    <link rel="stylesheet" href="../plugin/media/katex/katex.min.css" />
+    <link rel="stylesheet" href="./workbench.css" />
+  </head>
+  <body>
+    <div id="app">Starting OpenGrok…</div>
+    <script>
+      window.acquireVsCodeApi = function () {
+        if (window.__grokVscode) {
+          return window.__grokVscode;
+        }
+        var state = undefined;
+        try {
+          state = JSON.parse(localStorage.getItem('grok-ui') || 'null');
+        } catch (error) {}
+        window.__grokVscode = {
+          postMessage: function (msg) {
+            window.opengrok.post(msg);
+          },
+          getState: function () {
+            return state;
+          },
+          setState: function (next) {
+            state = next;
+            try {
+              localStorage.setItem('grok-ui', JSON.stringify(next));
+            } catch (error) {}
+          },
+        };
+        return window.__grokVscode;
+      };
+      window.opengrok.onHost(function (data) {
+        window.dispatchEvent(new MessageEvent('message', { data: data }));
+      });
+    </script>
+    <script src="../plugin/dist/webview.js"></script>
+  </body>
+</html>

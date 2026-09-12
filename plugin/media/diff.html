@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; img-src data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+  />
+  <link rel="stylesheet" href="./diff.css" />
+  <title>OpenGrok Diff</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window.acquireVsCodeApi = function () {
+      if (window.__grokDiffApi) {
+        return window.__grokDiffApi;
+      }
+      window.__grokDiffApi = {
+        postMessage: function (msg) {
+          if (window.opengrok && window.opengrok.post) {
+            window.opengrok.post({ source: 'grok-diff', message: msg });
+            return;
+          }
+          parent.postMessage({ source: 'grok-diff', message: msg }, '*');
+        },
+      };
+      return window.__grokDiffApi;
+    };
+    if (window.opengrok && window.opengrok.onHost) {
+      window.opengrok.onHost(function (data) {
+        window.dispatchEvent(new MessageEvent('message', { data: data }));
+      });
+    }
+  </script>
+  <script src="../dist/diff.js"></script>
+</body>
+</html>

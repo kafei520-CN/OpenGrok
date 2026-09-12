@@ -1,0 +1,1699 @@
+html.opengrok {
+  --og-rail: 264px;
+  --og-title: env(titlebar-area-height, 36px);
+  --motion: 140ms ease;
+  --bg: #ffffff;
+  --fg: #1c1c1c;
+  --muted: color-mix(in srgb, var(--fg) 55%, transparent);
+  --elev: color-mix(in srgb, var(--fg) 6%, var(--bg));
+  --line: color-mix(in srgb, var(--fg) 12%, transparent);
+  --hover: color-mix(in srgb, var(--fg) 8%, transparent);
+  --accent: var(--fg);
+  --on-accent: var(--bg);
+  --accent-muted: var(--hover);
+  --ink: var(--bg);
+  --vscode-foreground: var(--fg);
+  --vscode-descriptionForeground: var(--muted);
+  --vscode-sideBar-background: var(--bg);
+  --vscode-editor-background: var(--bg);
+  --vscode-textLink-foreground: var(--fg);
+  --vscode-errorForeground: #ef4444;
+  --vscode-font-family: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  --ice: var(--fg);
+  --ice-dim: color-mix(in srgb, var(--fg) 16%, transparent);
+  --ok: #22c55e;
+  --warn: #f59e0b;
+  --r: 12px;
+  --glass-edge: color-mix(in srgb, var(--fg) 16%, transparent);
+  --glass-border: 1px solid var(--glass-edge);
+  --glass-sheen: inset 0 1px 0 color-mix(in srgb, var(--fg) 22%, transparent);
+  --glass-shadow: var(--glass-sheen), 0 16px 36px color-mix(in srgb, #000 12%, transparent);
+  --glass-shadow-sm: var(--glass-sheen), 0 8px 16px color-mix(in srgb, #000 8%, transparent);
+  --glass-film: color-mix(in srgb, var(--bg) var(--chrome-fill, 72%), transparent);
+  --pane: color-mix(in srgb, var(--fg) 6%, transparent);
+  --pane-strong: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+html.opengrok,
+html.opengrok body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+html.opengrok body {
+  display: flex;
+  flex-direction: column;
+}
+
+#og-titlebar {
+  display: none;
+}
+
+.og-drag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+}
+
+.og-title-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.og-win {
+  display: flex;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.og-win button {
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  color: var(--muted);
+  position: relative;
+}
+
+.og-win button::before {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+}
+
+.og-win button[data-win="min"]::before {
+  height: 1px;
+  width: 10px;
+  background: currentColor;
+}
+
+.og-win button[data-win="max"]::before {
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+body.og-max .og-win button[data-win="max"]::before {
+  width: 8px;
+  height: 8px;
+  box-shadow: 2px -2px 0 -1px currentColor;
+}
+
+.og-win button[data-win="close"]::before,
+.og-win button[data-win="close"]::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 12px;
+  height: 1px;
+  background: currentColor;
+}
+
+.og-win button[data-win="close"]::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.og-win button[data-win="close"]::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.og-win button:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.og-win button[data-win="close"]:hover {
+  background: #e5484d;
+  color: #fff;
+}
+
+html.opengrok #app {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--og-rail) minmax(0, 1fr);
+  grid-template-rows: var(--og-title) minmax(0, 1fr) auto;
+  background: var(--bg);
+  padding: 0;
+}
+
+html.opengrok #app.og-dash-on,
+html.opengrok #app:has(#og-dash) {
+  grid-template-columns: var(--og-rail) minmax(0, 1fr) 320px;
+}
+
+html.opengrok #app.og-dash-on .topbar,
+html.opengrok #app.og-dash-on #grok-body,
+html.opengrok #app.og-dash-on #composer-wrap,
+html.opengrok #app:has(#og-dash) .topbar,
+html.opengrok #app:has(#og-dash) #grok-body,
+html.opengrok #app:has(#og-dash) #composer-wrap {
+  grid-column: 2;
+}
+
+html.opengrok #app.og-dash-on .drawer-layer,
+html.opengrok #app:has(#og-dash) .drawer-layer,
+html.opengrok #app.og-dash-on #grok-veil,
+html.opengrok #app:has(#og-dash) #grok-veil {
+  display: none !important;
+}
+
+html.opengrok #app[data-surface='glass'],
+html.opengrok #app[data-surface='solid'] {
+  padding: 0;
+}
+
+html.opengrok #app[data-surface='glass']::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 680px at 8% -10%, color-mix(in srgb, var(--fg) 11%, transparent), transparent 56%),
+    radial-gradient(860px 540px at 108% 8%, color-mix(in srgb, var(--fg) 8%, transparent), transparent 52%),
+    radial-gradient(720px 480px at 62% 118%, color-mix(in srgb, var(--fg) 7%, transparent), transparent 58%);
+}
+
+html.opengrok #grok-wallpaper,
+html.opengrok #grok-frost {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
+html.opengrok #grok-frost {
+  inset: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  display: none;
+}
+
+#og-rail,
+html.opengrok .topbar,
+html.opengrok #grok-body,
+html.opengrok #composer-wrap,
+html.opengrok #og-settings {
+  position: relative;
+  z-index: 1;
+}
+
+#og-rail {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 10px 10px;
+  gap: 8px;
+  border-right: 1px solid var(--line);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.25);
+  backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.25);
+}
+
+html.opengrok #app[data-surface='solid'] #og-rail {
+  background: var(--elev);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.og-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 10px;
+}
+
+.og-brand-back {
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.og-brand-back:hover {
+  background: var(--hover);
+}
+
+.og-set-back {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 8px;
+}
+
+.og-set-back button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.og-set-back button:hover {
+  background: var(--hover);
+}
+
+.og-set-chord {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding-right: 6px;
+}
+
+.og-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.og-logo.pulse {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 28%, transparent);
+}
+
+.og-brand-copy strong {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.og-new,
+.og-nav-item,
+.og-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 8px);
+  margin: 0 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-align: left;
+  color: color-mix(in srgb, var(--fg) 86%, transparent);
+}
+
+.og-new {
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 620;
+}
+
+.og-new svg {
+  color: currentColor;
+}
+
+.og-new:hover {
+  background: color-mix(in srgb, var(--fg) 88%, var(--bg));
+}
+
+.og-nav-item:hover,
+.og-project:hover,
+.og-account:hover,
+.og-gear:hover {
+  background: var(--hover);
+}
+
+.og-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.og-nav-item.on,
+.og-project.on {
+  background: var(--pane-strong);
+  color: var(--fg);
+}
+
+.og-section,
+.og-recents {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.og-recents {
+  flex: 1;
+  padding-top: 6px;
+}
+
+.og-kicker {
+  padding: 8px 14px 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.og-empty {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.og-session-list {
+  overflow: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.og-session-list .session-row,
+.og-session {
+  border-radius: 10px;
+}
+
+html.opengrok .og-session .session-time {
+  display: none;
+}
+
+html.opengrok .og-session .session-main {
+  grid-template-columns: 1fr;
+  padding: 7px 10px;
+}
+
+html.opengrok .og-session .session-tools {
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.opengrok .og-session:hover .session-tools,
+html.opengrok .og-session:focus-within .session-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+html.opengrok .og-session.active {
+  box-shadow: none;
+  background: var(--pane-strong);
+}
+
+.og-search-wrap {
+  position: relative;
+  display: block;
+  margin: 2px 4px 6px;
+}
+
+.og-search-wrap > svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.og-search {
+  width: 100%;
+  padding: 7px 10px 7px 30px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--pane);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+
+.og-search:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--fg) 28%, transparent);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+.og-search::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+html.opengrok #og-dash {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  padding-top: var(--og-title);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.og-dash-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 8px;
+}
+
+.og-dash-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+
+.og-dash-close:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.og-dash {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 12px 16px;
+  scrollbar-width: thin;
+}
+
+.og-footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.og-account {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 12px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.og-account.on,
+.og-account:hover {
+  background: var(--hover);
+}
+
+.og-account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.og-account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.og-quota {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+  font-size: 12px;
+}
+
+.og-account-menu {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  padding: 12px 10px 8px;
+  border-radius: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 16%, transparent);
+}
+
+.og-account-quota {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 6px 10px;
+}
+
+.og-account-quota-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.og-account-quota-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.og-account-quota-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.og-account-quota-row .og-quota-bar {
+  flex: 1;
+}
+
+.og-account-quota-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.og-account-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px;
+  border-radius: 10px;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+}
+
+.og-account-item:hover {
+  background: var(--hover);
+}
+
+.og-account-item span {
+  flex: 1;
+}
+
+.og-account-item svg:first-child {
+  color: var(--fg);
+}
+
+.og-account-item span + svg {
+  color: var(--muted);
+  transform: rotate(-90deg);
+}
+
+.og-account-logout {
+  width: 100%;
+  padding: 10px 8px 6px;
+  text-align: left;
+  color: #e11d48;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.og-account-logout:hover {
+  background: transparent;
+  color: #be123c;
+}
+
+.og-gear {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+
+html.opengrok .topbar,
+html.opengrok #grok-body,
+html.opengrok #composer-wrap,
+html.opengrok .settings,
+html.opengrok .drawer-layer {
+  grid-column: 2;
+}
+
+html.opengrok #app.og-dash-on .topbar {
+  padding-right: 16px;
+}
+
+html.opengrok .topbar {
+  height: var(--og-title);
+  min-height: var(--og-title);
+  max-height: var(--og-title);
+  padding: 0 16px;
+  padding-right: 140px;
+  display: flex;
+  align-items: center;
+  background: var(--glass-film);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  -webkit-backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.2);
+  backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.2);
+}
+
+html.opengrok #app[data-surface='solid'] .topbar {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok .og-session-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.opengrok .og-topbar {
+  justify-content: flex-start;
+}
+
+html.opengrok .og-topbar .header-actions {
+  display: none;
+}
+
+html.opengrok .send-fab,
+html.opengrok #app[data-surface='glass'] .send-fab,
+html.opengrok #app[data-surface='solid'] .send-fab {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  border-color: transparent;
+}
+
+html.opengrok .send-fab:disabled,
+html.opengrok #app[data-surface='glass'] .send-fab:disabled {
+  background: color-mix(in srgb, var(--fg) 18%, transparent);
+  color: color-mix(in srgb, var(--bg) 55%, var(--fg));
+}
+
+html.opengrok .send-fab.stop,
+html.opengrok #app[data-surface='glass'] .send-fab.stop {
+  background: #e5484d;
+  color: #fff;
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab::after {
+  background: color-mix(in srgb, var(--bg) 14%, transparent);
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab:hover:not(:disabled) {
+  background: var(--fg);
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab.stop:hover:not(:disabled) {
+  background: color-mix(in srgb, #000 14%, #e5484d);
+}
+
+html.opengrok .composer-bar .seg {
+  background: var(--pane);
+  border: 1px solid var(--line);
+}
+
+html.opengrok .settings,
+html.opengrok .drawer-layer {
+  inset: 0;
+  left: 0;
+}
+
+html.opengrok .drawer-layer {
+  z-index: 9;
+}
+
+html.opengrok .drawer {
+  inset: 12px 12px 12px auto;
+  width: min(420px, calc(100% - 24px));
+  border-radius: 18px;
+}
+
+html.opengrok .drawer-scrim {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+html.opengrok .home.og-home {
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  padding: 3vh 32px 12px;
+}
+
+html.opengrok .og-home-mark {
+  color: var(--fg);
+  line-height: 0;
+  width: min(460px, 52%);
+}
+
+html.opengrok .og-home-mark-heavy {
+  width: min(580px, 64%);
+}
+
+html.opengrok .og-home-mark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+html.opengrok .og-home-mark .supergrok-mark__badge {
+  fill: var(--elev);
+}
+
+html.opengrok .og-home-mark .supergrok-mark__badge-stroke {
+  fill: none;
+  stroke: var(--line);
+}
+
+html.opengrok .og-home-mark .supergrok-mark__badge-text {
+  fill: var(--muted);
+}
+
+html.opengrok .og-home-logo,
+html.opengrok .og-login-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  object-fit: cover;
+  background: #fff;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--fg) 14%, transparent),
+    0 18px 40px color-mix(in srgb, #000 16%, transparent);
+}
+
+html.opengrok .og-login-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  margin: 0 auto 14px;
+  display: block;
+}
+
+html.opengrok .og-login {
+  max-width: 400px;
+  padding: 28px 24px;
+  border-radius: 20px;
+  border: var(--glass-border);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+}
+
+html.opengrok #app[data-surface='solid'] .og-login {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok .og-home h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 560;
+  letter-spacing: -0.045em;
+}
+
+html.opengrok .og-home-hint {
+  margin: 0 0 4px;
+  max-width: 440px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+html.opengrok .og-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(520px, 100%);
+  margin-top: 8px;
+}
+
+html.opengrok .og-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  min-height: 108px;
+  padding: 16px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 16px;
+  border: var(--glass-border);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  color: var(--fg);
+}
+
+html.opengrok .og-card:hover {
+  background: color-mix(in srgb, var(--bg) 58%, transparent);
+  border-color: color-mix(in srgb, var(--fg) 28%, transparent);
+  transform: translateY(-2px);
+}
+
+html.opengrok #app[data-surface='solid'] .og-card {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='solid'] .og-card:hover {
+  background: color-mix(in srgb, var(--fg) 8%, var(--elev));
+}
+
+html.opengrok .og-card-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
+
+html.opengrok .og-card-copy {
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 550;
+}
+
+html.opengrok .og-card.tone-explore .og-card-icon {
+  color: var(--muted);
+}
+
+html.opengrok .og-card.tone-build .og-card-icon {
+  color: #2563eb;
+}
+
+html.opengrok .og-card.tone-review .og-card-icon {
+  color: #16a34a;
+}
+
+html.opengrok .og-card.tone-fix .og-card-icon {
+  color: #e11d48;
+}
+
+html.opengrok .composer-wrap {
+  background: transparent;
+  padding: 8px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+html.opengrok .composer-wrap > * {
+  width: min(720px, 100%);
+}
+
+html.opengrok #composer-card,
+html.opengrok .composer-card {
+  width: min(720px, 100%);
+  border-radius: 18px;
+  border: var(--glass-border);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  box-shadow: var(--glass-shadow);
+}
+
+html.opengrok #app[data-surface='solid'] #composer-card,
+html.opengrok #app[data-surface='solid'] .composer-card {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app.focused .composer-card,
+html.opengrok #app[data-status='streaming'] .composer-card {
+  border-color: color-mix(in srgb, var(--fg) 32%, transparent);
+}
+
+html.opengrok button:focus-visible {
+  outline-color: color-mix(in srgb, var(--fg) 55%, transparent);
+}
+
+html.opengrok #app[data-surface='glass'] .starter:hover,
+html.opengrok #app[data-surface='glass'] .recent-card:hover,
+html.opengrok #app[data-surface='glass'] .recent-card.active,
+html.opengrok #app[data-surface='glass'] .btn:not(.primary):hover,
+html.opengrok #app[data-surface='glass'] .icon-btn:hover,
+html.opengrok #app[data-surface='glass'] .icon-btn.open,
+html.opengrok #app[data-surface='glass'] .jump-bottom:hover,
+html.opengrok #app[data-surface='glass'] .change-chip:hover,
+html.opengrok #app[data-surface='glass'] .live-edits-review:hover {
+  border-color: color-mix(in srgb, var(--fg) 32%, transparent);
+}
+
+html.opengrok .composer-card textarea {
+  min-height: 52px;
+  padding: 6px 4px 10px;
+  outline: none;
+  box-shadow: none;
+}
+
+html.opengrok .composer-card textarea:focus,
+html.opengrok .composer-card textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+html.opengrok button,
+html.opengrok .og-card,
+html.opengrok .session-row,
+html.opengrok .og-search,
+html.opengrok .composer-card {
+  transition:
+    background-color var(--motion),
+    border-color var(--motion),
+    color var(--motion),
+    transform var(--motion),
+    box-shadow var(--motion),
+    opacity var(--motion);
+}
+
+html.opengrok button:focus-visible,
+html.opengrok input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--fg) 45%, transparent);
+  outline-offset: 2px;
+}
+
+html.opengrok textarea:focus-visible {
+  outline: none;
+}
+
+html.opengrok .switch {
+  appearance: none;
+  width: 40px;
+  height: 24px;
+  padding: 2px;
+  border: none;
+  background: color-mix(in srgb, var(--fg) 16%, var(--bg));
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+html.opengrok .switch .knob {
+  width: 20px;
+  height: 20px;
+  background: var(--bg);
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 22%, transparent);
+}
+
+html.opengrok .switch.on {
+  background: var(--fg);
+  box-shadow: none;
+}
+
+html.opengrok .switch.on .knob {
+  transform: translateX(16px);
+  background: var(--bg);
+}
+
+html.opengrok .switch:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+html.opengrok .icon-btn {
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.opengrok * {
+    transition: none !important;
+  }
+}
+
+html.opengrok #app.ws-on {
+  grid-template-columns: var(--og-rail) minmax(240px, 1.1fr) minmax(380px, 1fr);
+  grid-template-rows: var(--og-title) minmax(0, 1fr) auto;
+}
+
+html.opengrok #app.ws-on #og-rail {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+html.opengrok #app.ws-on #grok-header {
+  grid-column: 2 / -1;
+  grid-row: 1;
+}
+
+html.opengrok #app.ws-on #grok-ws-shell {
+  grid-column: 2;
+  grid-row: 2 / -1;
+  min-width: 0;
+}
+
+html.opengrok #app.ws-on #grok-body,
+html.opengrok #app.ws-on #composer-wrap {
+  grid-column: 3;
+  background: transparent;
+}
+
+html.opengrok #app.ws-on #grok-body {
+  grid-row: 2;
+}
+
+html.opengrok #app.ws-on #composer-wrap {
+  grid-row: 3;
+}
+
+html.opengrok #app.ws-on #og-settings {
+  grid-column: 2 / -1;
+}
+
+html.opengrok #app.og-settings-on {
+  grid-template-rows: var(--og-title) minmax(0, 1fr);
+}
+
+html.opengrok #app.og-settings-on #og-rail {
+  grid-row: 1 / -1;
+}
+
+html.opengrok #app.og-settings-on #grok-header,
+html.opengrok #app.og-settings-on .topbar {
+  display: flex !important;
+}
+
+html.opengrok #app.og-settings-on #grok-body,
+html.opengrok #app.og-settings-on #composer-wrap,
+html.opengrok #app.og-settings-on .composer-wrap {
+  display: none !important;
+}
+
+html.opengrok #og-settings {
+  grid-column: 2;
+  grid-row: 2 / -1;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+}
+
+html.opengrok #app[data-surface='solid'] #og-settings {
+  background: var(--bg);
+}
+
+.og-set-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 32px 0;
+}
+
+.og-set-done {
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.og-set-done:hover {
+  background: color-mix(in srgb, var(--fg) 88%, var(--bg));
+}
+
+.og-set-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 28px 16px 12px;
+}
+
+.og-deck {
+  --og-layer: 8px;
+  --og-tab-h: 40px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.og-deck-tabs {
+  display: flex;
+  align-items: flex-end;
+  height: var(--og-tab-h);
+  gap: 0;
+  position: relative;
+  z-index: 6;
+  margin-bottom: -1px;
+  overflow: visible;
+}
+
+.og-deck-tabs::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line);
+}
+
+.og-deck-tab {
+  position: relative;
+  height: var(--og-tab-h);
+  margin-right: -6px;
+  padding: 0 22px;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--fg) 8%, var(--bg));
+  color: var(--muted);
+  font-weight: 620;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.og-deck-tab.on {
+  z-index: 8;
+  height: calc(var(--og-tab-h) + 6px);
+  margin-bottom: -6px;
+  padding-bottom: 6px;
+  border-bottom: none;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.og-deck-tab.on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  background: var(--bg);
+  pointer-events: none;
+}
+
+.og-deck-layers {
+  position: absolute;
+  top: var(--og-tab-h);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.og-deck-layers span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% - var(--og-stack, 0) * var(--og-layer));
+  border-radius: 0 16px 16px 0;
+  background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+  border: 1px solid var(--line);
+  transform: translateX(calc(var(--i) * var(--og-layer)));
+}
+
+.og-deck-sheet {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  width: calc(100% - var(--og-stack, 0) * var(--og-layer));
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-top: none;
+  border-radius: 0 16px 16px 0;
+  background: var(--bg);
+  padding: 22px 24px 28px;
+  box-sizing: border-box;
+}
+
+.og-set-pills {
+  margin: 0 0 8px;
+}
+
+.og-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.og-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.og-profile-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.og-profile-copy strong {
+  font-size: 15px;
+}
+
+.og-profile-copy span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.og-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.og-quota-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.og-quota-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.og-quota-head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.og-quota-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  overflow: hidden;
+}
+
+.og-quota-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2563eb;
+}
+
+.og-quota-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.og-quota-chip {
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: var(--pane);
+  color: var(--fg);
+}
+
+.og-quota-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.og-text-link {
+  padding: 0;
+  color: #2563eb;
+  font-size: 13px;
+}
+
+.og-text-link:hover {
+  text-decoration: underline;
+}
+
+.og-set-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.og-deck-sheet .og-set-body {
+  max-width: none;
+}
+
+.og-set-card {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  border-radius: 16px;
+  padding: 16px 18px 14px;
+}
+
+html.opengrok #app[data-surface='solid'] .og-set-card {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.og-set-card h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.og-set-line,
+.og-set-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.og-set-card > :first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.og-set-toggle div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.og-set-toggle span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.og-set-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.og-set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.og-set-seg,
+.og-set-pills,
+html.opengrok .settings-seg {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  width: auto;
+  max-width: 100%;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 3px;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 8%, var(--bg));
+  overflow: visible;
+}
+
+html.opengrok .settings-seg {
+  display: flex;
+  width: 100%;
+}
+
+.og-set-seg button,
+.og-set-pills button,
+html.opengrok .settings-seg button {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+  box-shadow: none;
+}
+
+html.opengrok .settings-seg button {
+  flex: 1 1 0;
+}
+
+.og-set-seg button.on,
+.og-set-pills button.on,
+html.opengrok .settings-seg button.on {
+  background: var(--bg);
+  color: var(--fg);
+  font-weight: 650;
+  box-shadow: 0 1px 3px color-mix(in srgb, #000 12%, transparent);
+}
+
+.og-set-seg button:hover:not(.on),
+.og-set-pills button:hover:not(.on),
+html.opengrok .settings-seg button:hover:not(.on) {
+  color: var(--fg);
+  background: transparent;
+}
+
+.og-theme-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.og-theme-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  color: var(--fg);
+}
+
+.og-theme-tile span {
+  display: block;
+  height: 72px;
+  border-radius: 10px;
+}
+
+.og-theme-tile[data-tone='glass'] span {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--fg) 16%, transparent), transparent 46%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 70%, transparent), color-mix(in srgb, var(--fg) 10%, var(--bg)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 22%, transparent);
+}
+
+.og-theme-tile[data-tone='flat'] span {
+  background: var(--elev);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.og-theme-tile.on {
+  border-color: color-mix(in srgb, var(--fg) 42%, transparent);
+}
+
+.og-theme-tile em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.og-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.og-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.og-swatch.on {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg);
+}
+
+.og-set-embed .settings-body,
+.og-set-embed .settings-head {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.og-set-embed .settings-head {
+  display: none;
+}
+
+.og-set-embed .settings-card,
+.og-set-embed .settings-block {
+  background: var(--glass-film);
+  border: var(--glass-border);
+  border-radius: 14px;
+  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px));
+  backdrop-filter: blur(var(--glass-2-blur, 23px));
+}
+
+html.opengrok #app[data-surface='solid'] .og-set-embed .settings-card,
+html.opengrok #app[data-surface='solid'] .og-set-embed .settings-block {
+  background: var(--elev);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.og-heat {
+  margin-top: 8px;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg);
+}
+
+.og-heat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.og-heat-head .og-set-seg {
+  margin: 0;
+}
+
+.og-heat-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.og-heat-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fg) 5%, var(--bg));
+  text-align: center;
+}
+
+.og-heat-stat strong {
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+.og-heat-stat span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.og-heat-board {
+  overflow-x: auto;
+}
+
+.og-heat-months {
+  display: flex;
+  gap: 18px;
+  color: var(--muted);
+  font-size: 11px;
+  padding-left: 2px;
+  margin-bottom: 6px;
+}
+
+.og-heat-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-columns: 11px;
+  gap: 3px;
+}
+
+.og-heat-grid.week {
+  grid-template-rows: 16px;
+  grid-auto-columns: 16px;
+}
+
+.og-heat-cell,
+.og-heat-legend i {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--fg) 8%, var(--bg));
+}
+
+.og-heat-grid.week .og-heat-cell {
+  width: 16px;
+  height: 16px;
+}
+
+.og-heat-cell.lv1,
+.og-heat-legend i.lv1 {
+  background: #9be9a8;
+}
+
+.og-heat-cell.lv2,
+.og-heat-legend i.lv2 {
+  background: #40c463;
+}
+
+.og-heat-cell.lv3,
+.og-heat-legend i.lv3 {
+  background: #30a14e;
+}
+
+.og-heat-cell.lv4,
+.og-heat-legend i.lv4 {
+  background: #216e39;
+}
+
+.og-heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+

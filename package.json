@@ -1,0 +1,73 @@
+{
+  "name": "opengrok",
+  "productName": "OpenGrok",
+  "version": "0.3.0",
+  "description": "Desktop workbench for the Grok Build CLI",
+  "author": "mckafei_CN",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "dev": "node esbuild.mjs && electron .",
+    "start": "electron .",
+    "pack": "node esbuild.mjs && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "cn.mckafei.opengrok",
+    "productName": "OpenGrok",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "desktop/**",
+      "plugin/dist/**",
+      "plugin/media/**",
+      "resources/**"
+    ],
+    "extraResources": [
+      {
+        "from": "plugin/dist",
+        "to": "plugin/dist"
+      },
+      {
+        "from": "plugin/media",
+        "to": "plugin/media"
+      },
+      {
+        "from": "desktop",
+        "to": "desktop"
+      },
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
+    "win": {
+      "icon": "resources/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "OpenGrok"
+    }
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.3",
+    "katex": "^0.18.7"
+  },
+  "devDependencies": {
+    "@shikijs/monaco": "^4.4.3",
+    "@types/node": "^22.15.3",
+    "electron": "^37.10.3",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.4",
+    "monaco-editor": "^0.52.2",
+    "shiki": "^4.4.3",
+    "typescript": "^5.8.3"
+  }
+}

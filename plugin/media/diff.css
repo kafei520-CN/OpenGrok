@@ -1,0 +1,518 @@
+:root {
+  --fg: var(--vscode-foreground);
+  --muted: var(--vscode-descriptionForeground, color-mix(in srgb, var(--vscode-foreground) 55%, transparent));
+  --bg: var(--vscode-editor-background, var(--vscode-sideBar-background));
+  --elev: color-mix(in srgb, var(--vscode-foreground) 6%, var(--bg));
+  --line: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+  --hover: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+  --ice: color-mix(in srgb, #b9d4ff 72%, var(--fg));
+  --ice-dim: color-mix(in srgb, var(--ice) 28%, transparent);
+  --ok: #3fb950;
+  --bad: #f85149;
+  --mono: var(--vscode-editor-font-family, ui-monospace, monospace);
+  --font: var(--vscode-font-family);
+  --r: 12px;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 480px at 0% -10%, color-mix(in srgb, var(--ice) 8%, transparent), transparent 60%),
+    var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ice) 75%, var(--fg));
+  outline-offset: 2px;
+}
+
+html.remote-web {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 32%, transparent) transparent;
+}
+
+html.remote-web *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.remote-web *::-webkit-scrollbar-track,
+html.remote-web *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html.remote-web *::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg) 26%, transparent);
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background-clip: padding-box;
+}
+
+html.remote-web *::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--ice) 55%, var(--fg));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.brand .mark,
+.gap-btn .mark,
+.empty .mark {
+  color: var(--ice);
+  display: inline-flex;
+  filter: drop-shadow(0 0 6px var(--ice-dim));
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--ice) 8%, var(--elev));
+  border: 1px solid color-mix(in srgb, var(--ice) 20%, var(--line));
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.pill.add,
+.add {
+  color: var(--ok);
+}
+
+.pill.del,
+.del {
+  color: var(--bad);
+}
+
+.pill.add {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 28%, var(--line));
+}
+
+.pill.del {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 28%, var(--line));
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modes {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--elev);
+}
+
+.mode {
+  background: none;
+  border: none;
+  padding: 5px 12px;
+  color: var(--muted);
+}
+
+.mode.on {
+  background: color-mix(in srgb, var(--ice) 18%, transparent);
+  color: var(--fg);
+}
+
+.ghost-btn,
+.open-btn {
+  background: color-mix(in srgb, var(--ice) 7%, var(--elev));
+  border: 1px solid color-mix(in srgb, var(--ice) 24%, var(--line));
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ghost-btn:hover,
+.open-btn:hover,
+.mode:hover {
+  color: var(--ice);
+  border-color: color-mix(in srgb, var(--ice) 40%, var(--line));
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.file {
+  border: 1px solid color-mix(in srgb, var(--ice) 16%, var(--line));
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--elev) 70%, var(--bg));
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+  overflow: hidden;
+}
+
+.file-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ice) 6%, transparent);
+}
+
+.file-toggle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+  flex: 1;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0;
+}
+
+.chevron {
+  display: inline-flex;
+  color: var(--ice);
+  transition: transform 140ms ease;
+}
+
+.file.closed .chevron {
+  transform: rotate(-90deg);
+}
+
+.file-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.file-dir {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 42vw;
+}
+
+.file-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.tag {
+  font-style: normal;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.tag.new {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+
+.tag.gone {
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+
+.file.closed .file-pane {
+  display: none;
+}
+
+.col-heads {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.col-heads span {
+  padding: 6px 12px 6px 52px;
+}
+
+.col-heads span + span {
+  border-left: 1px solid color-mix(in srgb, var(--ice) 22%, var(--line));
+}
+
+.file-stage {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  min-width: 0;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 0;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--ice) 35%, transparent) 0.55px, transparent 0.7px);
+  background-size: 6px 6px;
+  background-color: color-mix(in srgb, var(--fg) 3%, var(--bg));
+  border-right: 1px solid var(--line);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  flex-shrink: 0;
+}
+
+.dot.add {
+  background: var(--ok);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ok) 50%, transparent);
+}
+
+.dot.del {
+  background: var(--bad);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--bad) 50%, transparent);
+}
+
+.dot.mix {
+  background: var(--ice);
+  box-shadow: 0 0 6px var(--ice-dim);
+}
+
+.dot.quiet {
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.file-body {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.gap {
+  margin: 4px 8px;
+}
+
+.gap-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--ice) 8%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--ice) 32%, var(--line));
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.more-rows {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 6px 8px 10px;
+  padding: 6px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.more-rows:hover {
+  color: var(--fg);
+  border-color: var(--ice);
+}
+
+.gap.open .gap-btn {
+  color: var(--fg);
+  border-style: solid;
+}
+
+.rows {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 0;
+}
+
+.pair + .pair .cell {
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+
+.cell {
+  display: grid;
+  grid-template-columns: 3.4em minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cell.before {
+  border-right: 1px solid color-mix(in srgb, var(--ice) 22%, var(--line));
+}
+
+.cell.ghost {
+  background: color-mix(in srgb, var(--fg) 3.5%, var(--bg));
+}
+
+.cell.ghost .no,
+.cell.ghost pre {
+  visibility: hidden;
+}
+
+.cell.add,
+.uni.add {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--ok);
+}
+
+.cell.del,
+.uni.del {
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--bad);
+}
+
+.no {
+  color: var(--muted);
+  text-align: right;
+  padding: 0 8px;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ice) 18%, transparent) 0.45px,
+    transparent 0.6px
+  );
+  background-size: 5px 5px;
+}
+
+.cell pre,
+.uni pre {
+  margin: 0;
+  padding: 0 12px 0 8px;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+}
+
+.uni {
+  display: grid;
+  grid-template-columns: 3.4em 1.2em 1fr;
+}
+
+.uni + .uni {
+  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.sign {
+  color: var(--muted);
+  text-align: center;
+}
+
+.uni.add .sign {
+  color: var(--ok);
+}
+
+.uni.del .sign {
+  color: var(--bad);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 72px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty .mark {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 720px) {
+  .rail {
+    display: none;
+  }
+
+  .file-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .col-heads {
+    display: none;
+  }
+
+  .pair {
+    grid-template-columns: 1fr;
+  }
+
+  .cell.before {
+    border-right: none;
+  }
+}

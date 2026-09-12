@@ -1,0 +1,7 @@
+node_modules/
+dist/
+plugin/dist/
+release/
+*.log
+.DS_Store
+参考文件夹

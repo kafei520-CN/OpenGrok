@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenGrok</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #12171f;
+        --fg: #e8eef6;
+        --muted: #8b97a8;
+        --line: rgb(255 255 255 / 10%);
+        --accent: #5eead4;
+        --ink: #04120f;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 13px/1.45 "Segoe UI Variable", "Segoe UI", sans-serif;
+      }
+      main {
+        padding: 18px 18px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 100vh;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 620;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      input,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        background: #0c1016;
+        color: var(--fg);
+        border-radius: 10px;
+        padding: 9px 11px;
+        font: inherit;
+      }
+      input:focus,
+      select:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+        outline-offset: 1px;
+      }
+      .items {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-height: 220px;
+        overflow: auto;
+      }
+      .items button {
+        text-align: left;
+        border: 1px solid transparent;
+        background: rgb(255 255 255 / 4%);
+        color: inherit;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: inherit;
+        cursor: pointer;
+      }
+      .items button:hover,
+      .items button:focus-visible {
+        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .items em {
+        display: block;
+        color: var(--muted);
+        font-style: normal;
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: auto;
+      }
+      .row button {
+        border: 0;
+        border-radius: 8px;
+        padding: 7px 12px;
+        font: inherit;
+        cursor: pointer;
+      }
+      .ghost {
+        background: rgb(255 255 255 / 8%);
+        color: var(--fg);
+      }
+      .ok {
+        background: var(--accent);
+        color: var(--ink);
+        font-weight: 620;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">OpenGrok</h1>
+      <p id="copy" hidden></p>
+      <input id="field" hidden />
+      <div id="items" class="items" hidden></div>
+      <div class="row">
+        <button class="ghost" id="cancel" type="button">Cancel</button>
+        <button class="ok" id="ok" type="button">OK</button>
+      </div>
+    </main>
+    <script src="./prompt.js"></script>
+  </body>
+</html>
