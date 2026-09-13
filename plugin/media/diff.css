@@ -93,7 +93,7 @@ html.remote-web *::-webkit-scrollbar-thumb:hover {
   gap: 10px 14px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(14px);
 }
 
@@ -199,15 +199,14 @@ html.remote-web *::-webkit-scrollbar-thumb:hover {
 .og-diff .stage {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: 8px 16px 16px;
 }
 
 .og-diff .file {
-  border: 1px solid color-mix(in srgb, var(--ice) 16%, var(--line));
-  border-radius: var(--r);
-  background: color-mix(in srgb, var(--elev) 70%, var(--bg));
-  box-shadow: 0 10px 28px color-mix(in srgb, #000 16%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
   overflow: hidden;
 }
 
@@ -216,9 +215,9 @@ html.remote-web *::-webkit-scrollbar-thumb:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--ice) 6%, transparent);
+  background: color-mix(in srgb, var(--elev) 88%, var(--bg));
 }
 
 .og-diff .file-toggle {
@@ -498,7 +497,7 @@ html.remote-web *::-webkit-scrollbar-thumb:hover {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 72px 16px;
+  padding: 88px 16px;
   color: var(--muted);
   text-align: center;
 }

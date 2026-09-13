@@ -267,6 +267,12 @@ function sendUi(payload: unknown): void {
     pushPetStatus(row.state);
     return;
   }
+  if (row.type === 'tail') {
+    if (typeof row.status === 'string') {
+      pushPetStatus({ status: row.status });
+    }
+    return;
+  }
   if (typeof row.status === 'string') {
     pushPetStatus({
       status: row.status,

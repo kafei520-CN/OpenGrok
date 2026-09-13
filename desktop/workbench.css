@@ -1353,18 +1353,111 @@ html.opengrok #app[data-surface='solid'] #og-review {
 
 html.opengrok #og-review .og-set-pane {
   flex: 1;
+  padding: 4px 16px 16px 8px;
 }
 
-html.opengrok #og-review .og-deck-tabs {
-  overflow-x: auto;
-  scrollbar-width: thin;
+html.opengrok #og-review .og-review-flat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html.opengrok #og-review .og-review-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 4px 0;
+}
+
+html.opengrok #og-review .og-review-head strong {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.opengrok #og-review .og-review-head span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 html.opengrok #og-review .og-review-sheet {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 6%);
+}
+
+html.opengrok .og-review-nav {
+  min-height: 0;
+  flex: 1;
+}
+
+html.opengrok .og-review-files {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+
+html.opengrok .og-review-nav .og-nav-item {
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+html.opengrok .og-review-nav .og-nav-item.on {
+  box-shadow: inset 2px 0 0 var(--fg);
+}
+
+html.opengrok .og-review-file {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+html.opengrok .og-review-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+html.opengrok .og-review-dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+html.opengrok .og-review-stat {
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
 }
 
 html.opengrok #og-review .og-diff {
@@ -2022,8 +2115,12 @@ html.opengrok #app[data-surface='solid'] .og-set-embed .settings-block {
 }
 
 .og-heat-grid.week {
-  grid-template-rows: 16px;
-  grid-auto-columns: 16px;
+  grid-auto-flow: row;
+  grid-template-rows: none;
+  grid-template-columns: repeat(auto-fill, 14px);
+  grid-auto-rows: 14px;
+  grid-auto-columns: 14px;
+  gap: 4px;
 }
 
 .og-heat-cell,
@@ -2036,8 +2133,9 @@ html.opengrok #app[data-surface='solid'] .og-set-embed .settings-block {
 }
 
 .og-heat-grid.week .og-heat-cell {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 
 .og-heat-cell.lv1,
@@ -2068,6 +2166,131 @@ html.opengrok #app[data-surface='solid'] .og-set-embed .settings-block {
   margin-top: 10px;
   color: var(--muted);
   font-size: 11px;
+}
+
+html.opengrok ::selection {
+  background: color-mix(in srgb, var(--fg) 16%, transparent);
+}
+
+html.opengrok * {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 22%, transparent) transparent;
+}
+
+html.opengrok *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.opengrok *::-webkit-scrollbar-track,
+html.opengrok *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html.opengrok *::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg) 18%, transparent);
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background-clip: padding-box;
+}
+
+html.opengrok *::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--fg) 32%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+html.opengrok .transcript {
+  padding: 18px 32px 28px;
+}
+
+html.opengrok .md.answer {
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+
+html.opengrok .msg.user {
+  max-width: min(74%, 460px);
+}
+
+html.opengrok .msg.user .bubble {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--fg) 6.5%, var(--bg));
+  border-color: transparent;
+}
+
+html.opengrok .work > summary {
+  font-size: 12px;
+}
+
+html.opengrok .jump-bottom {
+  width: 36px;
+  height: 36px;
+  background: var(--bg);
+  color: var(--fg);
+  border-color: var(--line);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 12%);
+}
+
+html.opengrok .jump-bottom:hover {
+  background: var(--elev);
+  border-color: color-mix(in srgb, var(--fg) 28%, var(--line));
+}
+
+html.opengrok .og-kicker {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 650;
+  font-size: 10.5px;
+}
+
+html.opengrok .session-row {
+  border-radius: 10px;
+}
+
+html.opengrok .composer-wrap {
+  padding: 6px 28px 22px;
+}
+
+html.opengrok .og-login h1 {
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  text-align: center;
+}
+
+html.opengrok .og-login p {
+  text-align: center;
+  color: var(--muted);
+}
+
+html.opengrok .og-login .row {
+  justify-content: center;
+  gap: 8px;
+}
+
+html.opengrok .og-login .btn.primary {
+  border-radius: 10px;
+  padding: 8px 16px;
+}
+
+html.opengrok .og-set-card {
+  border-radius: 16px;
+}
+
+html.opengrok .og-heat-board {
+  padding-bottom: 2px;
+}
+
+html.opengrok .picker-menu,
+html.opengrok .more-menu,
+html.opengrok .menu {
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 12%);
+}
+
+html.opengrok .permission,
+html.opengrok .ask-card {
+  border-radius: 14px;
 }
 
 

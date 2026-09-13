@@ -89,6 +89,11 @@ describe('markdown', () => {
     assert.doesNotMatch(fence, /<pre class="code"/);
   });
 
+  it('does not katex a huge CJK dump that would stall the UI', () => {
+    const html = renderMarkdown(`$$\n${'汉字'.repeat(200)}\n$$`);
+    assert.doesNotMatch(html, /katex/);
+  });
+
   it('renders links and rejects javascript urls', () => {
     const html = renderMarkdown('see [docs](https://x.ai) and [x](javascript:alert(1))');
     assert.match(html, /<a href="https:\/\/x.ai" rel="noreferrer noopener">docs<\/a>/);

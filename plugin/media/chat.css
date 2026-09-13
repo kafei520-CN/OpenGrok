@@ -794,7 +794,7 @@ textarea:focus-visible {
   gap: 8px;
   padding: 7px 10px;
   font: 11px/1.35 var(--mono);
-  color: color-mix(in srgb, var(--ice) 62%, var(--fg));
+  color: #ffffff;
   background: color-mix(in srgb, #101a24 55%, transparent);
 }
 
@@ -817,6 +817,7 @@ textarea:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #ffffff;
 }
 
 .term-meta {
@@ -880,7 +881,7 @@ textarea:focus-visible {
 
 .term-elapsed {
   font-size: 10px;
-  color: var(--muted);
+  color: rgb(255 255 255 / 72%);
   font-variant-numeric: tabular-nums;
 }
 

@@ -145,6 +145,50 @@ export function formatDurationLong(secs: number, zh: boolean): string {
   return `${Math.max(1, mins)}m`;
 }
 
+export type HeatmapWeek = {
+  start: string;
+  end: string;
+  tokens: number;
+  requests: number;
+};
+
+/** Fold days into Monday-start calendar weeks. */
+export function groupHeatmapWeeks(days: HeatmapDay[]): HeatmapWeek[] {
+  const buckets = new Map<string, HeatmapWeek>();
+  for (const row of days) {
+    const date = parseYmd(row.date);
+    if (!date) {
+      continue;
+    }
+    const start = startOfWeek(date);
+    const key = ymd(start);
+    const cur = buckets.get(key);
+    if (cur) {
+      cur.tokens += row.tokens;
+      cur.requests += row.requests;
+      if (row.date > cur.end) {
+        cur.end = row.date;
+      }
+      continue;
+    }
+    buckets.set(key, {
+      start: key,
+      end: row.date,
+      tokens: row.tokens,
+      requests: row.requests,
+    });
+  }
+  return [...buckets.values()].sort((a, b) => a.start.localeCompare(b.start));
+}
+
+function startOfWeek(date: Date): Date {
+  const next = new Date(date);
+  const weekday = next.getDay();
+  const mondayOffset = weekday === 0 ? 6 : weekday - 1;
+  next.setDate(next.getDate() - mondayOffset);
+  return next;
+}
+
 export function heatmapLevel(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
   if (value <= 0 || max <= 0) {
     return 0;

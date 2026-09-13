@@ -2,6 +2,7 @@ import { displayUsagePercent } from '../../billing/billing';
 import {
   formatCompactCount,
   formatDurationLong,
+  groupHeatmapWeeks,
   heatmapLevel,
   parseYmd,
   summarizeHeatmap,
@@ -414,18 +415,12 @@ type HeatCell = { date: string; label: string; value: number; requests: number }
 
 function heatCells(days: HeatmapDay[], mode: 'day' | 'week' | 'cumul'): HeatCell[] {
   if (mode === 'week') {
-    const weeks: HeatCell[] = [];
-    for (let i = 0; i < days.length; i += 7) {
-      const slice = days.slice(i, i + 7);
-      const last = slice[slice.length - 1]!;
-      weeks.push({
-        date: last.date,
-        label: `${slice[0]!.date} – ${last.date}`,
-        value: slice.reduce((sum, row) => sum + row.tokens, 0),
-        requests: slice.reduce((sum, row) => sum + row.requests, 0),
-      });
-    }
-    return weeks;
+    return groupHeatmapWeeks(days).map((week) => ({
+      date: week.start,
+      label: `${week.start} – ${week.end}`,
+      value: week.tokens,
+      requests: week.requests,
+    }));
   }
   let run = 0;
   return days.map((row) => {
@@ -459,7 +454,7 @@ function heatGrid(cells: HeatCell[], zh: boolean): HTMLElement {
   for (const cell of cells) {
     const date = parseYmd(cell.date);
     const month = date ? `${date.getMonth() + 1}` : '';
-    if (month && month !== lastMonth && ui.heatGranularity !== 'week') {
+    if (month && month !== lastMonth) {
       const tag = document.createElement('span');
       tag.textContent = zh ? `${month}月` : cell.date.slice(5, 7);
       months.append(tag);
@@ -476,7 +471,17 @@ function heatGrid(cells: HeatCell[], zh: boolean): HTMLElement {
   }
   const legend = document.createElement('div');
   legend.className = 'og-heat-legend';
-  legend.innerHTML = `<span>${escapeHtml(tr('heatLess'))}</span><i class="lv0"></i><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><span>${escapeHtml(tr('heatMore'))}</span>`;
+  const less = document.createElement('span');
+  less.textContent = tr('heatLess');
+  const more = document.createElement('span');
+  more.textContent = tr('heatMore');
+  legend.append(less);
+  for (const level of [0, 1, 2, 3, 4]) {
+    const swatch = document.createElement('i');
+    swatch.className = `lv${level}`;
+    legend.append(swatch);
+  }
+  legend.append(more);
   box.append(months, grid, legend);
   return box;
 }

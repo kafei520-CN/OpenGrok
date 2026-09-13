@@ -114,57 +114,36 @@ export function reviewSearch(): HTMLElement {
 
 export function reviewNav(): HTMLElement {
   const el = document.createElement('nav');
-  el.className = 'og-nav og-set-rail-nav';
+  el.className = 'og-nav og-set-rail-nav og-review-nav';
   const kicker = document.createElement('div');
   kicker.className = 'og-kicker';
   kicker.textContent = tr('reviewTitle');
   el.append(kicker);
+  const files = reviewFiles();
   const active = ui.review?.active ?? 'all';
-  el.append(fileBtn('all', tr('reviewAll'), active === 'all', 0, 0));
-  for (const file of reviewFiles()) {
-    const name = file.path.replace(/\\/g, '/').split('/').pop() ?? file.path;
-    el.append(fileBtn(file.path, name, active === file.path, file.added, file.removed));
+  const added = files.reduce((sum, file) => sum + file.added, 0);
+  const removed = files.reduce((sum, file) => sum + file.removed, 0);
+  const list = document.createElement('div');
+  list.className = 'og-review-files';
+  list.append(fileBtn('all', tr('reviewAll'), '', active === 'all', added, removed));
+  for (const file of files) {
+    const parts = splitReviewPath(file.path);
+    list.append(fileBtn(file.path, parts.name, parts.dir, active === file.path, file.added, file.removed));
   }
+  el.append(list);
   queueMicrotask(() => applyReviewFilter());
   return el;
 }
 
 function reviewDeck(files: FileDiff[], active: string): HTMLElement {
-  const pages = [
-    { id: 'all', label: tr('reviewAll') },
-    ...files.map((file) => ({
-      id: file.path,
-      label: file.path.replace(/\\/g, '/').split('/').pop() ?? file.path,
-    })),
-  ];
-  const front = pages.find((row) => row.id === active) ?? pages[0];
-  const deck = document.createElement('div');
-  deck.className = 'og-deck';
-  deck.style.setProperty('--og-stack', String(Math.max(0, pages.length - 1)));
-  const tabs = document.createElement('div');
-  tabs.className = 'og-deck-tabs';
-  for (const page of pages) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = page.id === front.id ? 'og-deck-tab on' : 'og-deck-tab';
-    btn.textContent = page.label;
-    btn.title = page.label;
-    btn.addEventListener('click', () => selectReview(page.id));
-    tabs.append(btn);
-  }
-  const layers = document.createElement('div');
-  layers.className = 'og-deck-layers';
-  layers.setAttribute('aria-hidden', 'true');
-  for (let i = pages.length - 1; i >= 1; i -= 1) {
-    const layer = document.createElement('span');
-    layer.style.setProperty('--i', String(i));
-    layers.append(layer);
-  }
+  const wrap = document.createElement('div');
+  wrap.className = 'og-review-flat';
+  wrap.append(reviewHead(files, active));
   const sheet = document.createElement('div');
-  sheet.className = 'og-deck-sheet og-review-sheet';
+  sheet.className = 'og-review-sheet';
   const body = document.createElement('div');
   body.className = 'og-diff';
-  const shown = front.id === 'all' ? files : files.filter((row) => row.path === front.id);
+  const shown = active === 'all' ? files : files.filter((row) => row.path === active);
   mountDiffView(body, {
     locale: ui.review?.locale,
     files: shown,
@@ -176,23 +155,59 @@ function reviewDeck(files: FileDiff[], active: string): HTMLElement {
     onOpenFile: (path) => post({ type: 'openFile', path }),
   });
   sheet.append(body);
-  deck.append(tabs, layers, sheet);
-  return deck;
+  wrap.append(sheet);
+  return wrap;
 }
 
-function fileBtn(id: string, label: string, on: boolean, added: number, removed: number): HTMLElement {
+function reviewHead(files: FileDiff[], active: string): HTMLElement {
+  const head = document.createElement('header');
+  head.className = 'og-review-head';
+  const title = document.createElement('strong');
+  const hint = document.createElement('span');
+  if (active === 'all') {
+    title.textContent = tr('reviewAll');
+    hint.textContent = tr('diffFiles', { n: files.length });
+  } else {
+    const parts = splitReviewPath(active);
+    title.textContent = parts.name;
+    hint.textContent = parts.dir;
+  }
+  head.append(title);
+  if (hint.textContent) {
+    head.append(hint);
+  }
+  return head;
+}
+
+function fileBtn(
+  id: string,
+  name: string,
+  dir: string,
+  on: boolean,
+  added: number,
+  removed: number,
+): HTMLElement {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = on ? 'og-nav-item on' : 'og-nav-item';
-  btn.title = label;
-  btn.dataset.label = label;
-  const stats =
-    id === 'all'
-      ? ''
-      : `<em class="og-review-stat"><span class="add">+${added}</span><span class="del">−${removed}</span></em>`;
-  btn.innerHTML = `<span>${escapeHtml(label)}</span>${stats}`;
+  btn.title = dir ? `${dir}/${name}` : name;
+  btn.dataset.label = `${name} ${dir}`.trim();
+  const copy = dir
+    ? `<span class="og-review-file"><span class="og-review-name">${escapeHtml(name)}</span><span class="og-review-dir">${escapeHtml(dir)}</span></span>`
+    : `<span class="og-review-name">${escapeHtml(name)}</span>`;
+  const stats = `<em class="og-review-stat"><span class="add">+${added}</span><span class="del">−${removed}</span></em>`;
+  btn.innerHTML = `${copy}${stats}`;
   btn.addEventListener('click', () => selectReview(id));
   return btn;
+}
+
+function splitReviewPath(path: string): { name: string; dir: string } {
+  const norm = path.replace(/\\/g, '/');
+  const i = norm.lastIndexOf('/');
+  if (i < 0) {
+    return { name: norm, dir: '' };
+  }
+  return { name: norm.slice(i + 1), dir: norm.slice(0, i) };
 }
 
 function selectReview(id: string): void {
@@ -205,14 +220,11 @@ function selectReview(id: string): void {
 
 function applyReviewFilter(): void {
   const q = reviewQuery.trim().toLowerCase();
-  const nav = document.querySelector('#og-rail .og-set-rail-nav');
-  if (!nav) {
+  const list = document.querySelector('#og-rail .og-review-files');
+  if (!list) {
     return;
   }
-  for (const child of Array.from(nav.children) as HTMLElement[]) {
-    if (child.classList.contains('og-kicker')) {
-      continue;
-    }
+  for (const child of Array.from(list.children) as HTMLElement[]) {
     child.hidden = Boolean(q) && !(child.dataset.label ?? '').toLowerCase().includes(q);
   }
 }

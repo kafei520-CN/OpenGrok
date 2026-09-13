@@ -5,6 +5,7 @@ import {
   emptyHeatmap,
   formatCompactCount,
   formatDurationLong,
+  groupHeatmapWeeks,
   heatmapLevel,
   summarizeHeatmap,
 } from './heatmapStats';
@@ -48,5 +49,18 @@ describe('heatmapStats', () => {
     assert.equal(formatDurationLong(17 * 3600 + 50 * 60, true), '17小时50分钟');
     assert.equal(heatmapLevel(0, 10), 0);
     assert.equal(heatmapLevel(10, 10), 4);
+  });
+
+  it('groups days into Monday-start weeks', () => {
+    const weeks = groupHeatmapWeeks([
+      { date: '2026-09-07', requests: 1, tokens: 10 },
+      { date: '2026-09-08', requests: 1, tokens: 20 },
+      { date: '2026-09-14', requests: 1, tokens: 5 },
+    ]);
+    assert.equal(weeks.length, 2);
+    assert.equal(weeks[0]?.start, '2026-09-07');
+    assert.equal(weeks[0]?.tokens, 30);
+    assert.equal(weeks[1]?.start, '2026-09-14');
+    assert.equal(weeks[1]?.tokens, 5);
   });
 });

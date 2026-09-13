@@ -263,8 +263,7 @@ function patchStreamingTurn(node: HTMLElement, turn: Turn): void {
     return;
   }
   if (visibleSteps(assistant).length && !col.querySelector('.steps-card')) {
-    node.replaceWith(turnEl(turn, false));
-    return;
+    patchStepsCard(col, assistant);
   }
   if (hasWork(assistant)) {
     let work = thinkingWork(col);
@@ -432,7 +431,7 @@ function paintStreamingMarkdown(el: HTMLElement, text: string): void {
     appendCommitted(stable, patch.append);
     streamCommitted.set(el, committed);
   }
-  paintLiveMarkdown(live, rest, rest.length > 800 || text.length > 8_000);
+  paintLiveMarkdown(live, rest, true);
 }
 
 function appendCommitted(stable: HTMLElement, added: string): void {
@@ -888,9 +887,13 @@ function assistantColumn(message: ChatMessage): HTMLElement {
   if (message.text) {
     const body = document.createElement('div');
     body.className = 'md answer';
-    body.dataset.len = String(message.text.length);
-    body.dataset.md = message.streaming ? 's' : 'd';
-    body.innerHTML = renderMarkdown(message.text);
+    if (message.streaming) {
+      setMarkdown(body, message.text, true);
+    } else {
+      body.dataset.len = String(message.text.length);
+      body.dataset.md = 'd';
+      body.innerHTML = renderMarkdown(message.text);
+    }
     el.append(body);
   } else if (message.error?.retrying) {
     el.append(turnErrorCard(message));

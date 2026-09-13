@@ -300,7 +300,6 @@ function scheduleTailPaint(): void {
     tailPaint = 0;
     patchBody(root);
     patchComposer();
-    scrollTranscript();
   });
 }
 

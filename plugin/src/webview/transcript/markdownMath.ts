@@ -8,16 +8,33 @@ const OPTIONS = {
   output: 'html' as const,
 };
 
+/** KaTeX can stall the UI thread on huge / non-TeX dumps (unclosed $$ mid-stream). */
+export const MAX_KATEX_CHARS = 1_200;
+
 export function renderKatex(src: string, display: boolean): string {
   const body = src.trim();
   if (!body) {
     return '';
+  }
+  if (!looksLikeTex(body)) {
+    return `<code>${escapeMath(body.length > MAX_KATEX_CHARS ? `${body.slice(0, MAX_KATEX_CHARS)}…` : body)}</code>`;
   }
   try {
     return katex.renderToString(body, { ...OPTIONS, displayMode: display });
   } catch {
     return `<code>${escapeMath(body)}</code>`;
   }
+}
+
+export function looksLikeTex(body: string): boolean {
+  if (body.length > MAX_KATEX_CHARS) {
+    return false;
+  }
+  const cjk = body.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
+  if (cjk > 12 && cjk * 2 > body.length) {
+    return false;
+  }
+  return true;
 }
 
 /** Pull TeX / mhchem out before HTML escaping. */
