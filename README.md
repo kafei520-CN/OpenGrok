@@ -44,8 +44,8 @@ npm run pack
 | `OpenGrok-*-1.x86_64.rpm` | Fedora / RHEL |
 
 ```powershell
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
 ## 源码

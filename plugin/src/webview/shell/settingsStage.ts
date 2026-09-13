@@ -854,13 +854,28 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
-  const version = document.documentElement.dataset.version || '0.3.0';
+  const version = document.documentElement.dataset.version || '0.4.1';
+  const hero = document.createElement('div');
+  hero.className = 'og-about-hero';
+  const logo = document.createElement('img');
+  logo.className = 'og-about-logo';
+  logo.src = '../resources/logo.png';
+  logo.alt = '';
+  const copy = document.createElement('div');
+  copy.className = 'og-about-copy';
+  const name = document.createElement('strong');
+  name.textContent = tr('appName');
+  const ver = document.createElement('span');
+  ver.textContent = tr('setVersion', { v: version });
+  copy.append(name, ver);
+  if (ui.state.agentVersion) {
+    const agent = document.createElement('span');
+    agent.textContent = tr('settingsAgentVer', { version: ui.state.agentVersion });
+    copy.append(agent);
+  }
+  hero.append(logo, copy);
   el.append(
-    card(tr('appName'), [
-      line(tr('setVersion', { v: version }), tr('appTag')),
-      p(tr('setUnofficial')),
-      p(tr('setAboutLicense')),
-    ]),
+    card('', [hero, p(tr('appTag')), p(tr('setUnofficial')), p(tr('setAboutLicense'))]),
   );
   return el;
 }

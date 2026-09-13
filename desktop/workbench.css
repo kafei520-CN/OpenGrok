@@ -2273,6 +2273,39 @@ html.opengrok .og-login .btn.primary {
   padding: 8px 16px;
 }
 
+html.opengrok .og-about-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+html.opengrok .og-about-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+html.opengrok .og-about-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+html.opengrok .og-about-copy strong {
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+html.opengrok .og-about-copy span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 html.opengrok .og-set-card {
   border-radius: 16px;
 }
