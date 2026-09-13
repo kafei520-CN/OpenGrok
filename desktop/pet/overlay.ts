@@ -179,13 +179,11 @@ function startIdleCycle(): void {
   stopBlink();
   showSpriteFrame('idle');
   const hasBlink = Boolean(SPRITES[prefs.shape]?.blink);
-  const hasThink = Boolean(SPRITES[prefs.shape]?.think);
   const tick = () => {
     if (mood !== 'idle' || !SPRITES[prefs.shape]) {
       return;
     }
-    const roll = Math.random();
-    if (hasBlink && roll < 0.62) {
+    if (hasBlink) {
       showSpriteFrame('blink');
       window.setTimeout(() => {
         if (mood !== 'idle') {
@@ -208,13 +206,6 @@ function startIdleCycle(): void {
           showSpriteFrame('idle');
         }
       }, 150);
-    } else if (hasThink) {
-      showSpriteFrame('think');
-      window.setTimeout(() => {
-        if (mood === 'idle') {
-          showSpriteFrame('idle');
-        }
-      }, 720);
     }
     blinkTimer = window.setTimeout(tick, 2000 + Math.random() * 2400);
   };
