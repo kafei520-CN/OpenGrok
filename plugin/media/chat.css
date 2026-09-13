@@ -3750,14 +3750,14 @@ kbd {
 #app[data-surface='glass'] .md :not(pre) > code,
 #app[data-surface='glass'] .change-chip,
 #app[data-surface='glass'] .live-edits-review {
-  --glass-pane-blur: var(--glass-3-blur, 26px);
+  --glass-pane-blur: var(--glass-3-blur, 46px);
   position: relative;
   overflow: hidden;
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-shadow-sm);
-  -webkit-backdrop-filter: blur(var(--glass-3-blur, 26px));
-  backdrop-filter: blur(var(--glass-3-blur, 26px));
+  -webkit-backdrop-filter: blur(var(--glass-3-blur, 46px)) saturate(1.8) brightness(1.08);
+  backdrop-filter: blur(var(--glass-3-blur, 46px)) saturate(1.8) brightness(1.08);
 }
 
 #app[data-surface='glass'] .changes-line {
@@ -3807,13 +3807,12 @@ kbd {
 #app[data-surface='glass'] .picker-menu,
 #grok-floats[data-surface='glass'] .more-menu,
 #grok-floats[data-surface='glass'] .picker-menu {
-  --glass-pane-blur: var(--glass-4-blur, 30px);
-  isolation: isolate;
+  --glass-pane-blur: var(--glass-4-blur, 52px);
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(var(--glass-4-blur, 30px));
-  backdrop-filter: blur(var(--glass-4-blur, 30px));
+  -webkit-backdrop-filter: blur(var(--glass-4-blur, 52px)) saturate(1.8) brightness(1.08);
+  backdrop-filter: blur(var(--glass-4-blur, 52px)) saturate(1.8) brightness(1.08);
 }
 
 #app[data-surface='glass'] .more-menu {
@@ -3840,23 +3839,21 @@ kbd {
 
 #app[data-surface='glass'] .settings,
 #app[data-surface='glass'] .drawer {
-  --glass-pane-blur: var(--glass-5-blur, 33px);
-  isolation: isolate;
+  --glass-pane-blur: var(--glass-5-blur, 56px);
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(var(--glass-5-blur, 33px));
-  backdrop-filter: blur(var(--glass-5-blur, 33px));
+  -webkit-backdrop-filter: blur(var(--glass-5-blur, 56px)) saturate(1.85) brightness(1.08);
+  backdrop-filter: blur(var(--glass-5-blur, 56px)) saturate(1.85) brightness(1.08);
 }
 
 #app[data-surface='glass'] #grok-veil,
 #app[data-surface='glass'] .drawer-scrim {
-  --glass-pane-blur: var(--glass-5-blur, 33px);
+  --glass-pane-blur: var(--glass-5-blur, 56px);
   overflow: hidden;
-  isolation: isolate;
   background: var(--glass-film);
-  -webkit-backdrop-filter: blur(var(--glass-5-blur, 33px));
-  backdrop-filter: blur(var(--glass-5-blur, 33px));
+  -webkit-backdrop-filter: blur(var(--glass-5-blur, 56px)) saturate(1.85) brightness(1.08);
+  backdrop-filter: blur(var(--glass-5-blur, 56px)) saturate(1.85) brightness(1.08);
 }
 
 #app[data-surface='glass'] .settings-card,
@@ -3865,27 +3862,25 @@ kbd {
 #app[data-surface='glass'] .settings .btn:not(.primary),
 #app[data-surface='glass'] .drawer .btn:not(.primary),
 #app[data-surface='glass'] .drawer .seg {
-  --glass-pane-blur: var(--glass-6-blur, 37px);
+  --glass-pane-blur: var(--glass-6-blur, 60px);
   position: relative;
   overflow: hidden;
-  isolation: isolate;
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-sheen);
-  -webkit-backdrop-filter: blur(var(--glass-6-blur, 37px));
-  backdrop-filter: blur(var(--glass-6-blur, 37px));
+  -webkit-backdrop-filter: blur(var(--glass-6-blur, 60px)) saturate(1.85) brightness(1.08);
+  backdrop-filter: blur(var(--glass-6-blur, 60px)) saturate(1.85) brightness(1.08);
 }
 
 #app[data-surface='glass'] .menu,
 #grok-floats[data-surface='glass'] .menu {
-  --glass-pane-blur: var(--glass-7-blur, 41px);
+  --glass-pane-blur: var(--glass-7-blur, 64px);
   overflow: hidden;
-  isolation: isolate;
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(var(--glass-7-blur, 41px));
-  backdrop-filter: blur(var(--glass-7-blur, 41px));
+  -webkit-backdrop-filter: blur(var(--glass-7-blur, 64px)) saturate(1.9) brightness(1.1);
+  backdrop-filter: blur(var(--glass-7-blur, 64px)) saturate(1.9) brightness(1.1);
 }
 
 #grok-floats[data-surface='glass'] .menu {
@@ -3898,15 +3893,14 @@ kbd {
 #app[data-surface='glass'] .settings-card .seg,
 #app[data-surface='glass'] .settings .icon-btn,
 #app[data-surface='glass'] .drawer .icon-btn {
-  --glass-pane-blur: var(--glass-7-blur, 41px);
+  --glass-pane-blur: var(--glass-7-blur, 64px);
   position: relative;
   overflow: hidden;
-  isolation: isolate;
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-sheen);
-  -webkit-backdrop-filter: blur(var(--glass-7-blur, 41px));
-  backdrop-filter: blur(var(--glass-7-blur, 41px));
+  -webkit-backdrop-filter: blur(var(--glass-7-blur, 64px)) saturate(1.9) brightness(1.1);
+  backdrop-filter: blur(var(--glass-7-blur, 64px)) saturate(1.9) brightness(1.1);
 }
 
 #app[data-surface='glass'][data-wp-kind='image'] #grok-veil::before,
@@ -4071,9 +4065,9 @@ kbd {
   left: 50%;
   bottom: 100%;
   overflow: hidden;
-  --glass-pane-blur: var(--glass-3-blur, 26px);
-  -webkit-backdrop-filter: blur(var(--glass-3-blur, 26px));
-  backdrop-filter: blur(var(--glass-3-blur, 26px));
+  --glass-pane-blur: var(--glass-3-blur, 46px);
+  -webkit-backdrop-filter: blur(var(--glass-3-blur, 46px)) saturate(1.8) brightness(1.08);
+  backdrop-filter: blur(var(--glass-3-blur, 46px)) saturate(1.8) brightness(1.08);
 }
 
 #app[data-surface='glass'] .tool-row,

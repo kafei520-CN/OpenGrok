@@ -32,7 +32,11 @@ html.opengrok {
   --glass-sheen: inset 0 1px 0 rgb(255 255 255 / 70%), inset 0 -1px 0 rgb(255 255 255 / 10%);
   --glass-shadow: var(--glass-sheen), 0 12px 40px color-mix(in srgb, #000 12%, transparent);
   --glass-shadow-sm: var(--glass-sheen), 0 8px 22px color-mix(in srgb, #000 8%, transparent);
-  --glass-film: color-mix(in srgb, var(--bg) var(--chrome-fill, 38%), rgb(255 255 255 / 28%));
+  --glass-film: color-mix(
+    in srgb,
+    var(--bg) min(46%, var(--chrome-fill, 38%)),
+    rgb(255 255 255 / 28%)
+  );
   --glass-frost: blur(var(--glass-3-blur, 46px)) saturate(1.85) brightness(1.08);
   --glass-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   --pane: color-mix(in srgb, var(--fg) 6%, transparent);
@@ -971,7 +975,8 @@ html.opengrok .composer-wrap > * {
 }
 
 html.opengrok #composer-card,
-html.opengrok .composer-card {
+html.opengrok .composer-card,
+html.opengrok #app[data-surface='glass'] .composer-card {
   width: min(720px, 100%);
   border-radius: 18px;
   border: var(--glass-border);
