@@ -73,11 +73,19 @@
   face.append(leftEye, rightEye, pupils, smile);
   critter.append(body, face);
   svg.append(critter);
-  var sprite = document.createElement("img");
-  sprite.alt = "";
-  sprite.draggable = false;
-  sprite.hidden = true;
-  markHost.append(svg, sprite);
+  var spriteStage = document.createElement("div");
+  spriteStage.className = "sprite-stage";
+  spriteStage.hidden = true;
+  var spriteFrames = {};
+  for (const kind of ["idle", "blink", "think"]) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.draggable = false;
+    img.dataset.kind = kind;
+    spriteStage.append(img);
+    spriteFrames[kind] = img;
+  }
+  markHost.append(svg, spriteStage);
   var SPRITES = {
     anime: {
       idle: "./pet-assets/anime-idle.png",
@@ -95,6 +103,7 @@
     }
   };
   var blinkTimer = 0;
+  var shownFrame = "idle";
   function paintBody(shape, fill) {
     body.replaceChildren();
     if (shape === "mark") {
@@ -142,44 +151,102 @@
   var overPet = false;
   var pendingClick = null;
   var labels = { thinking: "\u601D\u8003\u4E2D\u2026", working: "\u5DE5\u4F5C\u4E2D\u2026", done: "\u5B8C\u6210", alert: "\u9700\u8981\u4F60" };
-  function spriteSrc(shape, kind) {
+  function showSpriteFrame(kind) {
+    shownFrame = kind;
+    for (const [name, img] of Object.entries(spriteFrames)) {
+      img.classList.toggle("is-on", name === kind);
+    }
+  }
+  function loadSpritePack(shape) {
     const pack = SPRITES[shape];
     if (!pack) {
-      return "";
+      return;
     }
-    return pack[kind] ?? pack.idle ?? "";
+    for (const kind of ["idle", "blink", "think"]) {
+      const img = spriteFrames[kind];
+      const src = pack[kind] ?? pack.idle ?? "";
+      if (img && src && img.src !== new URL(src, location.href).href) {
+        img.src = src;
+      }
+    }
   }
   function stopBlink() {
+    window.clearTimeout(blinkTimer);
     window.clearInterval(blinkTimer);
     blinkTimer = 0;
   }
-  function startBlink() {
+  function startIdleCycle() {
     stopBlink();
-    if (prefs.shape !== "anime" && prefs.shape !== "adult" || mood !== "idle") {
-      return;
-    }
-    const kind = prefs.shape;
-    blinkTimer = window.setInterval(() => {
-      sprite.src = spriteSrc(kind, "blink");
-      window.setTimeout(() => {
-        if (prefs.shape === kind && mood === "idle") {
-          sprite.src = spriteSrc(kind, "idle");
-        }
-      }, 140);
-    }, 3200);
+    showSpriteFrame("idle");
+    const hasBlink = Boolean(SPRITES[prefs.shape]?.blink);
+    const hasThink = Boolean(SPRITES[prefs.shape]?.think);
+    const tick = () => {
+      if (mood !== "idle" || !SPRITES[prefs.shape]) {
+        return;
+      }
+      const roll = Math.random();
+      if (hasBlink && roll < 0.62) {
+        showSpriteFrame("blink");
+        window.setTimeout(() => {
+          if (mood !== "idle") {
+            return;
+          }
+          if (Math.random() < 0.32) {
+            showSpriteFrame("idle");
+            window.setTimeout(() => {
+              if (mood !== "idle") {
+                return;
+              }
+              showSpriteFrame("blink");
+              window.setTimeout(() => {
+                if (mood === "idle") {
+                  showSpriteFrame("idle");
+                }
+              }, 120);
+            }, 70);
+          } else {
+            showSpriteFrame("idle");
+          }
+        }, 150);
+      } else if (hasThink) {
+        showSpriteFrame("think");
+        window.setTimeout(() => {
+          if (mood === "idle") {
+            showSpriteFrame("idle");
+          }
+        }, 720);
+      }
+      blinkTimer = window.setTimeout(tick, 2e3 + Math.random() * 2400);
+    };
+    blinkTimer = window.setTimeout(tick, 1600 + Math.random() * 1400);
   }
   function applySpriteFrame() {
     const pack = SPRITES[prefs.shape];
     if (!pack) {
       return;
     }
-    if (mood === "thinking" || mood === "working" || prefs.face === "curious") {
-      sprite.src = spriteSrc(prefs.shape, "think");
-      stopBlink();
+    loadSpritePack(prefs.shape);
+    stopBlink();
+    if (mood === "working") {
+      showSpriteFrame("think");
+      blinkTimer = window.setInterval(() => {
+        showSpriteFrame(shownFrame === "think" ? "idle" : "think");
+      }, 860);
       return;
     }
-    sprite.src = spriteSrc(prefs.shape, "idle");
-    startBlink();
+    if (mood === "thinking" || prefs.face === "curious") {
+      showSpriteFrame("think");
+      return;
+    }
+    if (mood === "done") {
+      showSpriteFrame("think");
+      window.setTimeout(() => {
+        if (mood === "done" || mood === "idle") {
+          showSpriteFrame("idle");
+        }
+      }, 520);
+    }
+    startIdleCycle();
   }
   function applyLook() {
     const fill = resolvePetBodyInk(prefs.color);
@@ -194,7 +261,7 @@
     markHost.classList.toggle("is-anime", prefs.shape === "anime" || prefs.shape === "adult");
     markHost.classList.toggle("is-pixel", prefs.shape === "pixel");
     svg.hidden = spriteShape;
-    sprite.hidden = !spriteShape;
+    spriteStage.hidden = !spriteShape;
     if (spriteShape) {
       applySpriteFrame();
       return;

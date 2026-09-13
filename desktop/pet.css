@@ -48,7 +48,8 @@ body {
 }
 
 #mark svg,
-#mark img {
+#mark .sprite-stage,
+#mark .sprite-stage img {
   display: block;
   width: 100%;
   height: 100%;
@@ -58,42 +59,30 @@ body {
   pointer-events: none;
 }
 
+#mark .sprite-stage {
+  position: relative;
+}
+
+#mark .sprite-stage img {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+#mark .sprite-stage img.is-on {
+  opacity: 1;
+}
+
 #mark.is-sprite svg,
-#mark:not(.is-sprite) img,
+#mark:not(.is-sprite) .sprite-stage,
 #mark svg[hidden],
-#mark img[hidden] {
+#mark .sprite-stage[hidden] {
   display: none !important;
 }
 
-#mark.is-anime img {
-  transform-origin: 50% 100%;
-  animation: live2d-idle 3.2s ease-in-out infinite;
-}
-
-#mark.is-pixel img {
+#mark.is-pixel .sprite-stage img {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  animation: bit-idle 1.2s ease-in-out infinite;
-}
-
-@keyframes live2d-idle {
-  0%,
-  100% {
-    transform: rotate(-1.6deg) translateY(0);
-  }
-  50% {
-    transform: rotate(1.8deg) translateY(-4px);
-  }
-}
-
-@keyframes bit-idle {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-3px);
-  }
 }
 
 .body,
@@ -125,11 +114,11 @@ body {
 }
 
 .critter.idle {
-  animation: pet-breathe 3.2s ease-in-out infinite;
+  animation: none;
 }
 
 .critter.idle .pupils {
-  animation: pet-gaze 5.4s ease-in-out infinite;
+  animation: none;
 }
 
 .critter.thinking {
