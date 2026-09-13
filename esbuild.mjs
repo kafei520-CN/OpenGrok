@@ -1,10 +1,12 @@
 import * as esbuild from 'esbuild';
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
 
+const minify = process.argv.includes('--minify');
 const common = {
   bundle: true,
-  sourcemap: true,
+  minify,
+  sourcemap: minify ? false : true,
   logLevel: 'info',
   target: 'node20',
 };
@@ -72,7 +74,13 @@ function copyKatex() {
   }
   mkdirSync(destDir, { recursive: true });
   cpSync(srcCss, path.join(destDir, 'katex.min.css'));
-  cpSync(srcFonts, path.join(destDir, 'fonts'), { recursive: true });
+  const destFonts = path.join(destDir, 'fonts');
+  rmSync(destFonts, { recursive: true, force: true });
+  mkdirSync(destFonts, { recursive: true });
+  cpSync(srcFonts, destFonts, {
+    recursive: true,
+    filter: (from) => !from.endsWith('.ttf') && !from.endsWith('.woff'),
+  });
 }
 
 function copyMonaco() {
@@ -81,9 +89,19 @@ function copyMonaco() {
   if (!existsSync(src)) {
     return;
   }
+  rmSync(dest, { recursive: true, force: true });
   mkdirSync(path.dirname(dest), { recursive: true });
   cpSync(src, dest, {
     recursive: true,
-    filter: (from) => !from.endsWith('.map'),
+    filter: (from) => {
+      const base = path.basename(from);
+      if (base.endsWith('.map')) {
+        return false;
+      }
+      if (base.startsWith('nls.messages.') && base !== 'nls.messages.zh-cn.js') {
+        return false;
+      }
+      return true;
+    },
   });
 }

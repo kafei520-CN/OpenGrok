@@ -1248,12 +1248,92 @@ textarea:focus-visible {
   min-height: 100%;
 }
 
-.boot .mark {
-  width: 56px;
-  height: 56px;
-  color: var(--ice);
-  filter: drop-shadow(0 0 18px var(--ice-dim));
-  animation: star-pulse 1.2s ease-in-out infinite;
+.boot-logo {
+  width: 72px;
+  height: 68px;
+  overflow: visible;
+  color: var(--fg, #111);
+}
+
+.boot-logo path {
+  fill: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.boot-logo .boot-a {
+  stroke: currentColor;
+  fill: currentColor;
+  animation: boot-mark-a 2.6s ease-in-out infinite;
+}
+
+.boot-logo .boot-b {
+  stroke: currentColor;
+  fill: currentColor;
+  animation: boot-mark-b 2.6s ease-in-out infinite;
+}
+
+@keyframes boot-mark-a {
+  0%,
+  4% {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+    stroke-opacity: 1;
+  }
+  28% {
+    stroke-dashoffset: 0;
+    fill-opacity: 0;
+    stroke-opacity: 1;
+  }
+  36% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+    stroke-opacity: 0;
+  }
+  76% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+    stroke-opacity: 0;
+  }
+  90%,
+  100% {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+    stroke-opacity: 0;
+  }
+}
+
+@keyframes boot-mark-b {
+  0%,
+  28% {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+    stroke-opacity: 1;
+  }
+  52% {
+    stroke-dashoffset: 0;
+    fill-opacity: 0;
+    stroke-opacity: 1;
+  }
+  60% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+    stroke-opacity: 0;
+  }
+  76% {
+    stroke-dashoffset: 0;
+    fill-opacity: 1;
+    stroke-opacity: 0;
+  }
+  90%,
+  100% {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+    stroke-opacity: 0;
+  }
 }
 
 .permission {
@@ -3632,12 +3712,11 @@ kbd {
   --glass-pane-blur: var(--glass-2-blur, 23px);
   position: relative;
   overflow: hidden;
-  isolation: isolate;
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px));
-  backdrop-filter: blur(var(--glass-2-blur, 23px));
+  -webkit-backdrop-filter: blur(var(--glass-2-blur, 40px)) saturate(1.7) brightness(1.06);
+  backdrop-filter: blur(var(--glass-2-blur, 40px)) saturate(1.7) brightness(1.06);
 }
 
 #app[data-surface='glass'] .composer-card {
@@ -3674,7 +3753,6 @@ kbd {
   --glass-pane-blur: var(--glass-3-blur, 26px);
   position: relative;
   overflow: hidden;
-  isolation: isolate;
   background: var(--glass-film);
   border: var(--glass-border);
   box-shadow: var(--glass-shadow-sm);

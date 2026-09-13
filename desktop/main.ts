@@ -146,6 +146,10 @@ function createWindow(): BrowserWindow {
 }
 
 function iconPath(): string {
+  const ico = path.join(rootDir(), 'resources', 'icon.ico');
+  if (fs.existsSync(ico)) {
+    return ico;
+  }
   return path.join(rootDir(), 'resources', 'icon.png');
 }
 
@@ -193,8 +197,7 @@ function createTray(): void {
   if (tray) {
     return;
   }
-  const source = nativeImage.createFromPath(iconPath());
-  const image = source.isEmpty() ? source : source.resize({ width: 16, height: 16 });
+  const image = nativeImage.createFromPath(iconPath());
   tray = new Tray(image.isEmpty() ? iconPath() : image);
   tray.setToolTip(APP_NAME);
   tray.setContextMenu(

@@ -48,15 +48,15 @@ describe('theme', () => {
       140,
     );
     assert.equal(normalizeTheme({ wallpaper: 'icon' }).wallpaperScale, undefined);
-    assert.equal(normalizeTheme({ surface: 'glass' }).glassOpacity, 68);
+    assert.equal(normalizeTheme({ surface: 'glass' }).glassOpacity, 36);
     assert.equal(normalizeTheme({ surface: 'glass', glassOpacity: 70 }).glassOpacity, 70);
-    assert.equal(normalizeTheme({ surface: 'glass' }).glassBlur, 18);
+    assert.equal(normalizeTheme({ surface: 'glass' }).glassBlur, 24);
     assert.equal(normalizeTheme({ surface: 'glass', glassBlur: 28 }).glassBlur, 28);
-    assert.equal(normalizeTheme({ surface: 'glass' }).chromeBlur, 18);
+    assert.equal(normalizeTheme({ surface: 'glass' }).chromeBlur, 32);
     assert.equal(normalizeTheme({ surface: 'glass', chromeBlur: 30 }).chromeBlur, 30);
     assert.equal(normalizeTheme({ surface: 'glass' }).chromeGlass, undefined);
     assert.equal(normalizeTheme({ chromeGlass: true }).chromeGlass, true);
-    assert.equal(normalizeTheme({ chromeGlass: true }).chromeGlassOpacity, 72);
+    assert.equal(normalizeTheme({ chromeGlass: true }).chromeGlassOpacity, 38);
     assert.equal(normalizeTheme({ chromeGlass: true, chromeGlassOpacity: 88 }).chromeGlassOpacity, 88);
     assert.equal(normalizeTheme({ fontPath: 'E:/a.ttf' }).fontPath, 'E:/a.ttf');
     assert.equal(normalizeTheme({ fontPath: 'notes.txt' }).fontPath, undefined);
@@ -125,10 +125,10 @@ describe('theme', () => {
     assert.equal(props.get('--chrome-fill'), '40%');
     assert.equal(props.get('--glass-1-blur'), '30px');
     assert.equal(props.get('--glass-bg-pad'), '1.08');
-    assert.equal(props.get('--glass-2-blur'), '23px');
-    assert.equal(props.get('--glass-3-blur'), '26px');
-    assert.equal(props.get('--glass-5-blur'), '33px');
-    assert.equal(props.get('--glass-7-blur'), '41px');
+    assert.equal(props.get('--glass-2-blur'), '40px');
+    assert.equal(props.get('--glass-3-blur'), '46px');
+    assert.equal(props.get('--glass-5-blur'), '59px');
+    assert.equal(props.get('--glass-7-blur'), '72px');
     applyThemeTo(
       {
         setProperty: (name, value) => props.set(name, value),
@@ -141,7 +141,7 @@ describe('theme', () => {
     assert.equal(props.get('--glass-1-blur'), '0px');
     assert.equal(props.get('--glass-bg-pad'), '1');
     assert.equal(props.get('--glass-2-blur'), '38px');
-    assert.equal(props.get('--glass-7-blur'), '48px');
+    assert.equal(props.get('--glass-7-blur'), '68px');
   });
 
   it('uses host chrome when Ice has no background', () => {

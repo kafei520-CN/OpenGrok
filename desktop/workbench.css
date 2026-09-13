@@ -27,12 +27,14 @@ html.opengrok {
   --bad: #f85149;
   --warn: #f59e0b;
   --r: 12px;
-  --glass-edge: color-mix(in srgb, var(--fg) 16%, transparent);
+  --glass-edge: color-mix(in srgb, #fff 58%, color-mix(in srgb, var(--fg) 16%, transparent));
   --glass-border: 1px solid var(--glass-edge);
-  --glass-sheen: inset 0 1px 0 color-mix(in srgb, var(--fg) 22%, transparent);
-  --glass-shadow: var(--glass-sheen), 0 16px 36px color-mix(in srgb, #000 12%, transparent);
-  --glass-shadow-sm: var(--glass-sheen), 0 8px 16px color-mix(in srgb, #000 8%, transparent);
-  --glass-film: color-mix(in srgb, var(--bg) var(--chrome-fill, 72%), transparent);
+  --glass-sheen: inset 0 1px 0 rgb(255 255 255 / 70%), inset 0 -1px 0 rgb(255 255 255 / 10%);
+  --glass-shadow: var(--glass-sheen), 0 12px 40px color-mix(in srgb, #000 12%, transparent);
+  --glass-shadow-sm: var(--glass-sheen), 0 8px 22px color-mix(in srgb, #000 8%, transparent);
+  --glass-film: color-mix(in srgb, var(--bg) var(--chrome-fill, 38%), rgb(255 255 255 / 28%));
+  --glass-frost: blur(var(--glass-3-blur, 46px)) saturate(1.85) brightness(1.08);
+  --glass-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   --pane: color-mix(in srgb, var(--fg) 6%, transparent);
   --pane-strong: color-mix(in srgb, var(--fg) 10%, transparent);
 }
@@ -153,6 +155,19 @@ html.opengrok #app {
   padding: 0;
 }
 
+html.opengrok #app[data-surface='glass'] {
+  background:
+    radial-gradient(1100px 720px at 8% -8%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 58%),
+    radial-gradient(860px 560px at 108% 6%, color-mix(in srgb, var(--fg) 12%, transparent), transparent 52%),
+    radial-gradient(780px 520px at 72% 118%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--bg) 78%, #c5d0e6) 0%,
+      var(--bg) 46%,
+      color-mix(in srgb, var(--bg) 86%, #d4dbe8) 100%
+    );
+}
+
 html.opengrok #app.og-dash-on,
 html.opengrok #app:has(#og-dash) {
   grid-template-columns: var(--og-rail) minmax(0, 1fr) 320px;
@@ -182,13 +197,26 @@ html.opengrok #app[data-surface='solid'] {
 html.opengrok #app[data-surface='glass']::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -12%;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(1100px 680px at 8% -10%, color-mix(in srgb, var(--fg) 11%, transparent), transparent 56%),
-    radial-gradient(860px 540px at 108% 8%, color-mix(in srgb, var(--fg) 8%, transparent), transparent 52%),
-    radial-gradient(720px 480px at 62% 118%, color-mix(in srgb, var(--fg) 7%, transparent), transparent 58%);
+    radial-gradient(42% 36% at 18% 22%, color-mix(in srgb, #fff 55%, transparent), transparent 70%),
+    radial-gradient(38% 32% at 86% 12%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%),
+    radial-gradient(46% 38% at 70% 78%, color-mix(in srgb, #fff 40%, transparent), transparent 70%);
+  filter: blur(28px);
+}
+
+html.opengrok #app[data-surface='glass']::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: var(--glass-noise);
+  background-size: 180px 180px;
+  mix-blend-mode: overlay;
 }
 
 html.opengrok #grok-wallpaper,
@@ -223,10 +251,11 @@ html.opengrok #og-settings {
   min-height: 0;
   padding: 12px 10px 10px;
   gap: 8px;
-  border-right: 1px solid var(--line);
+  border-right: 1px solid var(--glass-edge);
   background: var(--glass-film);
-  -webkit-backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.25);
-  backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.25);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
+  box-shadow: var(--glass-sheen);
 }
 
 html.opengrok #app[data-surface='solid'] #og-rail {
@@ -458,9 +487,15 @@ html.opengrok #og-dash {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-left: 1px solid var(--line);
-  background: var(--bg);
+  border-left: 1px solid var(--glass-edge);
+  background: var(--glass-film);
   padding-top: var(--og-title);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
+}
+
+html.opengrok #app[data-surface='solid'] #og-dash {
+  background: var(--bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -672,10 +707,11 @@ html.opengrok .topbar {
   display: flex;
   align-items: center;
   background: var(--glass-film);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--glass-edge);
   -webkit-app-region: drag;
-  -webkit-backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.2);
-  backdrop-filter: blur(var(--glass-3-blur, 22px)) saturate(1.2);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
+  box-shadow: var(--glass-sheen);
 }
 
 html.opengrok #app[data-surface='solid'] .topbar {
@@ -822,8 +858,9 @@ html.opengrok .og-login {
   border-radius: 20px;
   border: var(--glass-border);
   background: var(--glass-film);
-  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
-  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
+  box-shadow: var(--glass-shadow);
 }
 
 html.opengrok #app[data-surface='solid'] .og-login {
@@ -869,14 +906,15 @@ html.opengrok .og-card {
   border-radius: 16px;
   border: var(--glass-border);
   background: var(--glass-film);
-  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
-  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
+  box-shadow: var(--glass-shadow-sm);
   color: var(--fg);
 }
 
 html.opengrok .og-card:hover {
-  background: color-mix(in srgb, var(--bg) 58%, transparent);
-  border-color: color-mix(in srgb, var(--fg) 28%, transparent);
+  background: color-mix(in srgb, var(--bg) 32%, rgb(255 255 255 / 40%));
+  border-color: color-mix(in srgb, #fff 70%, var(--fg));
   transform: translateY(-2px);
 }
 
@@ -938,8 +976,8 @@ html.opengrok .composer-card {
   border-radius: 18px;
   border: var(--glass-border);
   background: var(--glass-film);
-  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
-  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
   box-shadow: var(--glass-shadow);
 }
 
@@ -1463,8 +1501,9 @@ html.opengrok #app[data-surface='solid'] #og-settings {
 .og-set-card {
   border: var(--glass-border);
   background: var(--glass-film);
-  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
-  backdrop-filter: blur(var(--glass-2-blur, 23px)) saturate(1.25);
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
+  box-shadow: var(--glass-shadow-sm);
   border-radius: 16px;
   padding: 16px 18px 14px;
 }
@@ -1655,8 +1694,8 @@ html.opengrok .settings-seg button:hover:not(.on) {
   background: var(--glass-film);
   border: var(--glass-border);
   border-radius: 14px;
-  -webkit-backdrop-filter: blur(var(--glass-2-blur, 23px));
-  backdrop-filter: blur(var(--glass-2-blur, 23px));
+  -webkit-backdrop-filter: var(--glass-frost);
+  backdrop-filter: var(--glass-frost);
 }
 
 html.opengrok #app[data-surface='solid'] .og-set-embed .settings-card,

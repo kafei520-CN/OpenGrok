@@ -253,7 +253,7 @@ function surfaceCard(initial: ThemeColors): HTMLElement {
       'blur',
       tr('themeGlassBlur'),
       0,
-      40,
+      72,
       initial.glassBlur ?? DEFAULT_GLASS_BLUR,
       current !== 'glass',
       (n, persist) => {
@@ -270,7 +270,7 @@ function surfaceCard(initial: ThemeColors): HTMLElement {
       'chrome-blur',
       tr('themeChromeBlur'),
       0,
-      40,
+      72,
       initial.chromeBlur ?? DEFAULT_CHROME_BLUR,
       current !== 'glass',
       (n, persist) => {

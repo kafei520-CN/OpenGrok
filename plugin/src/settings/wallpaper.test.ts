@@ -59,7 +59,7 @@ describe('wallpaper fields', () => {
     assert.equal(clampGlassOpacity('x'), DEFAULT_GLASS_OPACITY);
     assert.equal(clampGlassBlur(28), 28);
     assert.equal(clampGlassBlur(-2), 0);
-    assert.equal(clampGlassBlur(99), 40);
+    assert.equal(clampGlassBlur(99), 72);
     assert.equal(clampGlassBlur('x'), DEFAULT_GLASS_BLUR);
     assert.equal(clampChromeGlassOpacity(88), 88);
     assert.equal(clampChromeGlassOpacity(-4), 0);
@@ -73,10 +73,10 @@ describe('wallpaper fields', () => {
     assert.equal(glassLayerBlur(18, 6), 37);
     assert.equal(glassLayerBlur(18, 7), 41);
     assert.equal(glassLayerBlur(0, 2), 0);
-    assert.equal(glassLayerBlur(30, 7), 48);
+    assert.equal(glassLayerBlur(30, 7), 68);
     assert.equal(clampChromeBlur(30), 30);
     assert.equal(clampChromeBlur(-2), 0);
-    assert.equal(clampChromeBlur(99), 40);
+    assert.equal(clampChromeBlur(99), 72);
     assert.equal(clampChromeBlur('x'), DEFAULT_CHROME_BLUR);
     assert.equal(chromeLayerBlur(18, 1), 23);
     assert.equal(chromeLayerBlur(18, 2), 23);

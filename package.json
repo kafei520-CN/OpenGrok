@@ -11,41 +11,69 @@
     "compile": "node esbuild.mjs",
     "dev": "node esbuild.mjs && electron .",
     "start": "electron .",
-    "pack": "node esbuild.mjs && electron-builder --win nsis"
+    "pack": "node esbuild.mjs --minify && electron-builder --win nsis --publish never"
   },
   "build": {
     "appId": "cn.mckafei.opengrok",
     "productName": "OpenGrok",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["en-US", "zh-CN"],
+    "afterPack": "./scripts/after-pack.cjs",
     "directories": {
       "output": "release"
     },
     "files": [
-      "dist/**",
-      "desktop/**",
-      "plugin/dist/**",
-      "plugin/media/**",
-      "resources/**"
+      "dist/main.js",
+      "dist/preload.js",
+      "!**/node_modules/**",
+      "!**/*.map"
     ],
     "extraResources": [
       {
         "from": "plugin/dist",
-        "to": "plugin/dist"
+        "to": "plugin/dist",
+        "filter": [
+          "**/*",
+          "!**/*.map",
+          "!test/**",
+          "!**/*.test.js"
+        ]
       },
       {
         "from": "plugin/media",
-        "to": "plugin/media"
+        "to": "plugin/media",
+        "filter": [
+          "**/*",
+          "!katex/fonts/*.ttf",
+          "!katex/fonts/*.woff"
+        ]
       },
       {
         "from": "desktop",
-        "to": "desktop"
+        "to": "desktop",
+        "filter": [
+          "index.html",
+          "workbench.css",
+          "prompt.html",
+          "prompt.js"
+        ]
       },
       {
         "from": "resources",
-        "to": "resources"
+        "to": "resources",
+        "filter": [
+          "icon.ico",
+          "icon.png",
+          "logo.png",
+          "logo.svg",
+          "SuperGrok.svg",
+          "SuperGrokHeavy.svg"
+        ]
       }
     ],
     "win": {
-      "icon": "resources/icon.png",
+      "icon": "resources/icon.ico",
       "target": [
         "nsis"
       ]
@@ -53,7 +81,10 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "OpenGrok"
+      "shortcutName": "OpenGrok",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico"
     }
   },
   "dependencies": {
