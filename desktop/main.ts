@@ -281,7 +281,7 @@ function readPet(): PetState {
   }
   const size = Number(raw.size);
   const colors = new Set(['ink', 'paper', 'moss', 'ice', 'ember']);
-  const shapes = new Set(['star', 'mark', 'orb', 'anime', 'pixel']);
+  const shapes = new Set(['star', 'mark', 'orb', 'anime', 'adult', 'pixel']);
   const faces = new Set(['idle', 'happy', 'curious']);
   const color = typeof raw.color === 'string' && colors.has(raw.color) ? raw.color : DEFAULT_PET.color;
   const shape = typeof raw.shape === 'string' && shapes.has(raw.shape) ? raw.shape : DEFAULT_PET.shape;

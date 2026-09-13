@@ -1,4 +1,4 @@
-export const PET_SHAPES = ['star', 'mark', 'orb', 'anime', 'pixel'] as const;
+export const PET_SHAPES = ['star', 'mark', 'orb', 'anime', 'adult', 'pixel'] as const;
 export type PetShape = (typeof PET_SHAPES)[number];
 
 export const PET_COLORS = ['ink', 'paper', 'moss', 'ice', 'ember'] as const;

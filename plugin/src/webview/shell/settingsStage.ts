@@ -722,7 +722,9 @@ function petGrid(
               ? tr('petShapeAnime')
               : id === 'pixel'
                 ? tr('petShapePixel')
-                : id;
+                : id === 'adult'
+                  ? tr('petShapeAdult')
+                  : id;
     btn.append(thumb(id));
     btn.addEventListener('click', () => pick(id));
     grid.append(btn);

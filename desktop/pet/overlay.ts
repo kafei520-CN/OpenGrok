@@ -81,6 +81,11 @@ const SPRITES: Record<string, Record<string, string>> = {
     idle: './pet-assets/pixel-idle.png',
     think: './pet-assets/pixel-think.png',
   },
+  adult: {
+    idle: './pet-assets/adult-idle.png',
+    blink: './pet-assets/adult-blink.png',
+    think: './pet-assets/adult-think.png',
+  },
 };
 
 let blinkTimer = 0;
@@ -149,14 +154,15 @@ function stopBlink(): void {
 
 function startBlink(): void {
   stopBlink();
-  if (prefs.shape !== 'anime' || mood !== 'idle') {
+  if ((prefs.shape !== 'anime' && prefs.shape !== 'adult') || mood !== 'idle') {
     return;
   }
+  const kind = prefs.shape;
   blinkTimer = window.setInterval(() => {
-    sprite.src = spriteSrc('anime', 'blink');
+    sprite.src = spriteSrc(kind, 'blink');
     window.setTimeout(() => {
-      if (prefs.shape === 'anime' && mood === 'idle') {
-        sprite.src = spriteSrc('anime', 'idle');
+      if (prefs.shape === kind && mood === 'idle') {
+        sprite.src = spriteSrc(kind, 'idle');
       }
     }, 140);
   }, 3200);
@@ -185,7 +191,7 @@ function applyLook(): void {
   document.documentElement.style.setProperty('--pet-pupil', tone.pupil);
   const spriteShape = Boolean(SPRITES[prefs.shape]);
   markHost.classList.toggle('is-sprite', spriteShape);
-  markHost.classList.toggle('is-anime', prefs.shape === 'anime');
+  markHost.classList.toggle('is-anime', prefs.shape === 'anime' || prefs.shape === 'adult');
   markHost.classList.toggle('is-pixel', prefs.shape === 'pixel');
   svg.hidden = spriteShape;
   sprite.hidden = !spriteShape;

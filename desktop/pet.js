@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   // desktop/pet/identity.ts
-  var PET_SHAPES = ["star", "mark", "orb", "anime", "pixel"];
+  var PET_SHAPES = ["star", "mark", "orb", "anime", "adult", "pixel"];
   var PET_COLORS = ["ink", "paper", "moss", "ice", "ember"];
   var PET_FACES = ["idle", "happy", "curious"];
   var PET_COLOR_SWATCH = {
@@ -87,6 +87,11 @@
     pixel: {
       idle: "./pet-assets/pixel-idle.png",
       think: "./pet-assets/pixel-think.png"
+    },
+    adult: {
+      idle: "./pet-assets/adult-idle.png",
+      blink: "./pet-assets/adult-blink.png",
+      think: "./pet-assets/adult-think.png"
     }
   };
   var blinkTimer = 0;
@@ -150,14 +155,15 @@
   }
   function startBlink() {
     stopBlink();
-    if (prefs.shape !== "anime" || mood !== "idle") {
+    if (prefs.shape !== "anime" && prefs.shape !== "adult" || mood !== "idle") {
       return;
     }
+    const kind = prefs.shape;
     blinkTimer = window.setInterval(() => {
-      sprite.src = spriteSrc("anime", "blink");
+      sprite.src = spriteSrc(kind, "blink");
       window.setTimeout(() => {
-        if (prefs.shape === "anime" && mood === "idle") {
-          sprite.src = spriteSrc("anime", "idle");
+        if (prefs.shape === kind && mood === "idle") {
+          sprite.src = spriteSrc(kind, "idle");
         }
       }, 140);
     }, 3200);
@@ -184,7 +190,7 @@
     document.documentElement.style.setProperty("--pet-pupil", tone.pupil);
     const spriteShape = Boolean(SPRITES[prefs.shape]);
     markHost.classList.toggle("is-sprite", spriteShape);
-    markHost.classList.toggle("is-anime", prefs.shape === "anime");
+    markHost.classList.toggle("is-anime", prefs.shape === "anime" || prefs.shape === "adult");
     markHost.classList.toggle("is-pixel", prefs.shape === "pixel");
     svg.hidden = spriteShape;
     sprite.hidden = !spriteShape;

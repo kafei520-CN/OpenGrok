@@ -6,7 +6,7 @@ const MARK_PATHS = [
 ];
 
 export function petMarkPreview(opts: { shape: string; color: string; size: number }): HTMLElement {
-  if (opts.shape === 'anime' || opts.shape === 'pixel') {
+  if (opts.shape === 'anime' || opts.shape === 'pixel' || opts.shape === 'adult') {
     const img = document.createElement('img');
     img.src = `./pet-assets/${opts.shape}-idle.png`;
     img.alt = opts.shape;
