@@ -321,8 +321,9 @@ function petConfigPayload(pet = readPet()) {
 const PET_MARK_PAD = 32;
 const PET_BUBBLE_SLOT = 84;
 
-function petBox(size = readPet().size, _bubble = false): { width: number; height: number } {
-  const side = Math.max(72, Math.min(200, size));
+function petBox(size = readPet().size, shape = readPet().shape): { width: number; height: number } {
+  const grown = shape === 'adult' ? Math.round(size * 1.6) : size;
+  const side = Math.max(72, Math.min(280, grown));
   return { width: side + PET_MARK_PAD, height: side + PET_MARK_PAD + PET_BUBBLE_SLOT };
 }
 
@@ -333,18 +334,13 @@ function defaultPetPoint(): { x: number; y: number } {
 }
 
 function clampPetPoint(x: number, y: number, box = petBox()): { x: number; y: number } {
-  const areas = screen.getAllDisplays().map((display) => display.workArea);
-  const visible = areas.some(
-    (area) =>
-      x + box.width > area.x + 24 &&
-      y + box.height > area.y + 24 &&
-      x < area.x + area.width - 24 &&
-      y < area.y + area.height - 24,
-  );
-  if (visible) {
-    return { x: Math.round(x), y: Math.round(y) };
-  }
-  return defaultPetPoint();
+  const area = screen.getPrimaryDisplay().workArea;
+  const maxX = area.x + Math.max(0, area.width - box.width);
+  const maxY = area.y + Math.max(0, area.height - box.height);
+  return {
+    x: Math.round(Math.min(Math.max(x, area.x), maxX)),
+    y: Math.round(Math.min(Math.max(y, area.y), maxY)),
+  };
 }
 
 function fitPetWindow(opts?: { bubble?: boolean; size?: number }): void {
@@ -352,7 +348,8 @@ function fitPetWindow(opts?: { bubble?: boolean; size?: number }): void {
   if (!win || win.isDestroyed()) {
     return;
   }
-  const next = petBox(opts?.size ?? readPet().size);
+  const pet = readPet();
+  const next = petBox(opts?.size ?? pet.size, pet.shape);
   const [x, y] = win.getPosition();
   const { width, height } = win.getBounds();
   const origin = clampPetPoint(
@@ -378,8 +375,8 @@ function fitPetWindow(opts?: { bubble?: boolean; size?: number }): void {
 
 function createPetWindow(): BrowserWindow {
   const pet = readPet();
-  const box = petBox(pet.size);
-  const origin = clampPetPoint(pet.x ?? defaultPetPoint().x, pet.y ?? defaultPetPoint().y, box);
+  const box = petBox(pet.size, pet.shape);
+  const origin = defaultPetPoint();
   const win = new BrowserWindow({
     width: box.width,
     height: box.height,
@@ -422,7 +419,24 @@ function savePetBounds(): void {
     return;
   }
   const [x, y] = win.getPosition();
-  writeState({ pet: { ...readPet(), x, y } });
+  const box = win.getBounds();
+  const origin = clampPetPoint(x, y, { width: box.width, height: box.height });
+  writeState({ pet: { ...readPet(), x: origin.x, y: origin.y } });
+}
+
+function parkPetCorner(): void {
+  const win = petWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  const box = petBox();
+  const origin = defaultPetPoint();
+  win.setBounds({
+    x: origin.x,
+    y: origin.y,
+    width: box.width,
+    height: box.height,
+  });
 }
 
 function showPetWindow(): void {
@@ -435,7 +449,8 @@ function showPetWindow(): void {
     petWindow = createPetWindow();
   }
   petWindow.showInactive();
-  fitPetWindow({ size: pet.size, bubble: true });
+  petWindow.setAlwaysOnTop(true, 'floating');
+  parkPetCorner();
   petWindow.webContents.send('pet-config', petConfigPayload(pet));
 }
 

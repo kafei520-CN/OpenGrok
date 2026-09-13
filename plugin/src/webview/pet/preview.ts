@@ -10,8 +10,9 @@ export function petMarkPreview(opts: { shape: string; color: string; size: numbe
     const img = document.createElement('img');
     img.src = `./pet-assets/${opts.shape}-idle.png`;
     img.alt = opts.shape;
-    img.style.width = `${opts.size}px`;
-    img.style.height = `${opts.size}px`;
+    const show = opts.shape === 'adult' ? Math.round(opts.size * 1.35) : opts.size;
+    img.style.width = `${show}px`;
+    img.style.height = `${show}px`;
     img.style.objectFit = 'contain';
     if (opts.shape === 'pixel') {
       img.style.imageRendering = 'pixelated';

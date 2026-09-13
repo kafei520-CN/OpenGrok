@@ -9,14 +9,14 @@ SRC = Path(
 )
 OUT = ROOT / "resources" / "pet"
 MAP = {
-    "3.jpg": "anime-idle.png",
-    "7.jpg": "anime-blink.png",
-    "6.jpg": "anime-think.png",
     "4.jpg": "pixel-idle.png",
     "5.jpg": "pixel-think.png",
-    "8.jpg": "adult-idle.png",
-    "9.jpg": "adult-blink.png",
-    "10.jpg": "adult-think.png",
+    "23.jpg": "anime-idle.png",
+    "24.jpg": "anime-blink.png",
+    "25.jpg": "anime-think.png",
+    "18.jpg": "adult-idle.png",
+    "21.jpg": "adult-blink.png",
+    "22.jpg": "adult-think.png",
 }
 
 

@@ -54,6 +54,7 @@ body {
   height: 100%;
   overflow: visible;
   object-fit: contain;
+  object-position: center bottom;
   pointer-events: none;
 }
 
@@ -72,7 +73,7 @@ body {
 #mark.is-pixel img {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  animation: bit-idle 0.7s steps(2, end) infinite;
+  animation: bit-idle 1.2s ease-in-out infinite;
 }
 
 @keyframes live2d-idle {
@@ -86,11 +87,12 @@ body {
 }
 
 @keyframes bit-idle {
-  0% {
+  0%,
+  100% {
     transform: translateY(0);
   }
-  100% {
-    transform: translateY(-4px);
+  50% {
+    transform: translateY(-3px);
   }
 }
 

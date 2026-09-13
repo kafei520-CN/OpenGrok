@@ -184,7 +184,8 @@
   function applyLook() {
     const fill = resolvePetBodyInk(prefs.color);
     const tone = resolvePetEyeInk(prefs.color);
-    document.documentElement.style.setProperty("--pet-size", `${prefs.size}px`);
+    const display = prefs.shape === "adult" ? Math.round(prefs.size * 1.6) : prefs.size;
+    document.documentElement.style.setProperty("--pet-size", `${display}px`);
     document.documentElement.style.setProperty("--pet-body", fill);
     document.documentElement.style.setProperty("--pet-eye", tone.eye);
     document.documentElement.style.setProperty("--pet-pupil", tone.pupil);
