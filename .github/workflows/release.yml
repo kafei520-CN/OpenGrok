@@ -32,7 +32,7 @@ jobs:
             pack: --mac dmg --mac zip --x64 --arm64
           - os: ubuntu-22.04
             name: Linux-x64
-            pack: --linux AppImage --linux deb --linux rpm --linux tar.gz --x64
+            pack: --linux AppImage --linux deb --linux tar.gz --x64
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.name }}
     steps:
@@ -60,6 +60,13 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder ${{ matrix.pack }} --publish never
 
+      - name: Pack Linux RPM
+        if: startsWith(matrix.os, 'ubuntu')
+        continue-on-error: true
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --linux rpm --x64 --publish never
+
       - name: Upload raw artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -76,6 +83,7 @@ jobs:
 
   publish:
     needs: build
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
