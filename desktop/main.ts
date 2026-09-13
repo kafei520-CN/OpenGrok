@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
+import { DEFAULT_DESKTOP_THEME } from '../plugin/src/settings/theme';
 
 const electron = resolveElectron();
 const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = electron;
@@ -589,14 +590,6 @@ function openPetSettings(): void {
 function sendSidecar(payload: unknown): void {
   sidecar?.stdin.write(`${JSON.stringify(payload)}\n`);
 }
-
-const DEFAULT_DESKTOP_THEME = {
-  primary: '#1c1c1c',
-  secondary: '#737373',
-  background: '#ffffff',
-  surface: 'glass',
-  chromeGlass: true,
-} as const;
 
 const LEGACY_INK_SEED = {
   primary: '#f4f4f4',

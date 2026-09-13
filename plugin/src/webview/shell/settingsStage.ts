@@ -8,7 +8,7 @@ import {
   type HeatmapDay,
 } from '../../billing/heatmapStats';
 import { DEFAULT_SETTINGS, type SettingsPage } from '../../core/types';
-import { applyThemeTo, contrastFg, parseHex } from '../../settings/theme';
+import { applyThemeTo, contrastFg, DEFAULT_DESKTOP_THEME, parseHex } from '../../settings/theme';
 import { SURFACES, getSurface, surfaceKind, type SurfaceId } from '../../settings/surfaces';
 import { loc, type DeskTab, post, render, tr, ui } from '../app';
 import { button } from '../dom';
@@ -617,6 +617,7 @@ function appearancePane(): HTMLElement {
         }
       }),
       swatches(themeBg()),
+      actions([button(tr('themeResetDefault'), () => resetAppearance())]),
     ]),
   );
   return el;
@@ -878,6 +879,22 @@ function themePrimary(): string {
 function followPrimary(background: string): string {
   const current = themePrimary();
   return current === contrastFg(themeBg()) ? contrastFg(background) : current;
+}
+
+function resetAppearance(): void {
+  const def = DEFAULT_DESKTOP_THEME;
+  post({
+    type: 'setTheme',
+    primary: def.primary,
+    secondary: def.secondary ?? '#737373',
+    background: def.background ?? '#ffffff',
+    surface: def.surface ?? 'glass',
+    chromeGlass: true,
+    wallpaper: '',
+    fontPath: '',
+    fontColor: '',
+    lockContrast: true,
+  });
 }
 
 function commitAppearance(patch: { background?: string; primary?: string; surface?: SurfaceId }): void {

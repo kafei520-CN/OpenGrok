@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  DEFAULT_DESKTOP_THEME,
   DEFAULT_THEME,
   THEME_PRESETS,
   applyThemeTo,
@@ -29,6 +30,13 @@ describe('theme', () => {
     assert.equal(rgbToHex('rgb(11 22 32)'), '#0b1620');
     assert.equal(rgbToHex('#0B1620'), '#0b1620');
     assert.equal(rgbToHex('transparent'), undefined);
+  });
+
+  it('seeds the desktop default as white glass', () => {
+    assert.equal(DEFAULT_DESKTOP_THEME.background, '#ffffff');
+    assert.equal(DEFAULT_DESKTOP_THEME.primary, '#1c1c1c');
+    assert.equal(DEFAULT_DESKTOP_THEME.surface, 'glass');
+    assert.equal(DEFAULT_DESKTOP_THEME.chromeGlass, true);
   });
 
   it('falls back to the Ice palette without locking a background', () => {

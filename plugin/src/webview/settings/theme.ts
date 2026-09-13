@@ -2,6 +2,7 @@ import type { StringKey } from '../../core/i18n';
 import {
   DEFAULT_FONT_SIZE,
   DEFAULT_LETTER_SPACING,
+  DEFAULT_DESKTOP_THEME,
   DEFAULT_THEME,
   THEME_PRESETS,
   applyThemeTo,
@@ -18,7 +19,7 @@ import {
   DEFAULT_GLASS_BLUR,
   DEFAULT_WALLPAPER_OPACITY,
 } from '../../settings/wallpaper';
-import { isRemoteWeb, post, tr, ui } from '../app';
+import { isDesktop, isRemoteWeb, post, tr, ui } from '../app';
 import { iconChevron } from '../icons';
 import { overlayKind, syncSurface, syncThemeFontFace, syncWallpaper } from '../chrome/wallpaper';
 
@@ -204,8 +205,10 @@ function pickerCard(initial: ThemeColors): HTMLElement {
   const reset = document.createElement('button');
   reset.type = 'button';
   reset.className = 'btn';
-  reset.textContent = tr('themeReset');
-  reset.addEventListener('click', () => commit(DEFAULT_THEME, true));
+  reset.textContent = isDesktop() ? tr('themeResetDefault') : tr('themeReset');
+  reset.addEventListener('click', () =>
+    commit(isDesktop() ? { ...DEFAULT_DESKTOP_THEME } : DEFAULT_THEME, true),
+  );
   actions.append(auto, reset);
   card.append(primary.row, secondary.row, background.row, actions);
   syncAuto();
