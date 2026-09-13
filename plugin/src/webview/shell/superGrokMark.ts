@@ -16,8 +16,14 @@ export function superGrokKind(
   if (!account?.email && !account?.methodId) {
     return undefined;
   }
-  const compact = (billing?.subscriptionTier ?? '').toLowerCase().replace(/[\s_-]+/g, '');
-  if (compact.includes('heavy') || compact === 'supergrokpro') {
+  const compact = [
+    billing?.subscriptionTier ?? '',
+    ...(billing?.products ?? []).map((row) => `${row.label} ${row.id}`),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+  if (compact.includes('heavy') || compact.includes('supergrokpro')) {
     return 'heavy';
   }
   return 'supergrok';

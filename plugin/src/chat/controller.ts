@@ -3,8 +3,7 @@ import {
   findInteractiveAuthMethod,
   isSessionAuthMethod,
   needsInteractiveLogin,
-  selectEagerAuthMethod,
-  selectNonInteractiveAuthMethod,
+  resolveSessionAuthMethodId,
 } from '../billing/authMethods';
 import { AUTH_METHODS } from '../core/constants';
 import { GrokAgent } from '../agent/agent';
@@ -1441,6 +1440,12 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (seeded && seeded.subscriptionTier !== this.billing?.subscriptionTier) {
       this.billing = seeded;
       this.emit();
+    } else if (!this.billing) {
+      const cached = withCachedSubscription(undefined);
+      if (cached) {
+        this.billing = cached;
+        this.emit();
+      }
     }
     if (!this.billing && !this.billingLoading) {
       this.billingLoading = true;
@@ -2415,15 +2420,27 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (this.agentProfile) {
       extra.agentProfile = this.agentProfile;
     }
+    const authMethodId = resolveSessionAuthMethodId({
+      accountMethodId: this.account?.methodId,
+      sessionAuthMethodId: this.sessionAuthMethodId,
+      skipInteractive: this.skipInteractiveLogin,
+      methods: this.agent?.authMethods() ?? [],
+      defaultId: this.agent?.defaultAuthMethodId(),
+    });
+    if (authMethodId) {
+      extra.authMethodId = authMethodId;
+    }
     return extra;
   }
 
   private async enterReady(agent: GrokAgent, epoch: number): Promise<void> {
     const methods = agent.authMethods();
     const defaultId = agent.defaultAuthMethodId();
-    const methodId = this.skipInteractiveLogin
-      ? selectNonInteractiveAuthMethod(methods, defaultId)
-      : selectEagerAuthMethod(methods, defaultId);
+    const methodId = resolveSessionAuthMethodId({
+      skipInteractive: this.skipInteractiveLogin,
+      methods,
+      defaultId,
+    });
     if (methodId) {
       try {
         await agent.authenticate(methodId);

@@ -6,14 +6,20 @@ import { pickSubscriptionTier } from './billing';
 import { asObject } from '../core/wire';
 
 export function withCachedSubscription(quota?: BillingQuota): BillingQuota | undefined {
-  if (!quota) {
-    return undefined;
-  }
-  if (quota.subscriptionTier?.trim()) {
+  if (quota?.subscriptionTier?.trim()) {
     return quota;
   }
   const cached = readCachedSubscriptionTier();
-  return cached ? { ...quota, subscriptionTier: cached } : quota;
+  if (!cached) {
+    return quota;
+  }
+  return {
+    usagePercent: quota?.usagePercent ?? 0,
+    periodType: quota?.periodType,
+    periodEnd: quota?.periodEnd,
+    products: quota?.products ?? [],
+    subscriptionTier: cached,
+  };
 }
 
 export function readCachedSubscriptionTier(): string | undefined {

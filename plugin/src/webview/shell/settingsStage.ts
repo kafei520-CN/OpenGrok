@@ -854,7 +854,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
-  const version = document.documentElement.dataset.version || '0.4.1';
+  const version = document.documentElement.dataset.version || '0.4.2';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';
   const logo = document.createElement('img');

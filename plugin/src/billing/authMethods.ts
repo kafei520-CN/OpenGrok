@@ -70,6 +70,26 @@ export function findInteractiveAuthMethod(
   return methods.find((method) => isInteractiveAuthMethod(method.id));
 }
 
+/** Method id to send on session/new. Skip-login falls back to the API key so a relay works unsigned. */
+export function resolveSessionAuthMethodId(opts: {
+  accountMethodId?: string;
+  sessionAuthMethodId?: string;
+  skipInteractive?: boolean;
+  methods: AuthMethodInfo[];
+  defaultId?: string;
+}): string | undefined {
+  if (opts.accountMethodId) {
+    return opts.accountMethodId;
+  }
+  if (opts.sessionAuthMethodId) {
+    return opts.sessionAuthMethodId;
+  }
+  if (opts.skipInteractive) {
+    return selectNonInteractiveAuthMethod(opts.methods, opts.defaultId) ?? AUTH_METHODS.apiKey;
+  }
+  return selectEagerAuthMethod(opts.methods, opts.defaultId);
+}
+
 export function isExternalProvider(method: AuthMethodInfo | undefined): boolean {
   const value = method?.meta?.['external_provider'];
   return value === true;

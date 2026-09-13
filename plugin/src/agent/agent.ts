@@ -251,11 +251,17 @@ export class GrokAgent {
     cwd: string,
     extraMeta?: Record<string, unknown>,
   ): Promise<SessionNewResult> {
-    const result = (await this.rpc.request('session/new', {
+    const meta = { ...extraMeta };
+    const authMethodId = asString(meta['authMethodId']);
+    const params: Record<string, unknown> = {
       cwd,
       mcpServers: [],
-      _meta: extraMeta,
-    })) as SessionNewResult;
+      _meta: meta,
+    };
+    if (authMethodId) {
+      params.authMethodId = authMethodId;
+    }
+    const result = (await this.rpc.request('session/new', params)) as SessionNewResult;
     this.sessionId = result.sessionId;
     return result;
   }

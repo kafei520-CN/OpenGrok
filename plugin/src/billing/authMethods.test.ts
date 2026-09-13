@@ -4,6 +4,7 @@ import {
   findInteractiveAuthMethod,
   isSessionAuthMethod,
   needsInteractiveLogin,
+  resolveSessionAuthMethodId,
   selectEagerAuthMethod,
   selectNonInteractiveAuthMethod,
 } from './authMethods';
@@ -56,5 +57,25 @@ describe('authMethods', () => {
     assert.equal(isSessionAuthMethod('grok.com'), true);
     assert.equal(isSessionAuthMethod('oidc'), true);
     assert.equal(isSessionAuthMethod('xai.api_key'), false);
+  });
+
+  it('session/new uses the signed-in method when present', () => {
+    assert.equal(
+      resolveSessionAuthMethodId({
+        accountMethodId: 'cached_token',
+        methods: [{ id: 'grok.com', name: 'Grok' }],
+      }),
+      'cached_token',
+    );
+  });
+
+  it('skip login can open a session with the API key and no grok.com method', () => {
+    assert.equal(
+      resolveSessionAuthMethodId({
+        skipInteractive: true,
+        methods: [{ id: 'grok.com', name: 'Grok' }],
+      }),
+      'xai.api_key',
+    );
   });
 });

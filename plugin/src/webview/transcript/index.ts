@@ -16,6 +16,7 @@ import { bindHoverPin } from '../chrome/popover';
 import { patchJumpBottom } from '../chrome/composer';
 import { onUserScroll, shouldPinToBottom, type TranscriptScroll } from '../chrome/scroll';
 import { bootStar, errorCard, home, loginCard, panel, setupCard } from '../chrome';
+import { superGrokKind } from '../shell/superGrokMark';
 import { button, iconButton } from '../dom';
 import {
   iconAskHint,
@@ -86,7 +87,7 @@ export function patchBody(parent: HTMLElement): void {
     patchErrorBanner(body);
     return;
   }
-  if (kind.startsWith('login') || kind === 'home') {
+  if (kind.startsWith('login') || kind.startsWith('home')) {
     const next = renderBody();
     next.id = 'grok-body';
     body.replaceWith(next);
@@ -113,7 +114,8 @@ function bodyKind(state: ChatState): string {
     return 'restoring';
   }
   if (state.messages.length === 0) {
-    return `home:${state.sessions?.length ?? 0}:${state.currentSessionId ?? ''}`;
+    const brand = superGrokKind(state.account, state.billing) ?? 'logo';
+    return `home:${state.sessions?.length ?? 0}:${state.currentSessionId ?? ''}:${brand}:${state.billing?.subscriptionTier ?? ''}`;
   }
   return 'chat';
 }

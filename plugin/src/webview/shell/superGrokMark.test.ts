@@ -29,6 +29,13 @@ describe('superGrokKind', () => {
   });
 
   it('uses SuperGrok when signed in otherwise', () => {
+    assert.equal(
+      superGrokKind(
+        { email: 'a@x.ai' },
+        { usagePercent: 1, products: [{ id: 'heavy', label: 'SuperGrok Heavy', usagePercent: 11 }] },
+      ),
+      'heavy',
+    );
     assert.equal(superGrokKind({ methodId: 'grok.com' }, undefined), 'supergrok');
     assert.equal(
       superGrokKind(
