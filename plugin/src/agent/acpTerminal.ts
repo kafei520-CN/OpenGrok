@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { plat, type AgentTerminal, type AgentTerminalExit, type AgentTerminalSpawn } from '../core/platform';
 import { asObject, asString } from '../core/wire';
+import { spawnWindowsAware, TermStreamDecoder } from '../terminal/termSpawn';
 
 const terms = new Map<string, AgentTerminal>();
 
@@ -122,17 +123,19 @@ class ProcessTerminal implements AgentTerminal {
 
   constructor(opts: AgentTerminalSpawn) {
     this.limit = opts.outputByteLimit ?? 2_000_000;
-    const env = { ...process.env, ...opts.env };
-    this.child = spawn(opts.command, opts.args ?? [], {
+    const decoder = new TermStreamDecoder();
+    this.child = spawnWindowsAware(opts.command, opts.args, {
       cwd: opts.cwd,
-      env,
-      shell: !opts.args?.length,
-      windowsHide: true,
+      env: opts.env,
     });
-    const onData = (chunk: Buffer) => this.push(chunk.toString('utf8'));
+    const onData = (chunk: Buffer) => this.push(decoder.push(chunk));
     this.child.stdout?.on('data', onData);
     this.child.stderr?.on('data', onData);
     this.child.on('close', (code, signal) => {
+      const tail = decoder.flush();
+      if (tail) {
+        this.push(tail);
+      }
       this.finish({
         exitCode: code ?? undefined,
         signal: signal ?? undefined,

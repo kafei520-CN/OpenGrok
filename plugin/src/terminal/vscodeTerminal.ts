@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { AgentTerminal, AgentTerminalExit, AgentTerminalSpawn } from '../core/platform';
+import { spawnWindowsAware, TermStreamDecoder } from './termSpawn';
 
 export function createVscodeAgentTerminal(opts: AgentTerminalSpawn): AgentTerminal {
   return new VscodeAgentTerminal(opts);
@@ -44,21 +45,27 @@ class VscodeAgentTerminal implements AgentTerminal {
       cwd: opts.cwd,
       pty,
     });
-    const env = { ...process.env, ...opts.env };
-    this.child = spawn(opts.command, opts.args ?? [], {
+    const decoder = new TermStreamDecoder();
+    this.child = spawnWindowsAware(opts.command, opts.args, {
       cwd: opts.cwd,
-      env,
-      shell: !opts.args?.length,
-      windowsHide: true,
+      env: opts.env,
     });
     const onData = (chunk: Buffer) => {
-      const text = chunk.toString('utf8');
+      const text = decoder.push(chunk);
+      if (!text) {
+        return;
+      }
       this.push(text);
       this.echo(text.replace(/\n/g, '\r\n'));
     };
     this.child.stdout?.on('data', onData);
     this.child.stderr?.on('data', onData);
     this.child.on('close', (code, signal) => {
+      const tail = decoder.flush();
+      if (tail) {
+        this.push(tail);
+        this.echo(tail.replace(/\n/g, '\r\n'));
+      }
       this.finish({
         exitCode: code ?? undefined,
         signal: signal ?? undefined,

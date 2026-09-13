@@ -542,6 +542,21 @@ describe('terminal tool cards', () => {
     assert.equal(session.messages[0]?.tools[0]?.output, '你好');
   });
 
+  it('recovers latin-1 stored GBK from terminal content text', () => {
+    const bytes = Buffer.from([0xc4, 0xe3, 0xba, 0xc3]);
+    const mojibake = bytes.toString('latin1');
+    const session = view({ replaying: false, messages: [], termEncoding: 'utf-8' });
+    applySessionUpdate(session, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't-mojibake',
+      kind: 'execute',
+      status: 'completed',
+      title: 'echo',
+      content: { type: 'text', text: mojibake },
+    });
+    assert.equal(session.messages[0]?.tools[0]?.output, '你好');
+  });
+
   it('replays a terminal card from the latest snapshot instead of every delta', () => {
     const session = view({ replaying: true, messages: [] });
     applySessionUpdate(session, {

@@ -5,6 +5,15 @@ import { foldCarriageReturns, normalizeTermStream, renderTermHtml } from './term
 import { normalizeTermEncoding } from './termEncoding';
 import iconv from 'iconv-lite';
 import { decodeTermBytes, decodeTermUnknown } from './termText';
+import {
+  isCmdCommand,
+  isPowershellCommand,
+  prepareWindowsSpawn,
+  TermStreamDecoder,
+  utf8CmdArgs,
+  utf8PowershellArgs,
+  wrapWindowsShellCommand,
+} from './termSpawn';
 
 describe('term encoding', () => {
   it('defaults unknown labels to utf-8', () => {
@@ -72,6 +81,64 @@ describe('term encoding', () => {
     assert.equal(text.includes('\uFFFD'), false);
     assert.match(text, /目录|驱动器/);
     assert.ok(lossy.includes('\uFFFD') || text.includes('目录') || text.includes('驱动器'));
+  });
+});
+
+describe('term spawn utf-8', () => {
+  it('detects powershell hosts', () => {
+    assert.equal(isPowershellCommand('powershell.exe'), true);
+    assert.equal(isPowershellCommand('C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe'), true);
+    assert.equal(isPowershellCommand('pwsh'), true);
+    assert.equal(isPowershellCommand('cmd.exe'), false);
+  });
+
+  it('injects utf-8 console encoding into powershell -Command', () => {
+    const args = utf8PowershellArgs(['-NoProfile', '-Command', 'dir']);
+    const command = args[args.indexOf('-Command') + 1] ?? '';
+    assert.match(command, /UTF8Encoding/);
+    assert.match(command, /dir/);
+  });
+
+  it('wraps cmd with chcp 65001', () => {
+    const wrapped = wrapWindowsShellCommand('echo 你好');
+    assert.match(wrapped.args.join(' '), /chcp 65001/);
+    assert.match(wrapped.args.join(' '), /echo 你好/);
+  });
+
+  it('injects chcp 65001 into cmd /c args', () => {
+    assert.equal(isCmdCommand('C:\\\\Windows\\\\System32\\\\cmd.exe'), true);
+    const args = utf8CmdArgs(['/d', '/c', 'dir']);
+    assert.match(args[args.indexOf('/c') + 1] ?? '', /chcp 65001/);
+    assert.match(args[args.indexOf('/c') + 1] ?? '', /dir/);
+  });
+
+  it('prepares powershell shell strings with utf-8 console encoding', () => {
+    if (process.platform !== 'win32') {
+      return;
+    }
+    const prepared = prepareWindowsSpawn('powershell -NoProfile -Command dir', [], true);
+    assert.equal(prepared.shell, false);
+    const command = prepared.args[prepared.args.findIndex((item) => item.toLowerCase() === '-command') + 1] ?? '';
+    assert.match(command, /UTF8Encoding/);
+    assert.match(command, /dir/);
+  });
+
+  it('reassembles GBK Chinese split across chunks', () => {
+    const bytes = iconv.encode('你好', 'gbk');
+    const decoder = new TermStreamDecoder('utf-8');
+    const first = decoder.push(bytes.subarray(0, 3));
+    const second = decoder.push(bytes.subarray(3));
+    const tail = decoder.flush();
+    assert.equal(`${first}${second}${tail}`, '你好');
+  });
+
+  it('reassembles UTF-8 Chinese split across chunks', () => {
+    const bytes = Buffer.from('你好', 'utf8');
+    const decoder = new TermStreamDecoder('utf-8');
+    const first = decoder.push(bytes.subarray(0, 2));
+    const second = decoder.push(bytes.subarray(2));
+    const tail = decoder.flush();
+    assert.equal(`${first}${second}${tail}`, '你好');
   });
 });
 

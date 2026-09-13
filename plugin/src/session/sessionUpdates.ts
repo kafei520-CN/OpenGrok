@@ -569,8 +569,8 @@ function applyTerminalCard(
       card.output = clipTermOutput(`${card.output ?? ''}${raw.delta}`);
     }
   } else {
-    const fromContent = textFromToolContent(update.content);
-    const chunk = raw.text || (fromContent.includes('\uFFFD') ? '' : fromContent) || fromContent;
+    const fromContent = textFromToolContent(update.content, encoding);
+    const chunk = raw.text || fromContent;
     if (chunk) {
       const prev = card.output ?? '';
       if (replaying || !prev || chunk.startsWith(prev) || chunk.length >= prev.length) {
@@ -615,7 +615,10 @@ function parseTermRaw(
   return { text, delta };
 }
 
-function textFromToolContent(content: SessionUpdate['content']): string {
+function textFromToolContent(
+  content: SessionUpdate['content'],
+  encoding: TermEncoding,
+): string {
   if (!content) {
     return '';
   }
@@ -626,13 +629,13 @@ function textFromToolContent(content: SessionUpdate['content']): string {
       continue;
     }
     if (block.text) {
-      parts.push(block.text);
+      parts.push(decodeTermUnknown(block.text, encoding));
       continue;
     }
     const nested = asObject((block as unknown as Record<string, unknown>)['content']);
     const inner = asString(nested['text']);
     if (inner) {
-      parts.push(inner);
+      parts.push(decodeTermUnknown(inner, encoding));
     }
   }
   return parts.join('');

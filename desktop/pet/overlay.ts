@@ -219,14 +219,7 @@ function applySpriteFrame(): void {
   }
   loadSpritePack(prefs.shape);
   stopBlink();
-  if (mood === 'working') {
-    showSpriteFrame('think');
-    blinkTimer = window.setInterval(() => {
-      showSpriteFrame(shownFrame === 'think' ? 'idle' : 'think');
-    }, 860);
-    return;
-  }
-  if (mood === 'thinking' || prefs.face === 'curious') {
+  if (mood === 'working' || mood === 'thinking' || prefs.face === 'curious') {
     showSpriteFrame('think');
     return;
   }

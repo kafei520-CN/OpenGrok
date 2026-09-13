@@ -67,6 +67,25 @@ describe('acp terminal', () => {
     await handleTerminalMethod('terminal/release', { terminalId: created.terminalId });
   });
 
+  it('decodes chinese cmd output without replacement chars', async () => {
+    if (process.platform !== 'win32') {
+      return;
+    }
+    bindPlatform(fakePlat());
+    const created = (await handleTerminalMethod('terminal/create', {
+      command: 'cmd.exe',
+      args: ['/c', 'dir'],
+      cwd: process.cwd(),
+    })) as { terminalId: string };
+    await handleTerminalMethod('terminal/wait_for_exit', { terminalId: created.terminalId });
+    const out = (await handleTerminalMethod('terminal/output', {
+      terminalId: created.terminalId,
+    })) as { output: string };
+    assert.equal(out.output.includes('\uFFFD'), false);
+    assert.match(out.output, /目录|驱动器|Volume|Directory/);
+    await handleTerminalMethod('terminal/release', { terminalId: created.terminalId });
+  });
+
   it('disposeAllTerminals releases waiters instead of leaving them hung', async () => {
     bindPlatform(fakePlat());
     const created = (await handleTerminalMethod('terminal/create', {
