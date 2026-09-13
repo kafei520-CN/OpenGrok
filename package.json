@@ -1,7 +1,7 @@
 {
   "name": "opengrok",
   "productName": "OpenGrok",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Desktop workbench for the Grok Build CLI",
   "author": "mckafei_CN",
   "license": "Apache-2.0",
@@ -11,7 +11,7 @@
     "compile": "node esbuild.mjs",
     "dev": "node esbuild.mjs && electron .",
     "start": "electron .",
-    "pack": "node esbuild.mjs --minify && electron-builder --win nsis --publish never"
+    "pack": "node scripts/pack.mjs"
   },
   "build": {
     "appId": "cn.mckafei.opengrok",
@@ -77,10 +77,18 @@
         ]
       }
     ],
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "win": {
       "icon": "resources/icon.ico",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
       ]
     },
     "nsis": {
@@ -89,7 +97,50 @@
       "shortcutName": "OpenGrok",
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
-      "installerHeaderIcon": "resources/icon.ico"
+      "installerHeaderIcon": "resources/icon.ico",
+      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
+    },
+    "mac": {
+      "icon": "resources/icon.png",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "category": "Development",
+      "executableName": "opengrok",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        },
+        {
+          "target": "rpm",
+          "arch": ["x64"]
+        },
+        {
+          "target": "tar.gz",
+          "arch": ["x64"]
+        }
+      ]
     }
   },
   "dependencies": {

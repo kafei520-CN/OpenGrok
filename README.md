@@ -25,13 +25,28 @@ npm install
 npm run dev
 ```
 
-## 打包
+## 打包 / GitHub Release
+
+本地（当前系统）：
 
 ```powershell
 npm run pack
 ```
 
-安装包输出到 `release/`。
+多平台安装包由 GitHub Actions 在 tag `v*` 时构建并发布（对齐 Grok App 的资产清单）：
+
+| 资产 | 平台 |
+| --- | --- |
+| `OpenGrok_*_x64-setup.exe` | Windows |
+| `OpenGrok_*_x64-portable.zip` | Windows 绿色版 |
+| `OpenGrok_*_x64.dmg` / `*_aarch64.dmg` | macOS Intel / Apple Silicon |
+| `OpenGrok_*_amd64.AppImage` / `.deb` / `.tar.gz` | Linux |
+| `OpenGrok-*-1.x86_64.rpm` | Fedora / RHEL |
+
+```powershell
+git tag v0.4.0
+git push origin v0.4.0
+```
 
 ## 源码
 

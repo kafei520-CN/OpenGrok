@@ -1,4 +1,4 @@
-"""Build a Windows app icon: white Grok mark on a rounded tile with transparent corners."""
+"""Build installer icons from resources/logo.png: rounded tile + multi-size ICO."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "resources" / "icon.png"
+SRC = ROOT / "resources" / "logo.png"
 OUT_PNG = ROOT / "resources" / "icon.png"
 OUT_ICO = ROOT / "resources" / "icon.ico"
 MASTER = 1024

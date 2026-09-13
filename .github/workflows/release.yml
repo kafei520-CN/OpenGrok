@@ -1,0 +1,123 @@
+# Multi-platform installers, same set as Grok App releases:
+#   Windows x64 NSIS + portable zip
+#   macOS x64 / Apple Silicon DMG + app zip
+#   Linux x64 AppImage / deb / rpm / tar.gz
+# Trigger: git tag v*  or Actions → Run workflow
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows-x64
+            pack: --win nsis --win zip --x64
+          - os: macos-latest
+            name: macOS
+            pack: --mac dmg --mac zip --x64 --arm64
+          - os: ubuntu-22.04
+            name: Linux-x64
+            pack: --linux AppImage --linux deb --linux rpm --linux tar.gz --x64
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Linux packaging tools
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot dpkg
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Compile
+        run: node esbuild.mjs --minify
+
+      - name: Pack
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder ${{ matrix.pack }} --publish never
+
+      - name: Upload raw artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.dmg
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm
+            release/*.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: raw-artifacts
+          merge-multiple: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stage GitHub asset names
+        id: ver
+        run: |
+          TAG="v$(node -p "require('./package.json').version")"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          node scripts/stage-release-assets.mjs raw-artifacts release/github
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || steps.ver.outputs.tag }}
+          name: OpenGrok ${{ github.ref_type == 'tag' && github.ref_name || steps.ver.outputs.tag }}
+          generate_release_notes: true
+          files: release/github/*
+          fail_on_unmatched_files: true
+          body: |
+            Desktop workbench for the local Grok Build CLI.
+
+            | File | Platform |
+            | --- | --- |
+            | `OpenGrok_*_x64-setup.exe` | Windows 安装包 |
+            | `OpenGrok_*_x64-portable.zip` | Windows 绿色版 |
+            | `OpenGrok_*_x64.dmg` | macOS Intel |
+            | `OpenGrok_*_aarch64.dmg` | macOS Apple Silicon |
+            | `OpenGrok_*_amd64.AppImage` | Linux AppImage |
+            | `OpenGrok_*_amd64.deb` | Debian / Ubuntu |
+            | `OpenGrok-*-1.x86_64.rpm` | Fedora / RHEL |
+            | `OpenGrok_*_amd64.tar.gz` | Linux 解压即用 |
+
+            不带版本号的文件名是同一安装包的稳定下载别名。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
