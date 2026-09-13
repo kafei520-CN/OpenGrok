@@ -93,6 +93,24 @@ export const ui = {
   heatGranularity: 'day' as 'day' | 'week' | 'cumul',
   chosenModelId: undefined as string | undefined,
   chosenEffort: undefined as string | undefined,
+  pet: {
+    enabled: true,
+    size: 128,
+    color: 'ink',
+    shape: 'star',
+    eyeColor: 'auto',
+    expression: 'idle',
+    bubbles: true,
+  } as {
+    enabled: boolean;
+    size: number;
+    color: string;
+    shape: string;
+    eyeColor: string;
+    expression: string;
+    bubbles: boolean;
+  },
+  petTab: 'look' as 'look' | 'bubbles',
   review: undefined as
     | {
         locale?: string;
@@ -112,7 +130,8 @@ export type DeskTab =
   | 'extensions'
   | 'cli'
   | 'remote'
-  | 'about';
+  | 'about'
+  | 'pet';
 
 export function loc(): UiLocale {
   return ui.state.locale === 'zh-CN' ? 'zh-CN' : 'en';

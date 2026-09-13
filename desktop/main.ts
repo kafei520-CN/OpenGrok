@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 
 const electron = resolveElectron();
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, shell, Tray } = electron;
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = electron;
 
 function resolveElectron(): typeof import('electron') {
   const mod = ElectronNS as typeof import('electron') & { default?: typeof import('electron') };
@@ -24,9 +24,22 @@ function resolveElectron(): typeof import('electron') {
 const APP_NAME = 'OpenGrok';
 const VERSION = app.getVersion();
 
+type PetState = {
+  enabled: boolean;
+  x?: number;
+  y?: number;
+  size: number;
+  color: string;
+  shape: string;
+  eyeColor: string;
+  expression: string;
+  bubbles: boolean;
+};
+
 type AppState = {
   cwd?: string;
   bounds?: { x: number; y: number; width: number; height: number };
+  pet?: PetState;
 };
 
 type HostRequest = {
@@ -42,7 +55,21 @@ let promptWindow: BrowserWindow | undefined;
 let promptConfig: unknown;
 let promptResolve: ((value: unknown) => void) | undefined;
 let tray: InstanceType<typeof Tray> | undefined;
+let petWindow: BrowserWindow | undefined;
+let lastAgentStatus = '';
+let lastPetPayload: { mood: string; headline: string } = { mood: 'idle', headline: '' };
+let petDoneTimer: ReturnType<typeof setTimeout> | undefined;
 let isQuitting = false;
+
+const DEFAULT_PET: PetState = {
+  enabled: true,
+  size: 128,
+  color: 'ink',
+  shape: 'star',
+  eyeColor: 'auto',
+  expression: 'idle',
+  bubbles: true,
+};
 
 function rootDir(): string {
   return app.isPackaged ? process.resourcesPath : path.join(__dirname, '..');
@@ -85,11 +112,21 @@ function grokBin(): string {
 
 const TITLEBAR_H = 36;
 
+type TitleChrome = {
+  background: string;
+  foreground: string;
+  surface: 'glass' | 'solid';
+};
+
+function overlayFill(chrome: TitleChrome): string {
+  return chrome.surface === 'solid' ? chrome.background : '#00000000';
+}
+
 function applyTitleBarOverlay(win: BrowserWindow, chrome = readThemeChrome()): void {
   win.setAlwaysOnTop(false);
   try {
     win.setTitleBarOverlay({
-      color: chrome.background,
+      color: overlayFill(chrome),
       symbolColor: chrome.foreground,
       height: TITLEBAR_H,
     });
@@ -111,7 +148,7 @@ function createWindow(): BrowserWindow {
     frame: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: chrome.background,
+      color: overlayFill(chrome),
       symbolColor: chrome.foreground,
       height: TITLEBAR_H,
     },
@@ -187,6 +224,9 @@ function quitApp(): void {
   if (win && !win.isDestroyed()) {
     writeState({ bounds: win.getBounds() });
   }
+  savePetBounds();
+  petWindow?.destroy();
+  petWindow = undefined;
   stopSidecar();
   tray?.destroy();
   tray = undefined;
@@ -200,18 +240,335 @@ function createTray(): void {
   const image = nativeImage.createFromPath(iconPath());
   tray = new Tray(image.isEmpty() ? iconPath() : image);
   tray.setToolTip(APP_NAME);
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '打开 OpenGrok', click: () => showMainWindow() },
-      { type: 'separator' },
-      { label: '退出', click: () => quitApp() },
-    ]),
-  );
+  tray.setContextMenu(buildTrayMenu());
   tray.on('click', () => showMainWindow());
 }
 
 function sendUi(payload: unknown): void {
   mainWindow?.webContents.send('grok-host', payload);
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+  const row = payload as {
+    type?: string;
+    status?: string;
+    message?: unknown;
+    state?: {
+      status?: string;
+      restoringSession?: boolean;
+      permission?: unknown;
+      messages?: unknown;
+      sessions?: unknown;
+      currentSessionId?: string;
+    };
+  };
+  if (row.type === 'state') {
+    pushPetStatus(row.state);
+    return;
+  }
+  if (typeof row.status === 'string') {
+    pushPetStatus({
+      status: row.status,
+      messages: row.message ? [row.message] : undefined,
+    });
+  }
+}
+
+function readPet(): PetState {
+  const raw = readState().pet;
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_PET };
+  }
+  const size = Number(raw.size);
+  const colors = new Set(['ink', 'paper', 'moss', 'ice', 'ember']);
+  const shapes = new Set(['star', 'mark', 'orb', 'anime', 'pixel']);
+  const faces = new Set(['idle', 'happy', 'curious']);
+  const color = typeof raw.color === 'string' && colors.has(raw.color) ? raw.color : DEFAULT_PET.color;
+  const shape = typeof raw.shape === 'string' && shapes.has(raw.shape) ? raw.shape : DEFAULT_PET.shape;
+  const expression =
+    typeof raw.expression === 'string' && faces.has(raw.expression) ? raw.expression : DEFAULT_PET.expression;
+  return {
+    enabled: raw.enabled !== false,
+    x: typeof raw.x === 'number' ? raw.x : undefined,
+    y: typeof raw.y === 'number' ? raw.y : undefined,
+    size: Number.isFinite(size) ? (size <= 112 ? 96 : size >= 144 ? 160 : 128) : DEFAULT_PET.size,
+    color,
+    shape,
+    eyeColor: 'auto',
+    expression,
+    bubbles: raw.bubbles !== false,
+  };
+}
+
+function petConfigPayload(pet = readPet()) {
+  return {
+    size: pet.size,
+    color: pet.color,
+    shape: pet.shape,
+    eyeColor: pet.eyeColor,
+    expression: pet.expression,
+    bubbles: pet.bubbles,
+    labels: {
+      thinking: '思考中…',
+      working: '工作中…',
+      done: '完成',
+      alert: '需要你',
+    },
+  };
+}
+
+/** Matches Grok App Windows overlay: always reserve a chip slot so the mark never jumps. */
+const PET_MARK_PAD = 32;
+const PET_BUBBLE_SLOT = 84;
+
+function petBox(size = readPet().size, _bubble = false): { width: number; height: number } {
+  const side = Math.max(72, Math.min(200, size));
+  return { width: side + PET_MARK_PAD, height: side + PET_MARK_PAD + PET_BUBBLE_SLOT };
+}
+
+function defaultPetPoint(): { x: number; y: number } {
+  const area = screen.getPrimaryDisplay().workArea;
+  const box = petBox();
+  return { x: area.x + area.width - box.width - 16, y: area.y + area.height - box.height - 16 };
+}
+
+function clampPetPoint(x: number, y: number, box = petBox()): { x: number; y: number } {
+  const areas = screen.getAllDisplays().map((display) => display.workArea);
+  const visible = areas.some(
+    (area) =>
+      x + box.width > area.x + 24 &&
+      y + box.height > area.y + 24 &&
+      x < area.x + area.width - 24 &&
+      y < area.y + area.height - 24,
+  );
+  if (visible) {
+    return { x: Math.round(x), y: Math.round(y) };
+  }
+  return defaultPetPoint();
+}
+
+function fitPetWindow(opts?: { bubble?: boolean; size?: number }): void {
+  const win = petWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  const next = petBox(opts?.size ?? readPet().size);
+  const [x, y] = win.getPosition();
+  const { width, height } = win.getBounds();
+  const origin = clampPetPoint(
+    x - (next.width - width) / 2,
+    y - (next.height - height),
+    next,
+  );
+  if (
+    Math.abs(width - next.width) < 1 &&
+    Math.abs(height - next.height) < 1 &&
+    Math.abs(x - origin.x) < 1 &&
+    Math.abs(y - origin.y) < 1
+  ) {
+    return;
+  }
+  win.setBounds({
+    x: origin.x,
+    y: origin.y,
+    width: next.width,
+    height: next.height,
+  });
+}
+
+function createPetWindow(): BrowserWindow {
+  const pet = readPet();
+  const box = petBox(pet.size);
+  const origin = clampPetPoint(pet.x ?? defaultPetPoint().x, pet.y ?? defaultPetPoint().y, box);
+  const win = new BrowserWindow({
+    width: box.width,
+    height: box.height,
+    x: origin.x,
+    y: origin.y,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    show: false,
+    backgroundColor: '#00000000',
+    title: 'OpenGrok pet',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  win.setAlwaysOnTop(true, 'floating');
+  win.setMenuBarVisibility(false);
+  win.setIgnoreMouseEvents(true, { forward: true });
+  void win.loadFile(path.join(rootDir(), 'desktop', 'pet.html'));
+  win.on('closed', () => {
+    if (petWindow === win) {
+      petWindow = undefined;
+    }
+  });
+  return win;
+}
+
+function savePetBounds(): void {
+  const win = petWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  const [x, y] = win.getPosition();
+  writeState({ pet: { ...readPet(), x, y } });
+}
+
+function showPetWindow(): void {
+  const pet = readPet();
+  if (!pet.enabled) {
+    petWindow?.hide();
+    return;
+  }
+  if (!petWindow || petWindow.isDestroyed()) {
+    petWindow = createPetWindow();
+  }
+  petWindow.showInactive();
+  fitPetWindow({ size: pet.size, bubble: true });
+  petWindow.webContents.send('pet-config', petConfigPayload(pet));
+}
+
+function hidePetWindow(persist = true): void {
+  savePetBounds();
+  petWindow?.hide();
+  if (persist) {
+    writeState({ pet: { ...readPet(), enabled: false } });
+    notifyPetSettings();
+  }
+}
+
+function applyPetPatch(patch: Partial<PetState>): void {
+  const prev = readPet();
+  const next = { ...prev, ...patch };
+  writeState({ pet: next });
+  if (next.enabled) {
+    showPetWindow();
+    fitPetWindow({ size: next.size, bubble: true });
+    petWindow?.webContents.send('pet-config', petConfigPayload(next));
+  } else {
+    hidePetWindow(false);
+  }
+  const chromeChanged =
+    prev.enabled !== next.enabled ||
+    prev.color !== next.color ||
+    prev.shape !== next.shape ||
+    prev.eyeColor !== next.eyeColor ||
+    prev.expression !== next.expression ||
+    prev.bubbles !== next.bubbles ||
+    prev.size !== next.size;
+  if (chromeChanged) {
+    notifyPetSettings();
+    tray?.setContextMenu(buildTrayMenu());
+  }
+}
+
+function notifyPetSettings(): void {
+  mainWindow?.webContents.send('grok-host', { type: 'pet', config: readPet() });
+}
+
+function petHeadline(state?: Record<string, unknown>): string {
+  if (!state) {
+    return '';
+  }
+  const permission = state.permission as { title?: string } | undefined;
+  if (permission?.title) {
+    return permission.title;
+  }
+  const sid = typeof state.currentSessionId === 'string' ? state.currentSessionId : '';
+  const sessions = Array.isArray(state.sessions) ? state.sessions : [];
+  const session = sessions.find((row) => row && typeof row === 'object' && (row as { id?: string }).id === sid) as
+    | { title?: string }
+    | undefined;
+  const messages = Array.isArray(state.messages) ? state.messages : [];
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i] as {
+      role?: string;
+      text?: string;
+      thinking?: string;
+      tools?: Array<{ title?: string; status?: string; detail?: string }>;
+    };
+    if (msg?.role !== 'assistant') {
+      continue;
+    }
+    const tools = Array.isArray(msg.tools) ? msg.tools : [];
+    const live = [...tools].reverse().find((tool) => tool.status === 'in_progress' || tool.status === 'pending');
+    const tool = live ?? [...tools].reverse()[0];
+    const think = (msg.thinking ?? '').trim();
+    const text = (msg.text ?? '').trim();
+    if (tool?.title) {
+      return tool.title;
+    }
+    if (think) {
+      return think.slice(0, 72);
+    }
+    if (text) {
+      return text.slice(0, 72);
+    }
+    break;
+  }
+  return (session?.title ?? '').trim();
+}
+
+function pushPetStatus(state?: {
+  status?: string;
+  restoringSession?: boolean;
+  permission?: unknown;
+  messages?: unknown;
+  sessions?: unknown;
+  currentSessionId?: string;
+}): void {
+  const status = state?.status ?? '';
+  const key = `${status}:${state?.permission ? 'p' : ''}:${petHeadline(state as Record<string, unknown>)}`;
+  if (key === lastAgentStatus) {
+    return;
+  }
+  const prev = lastAgentStatus.split(':')[0] ?? '';
+  lastAgentStatus = key;
+  let mood = 'idle';
+  if (state?.permission) {
+    mood = 'alert';
+  } else if (status === 'streaming') {
+    mood = 'working';
+  } else if (status === 'error') {
+    mood = 'alert';
+  } else if (prev === 'streaming' && status === 'ready') {
+    mood = 'done';
+  }
+  if (petDoneTimer) {
+    clearTimeout(petDoneTimer);
+    petDoneTimer = undefined;
+  }
+  lastPetPayload = { mood, headline: petHeadline(state as Record<string, unknown>) };
+  petWindow?.webContents.send('pet-status', lastPetPayload);
+}
+
+function buildTrayMenu() {
+  const pet = readPet();
+  return Menu.buildFromTemplate([
+    { label: '打开 OpenGrok', click: () => showMainWindow() },
+    {
+      label: pet.enabled ? '隐藏宠物' : '显示宠物',
+      click: () => applyPetPatch({ enabled: !pet.enabled }),
+    },
+    { type: 'separator' },
+    { label: '退出', click: () => quitApp() },
+  ]);
+}
+
+function openPetSettings(): void {
+  showMainWindow();
+  mainWindow?.webContents.send('grok-host', { type: 'openDesk', tab: 'pet' });
 }
 
 function sendSidecar(payload: unknown): void {
@@ -269,16 +626,27 @@ function readUiState(): Record<string, unknown> {
   }
 }
 
-function readThemeChrome(): { background: string; foreground: string } {
+function readThemeChrome(): TitleChrome {
   const theme = readUiState()['ui.theme'];
   if (theme && typeof theme === 'object') {
-    const background = (theme as { background?: unknown }).background;
+    const row = theme as { background?: unknown; surface?: unknown };
+    const background = row.background;
+    const surface = row.surface === 'solid' ? 'solid' : 'glass';
     if (typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background)) {
       const hex = background.toLowerCase();
-      return { background: hex, foreground: contrastFg(hex) };
+      return { background: hex, foreground: contrastFg(hex), surface };
     }
+    return {
+      background: DEFAULT_DESKTOP_THEME.background,
+      foreground: DEFAULT_DESKTOP_THEME.primary,
+      surface,
+    };
   }
-  return { background: DEFAULT_DESKTOP_THEME.background, foreground: DEFAULT_DESKTOP_THEME.primary };
+  return {
+    background: DEFAULT_DESKTOP_THEME.background,
+    foreground: DEFAULT_DESKTOP_THEME.primary,
+    surface: 'glass',
+  };
 }
 
 function seedTheme(): void {
@@ -597,6 +965,8 @@ if (!gotLock) {
     mainWindow = createWindow();
     mainWindow.webContents.on('did-finish-load', () => {
       startSidecar(readState().cwd || defaultCwd());
+      notifyPetSettings();
+      showPetWindow();
     });
   });
 }
@@ -614,18 +984,107 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  savePetBounds();
   stopSidecar();
 });
 
-ipcMain.on('grok-ui', (_event, message: { type?: string }) => {
+ipcMain.on(
+  'grok-ui',
+  (
+    _event,
+    message: {
+      type?: string;
+      enabled?: boolean;
+      size?: number;
+      color?: string;
+      shape?: string;
+      eyeColor?: string;
+      expression?: string;
+      bubbles?: boolean;
+    },
+  ) => {
   if (message?.type === 'pickProject') {
     void pickProject();
+    return;
+  }
+  if (message?.type === 'petConfig') {
+    const patch: Partial<PetState> = {};
+    if (typeof message.enabled === 'boolean') {
+      patch.enabled = message.enabled;
+    }
+    if (typeof message.size === 'number') {
+      patch.size = message.size;
+    }
+    if (typeof message.color === 'string') {
+      patch.color = message.color;
+    }
+    if (typeof message.shape === 'string') {
+      patch.shape = message.shape;
+    }
+    if (typeof message.eyeColor === 'string') {
+      patch.eyeColor = message.eyeColor;
+    }
+    if (typeof message.expression === 'string') {
+      patch.expression = message.expression;
+    }
+    if (typeof message.bubbles === 'boolean') {
+      patch.bubbles = message.bubbles;
+    }
+    applyPetPatch(patch);
     return;
   }
   sendSidecar({ type: 'ui', message });
 });
 
-ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: string }) => {
+ipcMain.on('pet-ready', () => {
+  petWindow?.webContents.send('pet-config', petConfigPayload());
+  petWindow?.webContents.send('pet-status', lastPetPayload);
+});
+
+ipcMain.on('pet-move', (_event, delta: { dx?: number; dy?: number }) => {
+  const win = petWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  const [x, y] = win.getPosition();
+  win.setPosition(Math.round(x + Number(delta?.dx ?? 0)), Math.round(y + Number(delta?.dy ?? 0)));
+});
+
+ipcMain.on('pet-end-move', () => {
+  savePetBounds();
+});
+
+ipcMain.on('pet-ignore', (_event, ignore: boolean) => {
+  if (!petWindow || petWindow.isDestroyed()) {
+    return;
+  }
+  petWindow.setIgnoreMouseEvents(Boolean(ignore), { forward: true });
+});
+
+ipcMain.on('pet-fit', (_event, opts: { bubble?: boolean; size?: number }) => {
+  fitPetWindow(opts);
+});
+
+ipcMain.on('pet-click', () => {
+  showMainWindow();
+});
+
+ipcMain.on('pet-dblclick', () => {
+  hidePetWindow(true);
+});
+
+ipcMain.on('pet-menu', () => {
+  const pet = readPet();
+  Menu.buildFromTemplate([
+    { label: '打开 OpenGrok', click: () => showMainWindow() },
+    { label: pet.enabled ? '隐藏宠物' : '显示宠物', click: () => applyPetPatch({ enabled: !pet.enabled }) },
+    { label: '宠物设置', click: () => openPetSettings() },
+    { type: 'separator' },
+    { label: '退出', click: () => quitApp() },
+  ]).popup({ window: petWindow });
+});
+
+ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: string; surface?: string }) => {
   const win = mainWindow;
   if (!win || win.isDestroyed()) {
     return;
@@ -639,8 +1098,9 @@ ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: str
     typeof next?.foreground === 'string' && /^#[0-9a-f]{6}$/i.test(next.foreground)
       ? next.foreground.toLowerCase()
       : fallback.foreground;
+  const surface = next?.surface === 'solid' ? 'solid' : 'glass';
   win.setBackgroundColor(background);
-  applyTitleBarOverlay(win, { background, foreground });
+  applyTitleBarOverlay(win, { background, foreground, surface });
 });
 
 ipcMain.on('grok-window', (_event, action: 'min' | 'max' | 'close') => {

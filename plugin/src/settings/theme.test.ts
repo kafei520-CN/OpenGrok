@@ -98,7 +98,7 @@ describe('theme', () => {
       },
       { primary: '#ff0000', secondary: '#00ff00', background: '#0b1620' },
     );
-    assert.equal(props.get('--ok'), '#00ff00');
+    assert.equal(props.has('--ok'), false);
     assert.equal(props.get('--bg'), '#0b1620');
     assert.equal(props.get('--fg'), '#e8e8e8');
     assert.equal(props.get('--ice'), 'color-mix(in srgb, #ff0000 72%, var(--fg))');
@@ -112,7 +112,7 @@ describe('theme', () => {
       DEFAULT_THEME,
     );
     assert.equal(props.has('--bg'), false);
-    assert.equal(props.get('--ok'), DEFAULT_THEME.secondary);
+    assert.equal(props.has('--ok'), false);
     applyThemeTo(
       {
         setProperty: (name, value) => props.set(name, value),

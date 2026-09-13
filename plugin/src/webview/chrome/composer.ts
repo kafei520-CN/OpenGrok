@@ -103,9 +103,9 @@ export function patchComposer(): void {
     menuSlot.replaceChildren();
     releaseByClass('menu');
     if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'slash') {
-      pinFloating(slashMenu(), input, { prefer: 'above', align: 'start' });
+      pinComposerMenu(slashMenu(), input);
     } else if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'files') {
-      pinFloating(fileMenu(), input, { prefer: 'above', align: 'start' });
+      pinComposerMenu(fileMenu(), input);
     }
   }
   const card = document.getElementById('composer-card');
@@ -628,6 +628,17 @@ function pickerMenu(
   return list;
 }
 
+function pinComposerMenu(el: HTMLElement, input: HTMLElement): void {
+  const card = document.getElementById('composer-card') ?? input;
+  pinFloating(el, card, {
+    prefer: 'above',
+    align: 'start',
+    matchWidth: true,
+    pad: 52,
+    gap: 10,
+  });
+}
+
 function slashMenu(): HTMLElement {
   const query = (ui.draft.split(/\s+/).pop() ?? '').replace(/^\//, '');
   const hits = filterCommands(
@@ -635,7 +646,7 @@ function slashMenu(): HTMLElement {
     query,
   );
   const el = document.createElement('div');
-  el.className = 'menu';
+  el.className = 'menu composer-suggest';
   el.addEventListener('click', (event) => event.stopPropagation());
   for (const cmd of hits) {
     const item = document.createElement('button');
@@ -655,7 +666,7 @@ function slashMenu(): HTMLElement {
 
 function fileMenu(): HTMLElement {
   const el = document.createElement('div');
-  el.className = 'menu';
+  el.className = 'menu composer-suggest';
   el.addEventListener('click', (event) => event.stopPropagation());
   for (const hit of ui.state.fileHits ?? []) {
     const item = document.createElement('button');

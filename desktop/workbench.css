@@ -702,7 +702,9 @@ html.opengrok #app.og-dash-on .topbar {
   padding-right: 16px;
 }
 
-html.opengrok .topbar {
+html.opengrok .topbar,
+html.opengrok #app[data-surface='glass'] .topbar,
+html.opengrok #app[data-surface='solid'] .topbar {
   height: var(--og-title);
   min-height: var(--og-title);
   max-height: var(--og-title);
@@ -710,9 +712,13 @@ html.opengrok .topbar {
   padding-right: 140px;
   display: flex;
   align-items: center;
-  background: var(--glass-film);
   border-bottom: 1px solid var(--glass-edge);
   -webkit-app-region: drag;
+}
+
+html.opengrok .topbar,
+html.opengrok #app[data-surface='glass'] .topbar {
+  background: var(--glass-film);
   -webkit-backdrop-filter: var(--glass-frost);
   backdrop-filter: var(--glass-frost);
   box-shadow: var(--glass-sheen);
@@ -722,6 +728,7 @@ html.opengrok #app[data-surface='solid'] .topbar {
   background: var(--bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  box-shadow: none;
 }
 
 html.opengrok .og-session-title {
@@ -1524,6 +1531,86 @@ html.opengrok #app[data-surface='solid'] .og-set-card {
   margin: 0 0 12px;
   font-size: 13px;
   font-weight: 650;
+}
+
+.pet-look__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin-bottom: 14px;
+}
+
+.pet-look__body {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px 18px;
+}
+
+.pet-look__preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.pet-look__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pet-look__field-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pet-settings-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pet-settings-grid__btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--elev, var(--bg));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pet-settings-grid__btn.is-on {
+  outline: 2px solid #00c972;
+  outline-offset: 1px;
+}
+
+.pet-settings-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: block;
+}
+
+.pet-settings-swatch--auto {
+  background: conic-gradient(#111 0 180deg, #f4f4f5 180deg 360deg);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.pet-settings-swatch--light {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.og-set-line input[type='range'] {
+  width: 160px;
+  accent-color: var(--ok, #22c55e);
 }
 
 .og-set-line,

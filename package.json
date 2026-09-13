@@ -56,7 +56,11 @@
           "index.html",
           "workbench.css",
           "prompt.html",
-          "prompt.js"
+          "prompt.js",
+          "pet.html",
+          "pet.css",
+          "pet.js",
+          "pet-assets/*.png"
         ]
       },
       {
@@ -68,7 +72,8 @@
           "logo.png",
           "logo.svg",
           "SuperGrok.svg",
-          "SuperGrokHeavy.svg"
+          "SuperGrokHeavy.svg",
+          "pet/*.png"
         ]
       }
     ],

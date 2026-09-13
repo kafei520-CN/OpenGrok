@@ -49,6 +49,16 @@ type HostMsg = {
   reset?: boolean;
   done?: boolean;
   items?: EditStatsItem[];
+  config?: {
+    enabled?: boolean;
+    size?: number;
+    color?: string;
+    shape?: string;
+    eyeColor?: string;
+    expression?: string;
+    bubbles?: boolean;
+  };
+  tab?: string;
 } & Partial<StreamTail>;
 
 let hydrateGen = 0;
@@ -60,6 +70,39 @@ function onHostMessage(data: HostMsg | null | undefined): void {
   }
   if (data.type === 'wake') {
     post({ type: 'alive' });
+    return;
+  }
+  if (data.type === 'pet' && data.config && typeof data.config === 'object') {
+    const config = data.config as {
+      enabled?: boolean;
+      size?: number;
+      color?: string;
+      shape?: string;
+      eyeColor?: string;
+      expression?: string;
+      bubbles?: boolean;
+    };
+    const enabled = config.enabled !== false;
+    const color = config.color ?? ui.pet.color;
+    const size = typeof config.size === 'number' ? config.size : ui.pet.size;
+    ui.pet = {
+      enabled,
+      size,
+      color,
+      shape: config.shape ?? ui.pet.shape,
+      eyeColor: config.eyeColor ?? ui.pet.eyeColor,
+      expression: config.expression ?? ui.pet.expression,
+      bubbles: config.bubbles !== false,
+    };
+    const chromeChanged = true;
+    if (chromeChanged) {
+      render();
+    }
+    return;
+  }
+  if (data.type === 'openDesk' && data.tab) {
+    ui.deskTab = data.tab as typeof ui.deskTab;
+    post({ type: 'openSettings' });
     return;
   }
   if (data.type === 'state' && data.state) {
@@ -479,10 +522,17 @@ function syncDesktopChrome(): void {
   }
   const host = (
     window as unknown as {
-      opengrok?: { setChrome?: (chrome: { background: string; foreground: string }) => void };
+      opengrok?: {
+        setChrome?: (chrome: {
+          background: string;
+          foreground: string;
+          surface?: 'glass' | 'solid';
+        }) => void;
+      };
     }
   ).opengrok;
-  host?.setChrome?.({ background, foreground });
+  const surface = document.getElementById('app')?.dataset.surface === 'solid' ? 'solid' : 'glass';
+  host?.setChrome?.({ background, foreground, surface });
 }
 
 function hrefFromEvent(event: MouseEvent): string | undefined {

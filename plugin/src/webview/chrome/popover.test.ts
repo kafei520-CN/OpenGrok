@@ -5,6 +5,18 @@ import { placeFloating } from './popover';
 const view = { left: 0, top: 0, width: 400, height: 600 };
 
 describe('placeFloating', () => {
+  it('keeps a pad away from the top of the view', () => {
+    const placed = placeFloating({
+      view,
+      anchor: { left: 40, top: 500, right: 760, bottom: 560 },
+      size: { width: 720, height: 800 },
+      prefer: 'above',
+      pad: 52,
+    });
+    assert.ok(placed.top >= 52);
+    assert.ok(placed.maxHeight <= 500 - 52 - 6);
+  });
+
   it('opens above when there is room', () => {
     const placed = placeFloating({
       view,

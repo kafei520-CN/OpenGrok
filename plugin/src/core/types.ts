@@ -704,6 +704,16 @@ export type WebviewToHost =
   | { type: 'attach' }
   | { type: 'openSettings' }
   | { type: 'pickProject' }
+  | {
+      type: 'petConfig';
+      enabled?: boolean;
+      size?: number;
+      color?: string;
+      shape?: string;
+      eyeColor?: string;
+      expression?: string;
+      bubbles?: boolean;
+    }
   | { type: 'closeSettings' }
   | { type: 'openRules' }
   | { type: 'closeRules' }

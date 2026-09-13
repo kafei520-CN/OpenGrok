@@ -19,6 +19,7 @@ import {
   iconGear,
   iconInfo,
   iconPerson,
+  iconPet,
   iconPlug,
 } from '../icons';
 import { mountApiFormBody, mountApisBody } from '../settings/api';
@@ -30,6 +31,14 @@ import { mountRemoteBody } from '../settings/remote';
 import { mountRulesBody } from '../settings/rules';
 import { mountSkillsBody } from '../settings/skills';
 import { mountWorktreesBody } from '../settings/worktrees';
+import {
+  PET_COLORS,
+  PET_COLOR_SWATCH,
+  PET_FACES,
+  PET_SHAPES,
+  PET_SIZES,
+} from '../../../../desktop/pet/identity';
+import { petMarkPreview } from '../pet/preview';
 
 export function patchSettingsStage(parent: HTMLElement): void {
   const existing = document.getElementById('og-settings');
@@ -107,6 +116,14 @@ function stageKey(tab: DeskTab): string {
     JSON.stringify(ui.state.settings ?? {}),
     String(ui.state.compactMode),
     String(ui.state.timestamps),
+    String(ui.pet.enabled),
+    ui.pet.color,
+    ui.pet.shape,
+    ui.pet.eyeColor,
+    ui.pet.expression,
+    String(ui.pet.bubbles),
+    String(ui.pet.size),
+    ui.petTab,
     remoteKey(ui.state.remote),
   ].join('~');
 }
@@ -150,6 +167,7 @@ export function settingsNavItems(): SettingsNavItem[] {
   return [
     { id: 'agent', label: tr('setGeneral'), icon: iconGear(), group: 'person' },
     { id: 'appearance', label: tr('setAppearance'), icon: iconEdit(), group: 'person' },
+    { id: 'pet', label: tr('petTitle'), icon: iconPet(), group: 'person' },
     { id: 'account', label: tr('setAccount'), icon: iconPerson(), group: 'person' },
     { id: 'extensions', label: tr('setExt'), icon: iconPlug(), group: 'system' },
     { id: 'cli', label: tr('setCli'), icon: iconChip(), group: 'system' },
@@ -249,6 +267,9 @@ function activeDeckId(tab: DeskTab, pages: DeckPage[]): string {
   if (tab === 'extensions') {
     return ui.state.settingsPage ?? 'extensions';
   }
+  if (tab === 'pet') {
+    return ui.petTab;
+  }
   return pages[0]?.id ?? '';
 }
 
@@ -275,6 +296,11 @@ function deckPages(tab: DeskTab): DeckPage[] {
       return extensionPages();
     case 'appearance':
       return [{ id: 'appearance', label: tr('setAppearance'), body: () => appearancePane() }];
+    case 'pet':
+      return [
+        { id: 'look', label: tr('petLook'), body: () => petLookPane(), open: () => { ui.petTab = 'look'; render(); } },
+        { id: 'bubbles', label: tr('petBubbles'), body: () => petBubblesPane(), open: () => { ui.petTab = 'bubbles'; render(); } },
+      ];
     case 'agent':
       return [{ id: 'agent', label: tr('setGeneral'), body: () => generalPane() }];
     case 'cli':
@@ -594,6 +620,144 @@ function appearancePane(): HTMLElement {
   );
   return el;
 }
+
+function petLookPane(): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'pet-look';
+  const bar = document.createElement('div');
+  bar.className = 'pet-look__toolbar';
+  bar.append(
+    toggle(tr('petEnable'), tr('petHint'), ui.pet.enabled, () => {
+      ui.pet = { ...ui.pet, enabled: !ui.pet.enabled };
+      post({ type: 'petConfig', enabled: ui.pet.enabled });
+    }),
+  );
+  const sizes = document.createElement('div');
+  sizes.className = 'pet-look__toolbar-item';
+  sizes.append(
+    seg(
+      PET_SIZES.map((n) => [String(n), n === 96 ? tr('petSizeSm') : n === 160 ? tr('petSizeLg') : tr('petSizeMd')]),
+      String(ui.pet.size),
+      (value) => {
+        ui.pet = { ...ui.pet, size: Number(value) };
+        post({ type: 'petConfig', size: Number(value) });
+      },
+    ),
+  );
+  bar.append(sizes);
+  const body = document.createElement('div');
+  body.className = 'pet-look__body';
+  const preview = document.createElement('div');
+  preview.className = 'pet-look__preview';
+  preview.append(petMarkPreview({ shape: ui.pet.shape, color: ui.pet.color, size: 96 }));
+  const fields = document.createElement('div');
+  fields.className = 'pet-look__fields';
+  fields.append(
+    petGrid(
+      tr('petShape'),
+      PET_SHAPES,
+      ui.pet.shape,
+      (shape) => {
+        ui.pet = { ...ui.pet, shape };
+        post({ type: 'petConfig', shape });
+      },
+      (shape) => petMarkPreview({ shape, color: ui.pet.color, size: 26 }),
+    ),
+    petGrid(
+      tr('petExpression'),
+      PET_FACES,
+      ui.pet.expression,
+      (expression) => {
+        ui.pet = { ...ui.pet, expression };
+        post({ type: 'petConfig', expression });
+      },
+      (expression) => petMarkPreview({ shape: ui.pet.shape, color: ui.pet.color, size: 26 }),
+    ),
+    petColorGrid(),
+  );
+  body.append(preview, fields);
+  el.append(bar, body);
+  return el;
+}
+
+function petBubblesPane(): HTMLElement {
+  const el = document.createElement('div');
+  el.append(
+    card(tr('petBubbles'), [
+      toggle(tr('petBubblesOn'), tr('petBubblesHint'), ui.pet.bubbles, () => {
+        ui.pet = { ...ui.pet, bubbles: !ui.pet.bubbles };
+        post({ type: 'petConfig', bubbles: ui.pet.bubbles });
+      }),
+    ]),
+  );
+  return el;
+}
+
+function petGrid(
+  label: string,
+  ids: readonly string[],
+  current: string,
+  pick: (id: string) => void,
+  thumb: (id: string) => HTMLElement,
+): HTMLElement {
+  const field = document.createElement('div');
+  field.className = 'pet-look__field';
+  const name = document.createElement('div');
+  name.className = 'pet-look__field-label';
+  name.textContent = label;
+  const grid = document.createElement('div');
+  grid.className = 'pet-settings-grid';
+  for (const id of ids) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = id === current ? 'pet-settings-grid__btn is-on' : 'pet-settings-grid__btn';
+    btn.title =
+      id === 'star'
+        ? tr('petShapeStar')
+        : id === 'mark'
+          ? tr('petShapeMark')
+          : id === 'orb'
+            ? tr('petShapeOrb')
+            : id === 'anime'
+              ? tr('petShapeAnime')
+              : id === 'pixel'
+                ? tr('petShapePixel')
+                : id;
+    btn.append(thumb(id));
+    btn.addEventListener('click', () => pick(id));
+    grid.append(btn);
+  }
+  field.append(name, grid);
+  return field;
+}
+
+function petColorGrid(): HTMLElement {
+  const field = document.createElement('div');
+  field.className = 'pet-look__field';
+  const name = document.createElement('div');
+  name.className = 'pet-look__field-label';
+  name.textContent = tr('petColor');
+  const grid = document.createElement('div');
+  grid.className = 'pet-settings-grid';
+  for (const id of PET_COLORS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = id === ui.pet.color ? 'pet-settings-grid__btn is-on' : 'pet-settings-grid__btn';
+    const sw = document.createElement('span');
+    sw.className = id === 'paper' ? 'pet-settings-swatch pet-settings-swatch--light' : 'pet-settings-swatch';
+    sw.style.background = PET_COLOR_SWATCH[id].value;
+    btn.append(sw);
+    btn.addEventListener('click', () => {
+      ui.pet = { ...ui.pet, color: id };
+      post({ type: 'petConfig', color: id });
+    });
+    grid.append(btn);
+  }
+  field.append(name, grid);
+  return field;
+}
+
+
 
 function generalPane(): HTMLElement {
   const el = document.createElement('div');

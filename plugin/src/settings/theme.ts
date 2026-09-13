@@ -242,7 +242,7 @@ export function applyThemeTo(
   }
   style.setProperty('--ice', `color-mix(in srgb, ${theme.primary} 72%, var(--fg))`);
   style.setProperty('--ice-dim', 'color-mix(in srgb, var(--ice) 28%, transparent)');
-  style.setProperty('--ok', theme.secondary);
+  style.removeProperty?.('--ok');
   style.setProperty('--accent', theme.primary);
   style.setProperty('--on-accent', contrastFg(theme.primary));
   style.setProperty('--glass-fill', `${theme.glassOpacity ?? DEFAULT_GLASS_OPACITY}%`);

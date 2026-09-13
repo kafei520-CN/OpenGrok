@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('opengrok', {
       handler(message);
     });
   },
-  setChrome(chrome: { background: string; foreground: string }) {
+  setChrome(chrome: { background: string; foreground: string; surface?: 'glass' | 'solid' }) {
     ipcRenderer.send('grok-chrome', chrome);
   },
   window(action: 'min' | 'max' | 'close') {
@@ -22,6 +22,39 @@ contextBridge.exposeInMainWorld('opengrok', {
     ipcRenderer.on('grok-maximized', (_event, value: boolean) => {
       handler(value);
     });
+  },
+});
+
+contextBridge.exposeInMainWorld('opengrokPet', {
+  ready() {
+    ipcRenderer.send('pet-ready');
+  },
+  move(delta: { dx: number; dy: number }) {
+    ipcRenderer.send('pet-move', delta);
+  },
+  endMove() {
+    ipcRenderer.send('pet-end-move');
+  },
+  click() {
+    ipcRenderer.send('pet-click');
+  },
+  dblclick() {
+    ipcRenderer.send('pet-dblclick');
+  },
+  menu() {
+    ipcRenderer.send('pet-menu');
+  },
+  setIgnore(ignore: boolean) {
+    ipcRenderer.send('pet-ignore', ignore);
+  },
+  fit(opts: { bubble?: boolean; size?: number }) {
+    ipcRenderer.send('pet-fit', opts);
+  },
+  onConfig(handler: (config: unknown) => void) {
+    ipcRenderer.on('pet-config', (_event, config: unknown) => handler(config));
+  },
+  onStatus(handler: (status: string) => void) {
+    ipcRenderer.on('pet-status', (_event, status: string) => handler(status));
   },
 });
 

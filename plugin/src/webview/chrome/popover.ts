@@ -104,6 +104,8 @@ type PinSpec = {
   align: PinAlign;
   restoreTo?: HTMLElement;
   matchWidth?: boolean;
+  pad?: number;
+  gap?: number;
 };
 
 const pins = new Map<HTMLElement, PinSpec>();
@@ -112,7 +114,14 @@ let listening = false;
 export function pinFloating(
   el: HTMLElement,
   anchor: HTMLElement,
-  opts: { prefer: PinPrefer; align?: PinAlign; restoreTo?: HTMLElement; matchWidth?: boolean },
+  opts: {
+    prefer: PinPrefer;
+    align?: PinAlign;
+    restoreTo?: HTMLElement;
+    matchWidth?: boolean;
+    pad?: number;
+    gap?: number;
+  },
 ): void {
   sweepFloating();
   pins.set(el, {
@@ -121,6 +130,8 @@ export function pinFloating(
     align: opts.align ?? 'start',
     restoreTo: opts.restoreTo,
     matchWidth: opts.matchWidth,
+    pad: opts.pad,
+    gap: opts.gap,
   });
   el.classList.add('pin');
   const host = floatHost();
@@ -255,15 +266,18 @@ function applyPin(el: HTMLElement): void {
   el.style.margin = '0';
   const view = viewBox();
   const anchor = spec.anchor.getBoundingClientRect();
-  const matchW = spec.matchWidth ? anchor.width : 0;
+  const matchW = spec.matchWidth ? Math.round(anchor.width) : 0;
   if (matchW > 0) {
+    el.style.width = `${matchW}px`;
     el.style.minWidth = `${matchW}px`;
+    el.style.maxWidth = `${matchW}px`;
   } else {
+    el.style.width = 'max-content';
     el.style.minWidth = '';
+    el.style.maxWidth = '';
   }
-  el.style.width = 'max-content';
   const size = {
-    width: Math.max(el.offsetWidth, el.scrollWidth, 96, matchW),
+    width: matchW > 0 ? matchW : Math.max(el.offsetWidth, el.scrollWidth, 96),
     height: Math.max(el.offsetHeight, el.scrollHeight, 1),
   };
   const placed = placeFloating({
@@ -272,11 +286,17 @@ function applyPin(el: HTMLElement): void {
     size,
     prefer: spec.prefer,
     align: spec.align,
+    pad: spec.pad,
+    gap: spec.gap,
   });
   el.style.top = `${placed.top}px`;
   el.style.left = `${placed.left}px`;
   el.style.maxHeight = `${placed.maxHeight}px`;
-  el.style.maxWidth = `${placed.maxWidth}px`;
+  if (matchW > 0) {
+    el.style.maxWidth = `${matchW}px`;
+  } else {
+    el.style.maxWidth = `${placed.maxWidth}px`;
+  }
   el.style.zIndex = '50';
 }
 

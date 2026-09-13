@@ -688,26 +688,28 @@ textarea:focus-visible {
   padding: 6px 9px;
   font-size: 12px;
   background: color-mix(in srgb, var(--elev) 80%, transparent);
-  box-shadow: inset 2px 0 0 var(--ice-dim);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 75%, transparent);
 }
 
 .tool-row[data-kind='read'],
 .tool-row[data-kind='search'] {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ice) 70%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 70%, transparent);
 }
 
 .tool-row[data-kind='edit'],
 .tool-row[data-kind='write'] {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 80%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 85%, transparent);
 }
 
 .tool-row[data-kind='execute'],
 .tool-row[data-kind='terminal'] {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ice) 55%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 70%, transparent);
 }
 
 .tool-row.completed:not(.failed) {
   opacity: 0.88;
+  box-shadow: inset 2px 0 0 var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 28%, var(--line));
 }
 
 .tool-row.failed,
@@ -2587,6 +2589,11 @@ textarea:focus-visible {
   margin-bottom: 8px;
 }
 
+.menu.composer-suggest {
+  box-sizing: border-box;
+  max-height: min(52vh, 420px);
+}
+
 .menu-item {
   display: flex;
   gap: 8px;
@@ -2599,12 +2606,26 @@ textarea:focus-visible {
   border-radius: 8px;
 }
 
+.composer-suggest .menu-item {
+  align-items: flex-start;
+}
+
+.composer-suggest .menu-item code {
+  flex-shrink: 0;
+}
+
 .menu-item:hover {
   background: var(--hover);
 }
 
 .menu-item span {
   color: var(--muted);
+}
+
+.composer-suggest .menu-item span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .drawer-layer {
@@ -4072,7 +4093,7 @@ kbd {
 
 #app[data-surface='glass'] .tool-row,
 #app[data-surface='glass'] .work-body .tool-row {
-  --tool-accent: color-mix(in srgb, var(--ice) 55%, transparent);
+  --tool-accent: color-mix(in srgb, var(--ok) 70%, transparent);
   background:
     var(--glass-film),
     linear-gradient(90deg, color-mix(in srgb, var(--tool-accent) 46%, transparent), transparent 22px);
@@ -4083,21 +4104,27 @@ kbd {
 #app[data-surface='glass'] .tool-row[data-kind='search'],
 #app[data-surface='glass'] .work-body .tool-row[data-kind='read'],
 #app[data-surface='glass'] .work-body .tool-row[data-kind='search'] {
-  --tool-accent: color-mix(in srgb, var(--ice) 70%, transparent);
+  --tool-accent: color-mix(in srgb, var(--ok) 70%, transparent);
 }
 
 #app[data-surface='glass'] .tool-row[data-kind='edit'],
 #app[data-surface='glass'] .tool-row[data-kind='write'],
 #app[data-surface='glass'] .work-body .tool-row[data-kind='edit'],
 #app[data-surface='glass'] .work-body .tool-row[data-kind='write'] {
-  --tool-accent: color-mix(in srgb, var(--ok) 80%, transparent);
+  --tool-accent: color-mix(in srgb, var(--ok) 85%, transparent);
 }
 
 #app[data-surface='glass'] .tool-row[data-kind='execute'],
 #app[data-surface='glass'] .tool-row[data-kind='terminal'],
 #app[data-surface='glass'] .work-body .tool-row[data-kind='execute'],
 #app[data-surface='glass'] .work-body .tool-row[data-kind='terminal'] {
-  --tool-accent: color-mix(in srgb, var(--ice) 55%, transparent);
+  --tool-accent: color-mix(in srgb, var(--ok) 70%, transparent);
+}
+
+#app[data-surface='glass'] .tool-row.completed:not(.failed),
+#app[data-surface='glass'] .work-body .tool-row.completed:not(.failed) {
+  --tool-accent: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 32%, var(--glass-edge));
 }
 
 #app[data-surface='glass'] .tool-row.failed,

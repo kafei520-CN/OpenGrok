@@ -6,6 +6,10 @@ export function iconGrid(): string {
   return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="4.4" height="4.4" rx="1"/><rect x="9.1" y="2.5" width="4.4" height="4.4" rx="1"/><rect x="2.5" y="9.1" width="4.4" height="4.4" rx="1"/><rect x="9.1" y="9.1" width="4.4" height="4.4" rx="1"/></svg>';
 }
 
+export function iconPet(): string {
+  return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4.2 8.2 8 2.8l3.8 5.4-1.4 4.6H5.6z"/><path d="M6.6 7.6v1.7M9.4 7.6v1.7"/></svg>';
+}
+
 export function iconEdit(): string {
   return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M9.2 3.4 12.6 6.8 6 13.4H2.6V10z"/></svg>';
 }

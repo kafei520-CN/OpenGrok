@@ -1,0 +1,270 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+}
+
+.pet-bubbles {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  width: min(220px, 100%);
+  min-height: 64px;
+  margin-bottom: 6px;
+  pointer-events: none;
+}
+
+#stage,
+.pet-overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 16px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+#mark {
+  flex: 0 0 auto;
+  width: var(--pet-size, 128px);
+  height: var(--pet-size, 128px);
+  cursor: grab;
+  overflow: visible;
+  filter: drop-shadow(0 10px 12px rgb(0 0 0 / 22%));
+}
+
+#mark:active {
+  cursor: grabbing;
+}
+
+#mark svg,
+#mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+#mark.is-sprite svg,
+#mark:not(.is-sprite) img,
+#mark svg[hidden],
+#mark img[hidden] {
+  display: none !important;
+}
+
+#mark.is-anime img {
+  transform-origin: 50% 100%;
+  animation: live2d-idle 3.2s ease-in-out infinite;
+}
+
+#mark.is-pixel img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  animation: bit-idle 0.7s steps(2, end) infinite;
+}
+
+@keyframes live2d-idle {
+  0%,
+  100% {
+    transform: rotate(-1.6deg) translateY(0);
+  }
+  50% {
+    transform: rotate(1.8deg) translateY(-4px);
+  }
+}
+
+@keyframes bit-idle {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-4px);
+  }
+}
+
+.body,
+.body path,
+.body ellipse {
+  fill: var(--pet-body, #171717);
+}
+
+.eye {
+  fill: var(--pet-eye, #f7f7f7);
+}
+
+.pupil {
+  fill: var(--pet-pupil, #111);
+}
+
+.spark {
+  fill: #fff;
+}
+
+.smile {
+  stroke: var(--pet-pupil, #111);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.critter {
+  transform-origin: 60px 72px;
+}
+
+.critter.idle {
+  animation: pet-breathe 3.2s ease-in-out infinite;
+}
+
+.critter.idle .pupils {
+  animation: pet-gaze 5.4s ease-in-out infinite;
+}
+
+.critter.thinking {
+  animation: pet-think 1.1s ease-in-out infinite;
+}
+
+.critter.working {
+  animation: pet-pulse 0.75s ease-in-out infinite;
+}
+
+.critter.done {
+  animation: pet-hop 0.7s ease-out;
+}
+
+.critter.alert {
+  animation: pet-shake 0.4s ease-in-out 2;
+}
+
+.critter.idle .eye,
+.critter.thinking .eye {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: pet-blink 4.6s step-end infinite;
+}
+
+@keyframes pet-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.03, 0.97);
+  }
+}
+
+@keyframes pet-gaze {
+  0%,
+  40%,
+  100% {
+    transform: translate(0, 0);
+  }
+  55% {
+    transform: translate(3px, 1px);
+  }
+  72% {
+    transform: translate(-2px, 0);
+  }
+}
+
+@keyframes pet-think {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg) translateY(-4px);
+  }
+}
+
+@keyframes pet-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07, 0.93);
+  }
+}
+
+@keyframes pet-hop {
+  0% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-12px) rotate(-8deg);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes pet-shake {
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes pet-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  93% {
+    transform: scaleY(0.08);
+  }
+}
+
+.pet-bubble {
+  margin: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #171717;
+  color: #f4f4f5;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 20%);
+}
+
+.pet-bubble__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pet-bubble__title {
+  font: 600 12px/1.3 "Segoe UI", "PingFang SC", sans-serif;
+}
+
+.pet-bubble.is-done .pet-bubble__glyph {
+  color: #22c55e;
+}
+
+.pet-bubble__spin {
+  width: 10px;
+  height: 10px;
+  display: block;
+  border-radius: 50%;
+  border: 1.6px solid rgb(255 255 255 / 28%);
+  border-top-color: #fff;
+  animation: pet-bubble-spin 0.7s linear infinite;
+}
+
+@keyframes pet-bubble-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -60,6 +60,14 @@ await Promise.all([
     format: 'cjs',
     external: ['electron'],
   }),
+  esbuild.build({
+    ...common,
+    entryPoints: ['desktop/pet/overlay.ts'],
+    outfile: 'desktop/pet.js',
+    platform: 'browser',
+    format: 'iife',
+    target: 'es2022',
+  }),
 ]);
 
 copyKatex();
