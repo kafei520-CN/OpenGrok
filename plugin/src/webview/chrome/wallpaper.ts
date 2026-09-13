@@ -1,5 +1,6 @@
 import { THEME_FONT_FAMILY } from '../../settings/theme';
 import type { ThemeColors } from '../../core/types';
+import { framedSurface, frostSurface, surfaceKind } from '../../settings/surfaces';
 import {
   DEFAULT_WALLPAPER_OPACITY,
   overlayKind,
@@ -37,20 +38,15 @@ export function syncSurface(
   theme: ThemeColors | undefined,
   overlay?: 'settings' | 'drawer',
 ): void {
-  const surface =
-    theme?.surface === 'glass' || theme?.surface === 'solid'
-      ? theme.surface
-      : isDesktop()
-        ? 'glass'
-        : undefined;
-  if (surface === 'glass' || surface === 'solid') {
+  const surface = surfaceKind(theme?.surface) ?? (isDesktop() ? 'glass' : undefined);
+  if (surface && framedSurface(surface)) {
     root.dataset.surface = surface;
     ensureLayer(root, 'grok-frost', ['grok-wallpaper']);
   } else {
     delete root.dataset.surface;
     document.getElementById('grok-frost')?.remove();
   }
-  if (surface === 'glass' && (theme?.chromeGlass || isDesktop())) {
+  if (frostSurface(surface) && (theme?.chromeGlass || isDesktop())) {
     root.dataset.chromeGlass = 'on';
   } else {
     delete root.dataset.chromeGlass;

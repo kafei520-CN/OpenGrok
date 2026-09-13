@@ -1865,7 +1865,7 @@ html.opengrok .settings-seg button:hover:not(.on) {
 
 .og-theme-tiles {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
 }
 

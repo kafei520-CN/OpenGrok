@@ -79,9 +79,7 @@ export function wallpaperMime(raw: string | undefined): string {
   return 'application/octet-stream';
 }
 
-export function surfaceKind(raw: unknown): ThemeColors['surface'] {
-  return raw === 'glass' || raw === 'solid' ? raw : undefined;
-}
+export { surfaceKind } from './surfaces';
 
 /** Settings and drawers sit over home/chat. The wallpaper editor is the viewport itself. */
 export function overlayKind(flags: {

@@ -97,8 +97,8 @@ export interface ThemeColors {
   wallpaperScale?: number;
   wallpaperX?: number;
   wallpaperY?: number;
-  /** Chat chrome: frosted glass or an opaque floating sheet. */
-  surface?: 'glass' | 'solid';
+  /** Chat chrome: frosted glass, opaque sheet, or a named surface pack. */
+  surface?: 'glass' | 'solid' | 'endfield';
   /** 0–100 mix of --bg into the frosted panel. */
   glassOpacity?: number;
   /** Wallpaper blur in px, 0–40. */
@@ -133,7 +133,7 @@ export type ThemePatch = {
   wallpaperScale?: number;
   wallpaperX?: number;
   wallpaperY?: number;
-  surface?: 'glass' | 'solid' | '';
+  surface?: 'glass' | 'solid' | 'endfield' | '';
   glassOpacity?: number;
   glassBlur?: number;
   chromeBlur?: number;

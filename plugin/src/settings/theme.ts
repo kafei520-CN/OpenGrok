@@ -1,4 +1,5 @@
 import type { ThemeColors, WebviewToHost } from '../core/types';
+import { getSurface } from './surfaces';
 import {
   clampChromeBlur,
   clampChromeGlassOpacity,
@@ -46,6 +47,7 @@ export const THEME_PRESETS: Array<{
   { id: 'sunset', primary: '#fdba74', secondary: '#f59e0b', background: '#1a140f' },
   { id: 'rose', primary: '#fda4af', secondary: '#fb7185', background: '#1a1014' },
   { id: 'ember', primary: '#fcd34d', secondary: '#f97316', background: '#1a150c' },
+  { id: 'endfield', primary: '#fff936', secondary: '#ffffff', background: '#191919' },
 ];
 
 const SURFACE_VARS = [
@@ -207,9 +209,11 @@ export function applyThemeTo(
   chrome?: { background?: string; foreground?: string },
 ): void {
   const theme = normalizeTheme(raw);
-  const background = theme.background ?? parseHex(chrome?.background);
+  const pack = getSurface(theme.surface)?.theme;
+  const background = pack?.background ?? theme.background ?? parseHex(chrome?.background);
   const hostFg = parseHex(chrome?.foreground);
-  const fg = resolveFg(theme, background, hostFg);
+  const fg = pack?.secondary ?? resolveFg(theme, background, hostFg);
+  const primary = pack?.primary ?? theme.primary;
   if (background) {
     const text = fg ?? contrastFg(background);
     style.setProperty('--bg', background);
@@ -240,11 +244,11 @@ export function applyThemeTo(
   } else {
     style.removeProperty?.('--font');
   }
-  style.setProperty('--ice', `color-mix(in srgb, ${theme.primary} 72%, var(--fg))`);
+  style.setProperty('--ice', `color-mix(in srgb, ${primary} 72%, var(--fg))`);
   style.setProperty('--ice-dim', 'color-mix(in srgb, var(--ice) 28%, transparent)');
   style.removeProperty?.('--ok');
-  style.setProperty('--accent', theme.primary);
-  style.setProperty('--on-accent', contrastFg(theme.primary));
+  style.setProperty('--accent', primary);
+  style.setProperty('--on-accent', contrastFg(primary));
   style.setProperty('--glass-fill', `${theme.glassOpacity ?? DEFAULT_GLASS_OPACITY}%`);
   const bgBlur = theme.glassBlur ?? DEFAULT_GLASS_BLUR;
   const chromeBlur = theme.chromeBlur ?? DEFAULT_CHROME_BLUR;

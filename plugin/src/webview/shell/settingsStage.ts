@@ -9,6 +9,7 @@ import {
 } from '../../billing/heatmapStats';
 import { DEFAULT_SETTINGS, type SettingsPage } from '../../core/types';
 import { applyThemeTo, contrastFg, parseHex } from '../../settings/theme';
+import { SURFACES, getSurface, surfaceKind, type SurfaceId } from '../../settings/surfaces';
 import { loc, type DeskTab, post, render, tr, ui } from '../app';
 import { button } from '../dom';
 import { escapeHtml } from '../transcript/markdown';
@@ -598,7 +599,7 @@ function linkBtn(label: string, url: string): HTMLElement {
 function appearancePane(): HTMLElement {
   const el = document.createElement('div');
   el.append(
-    card(tr('setStyle'), [styleTiles(isGlass())]),
+    card(tr('setStyle'), [styleTiles()]),
     card(tr('setColors'), [
       p(tr('setMainColorHint')),
       colorRow(tr('setMainColor'), themeBg(), (hex, persist) => {
@@ -862,8 +863,8 @@ const DEFAULT_BG = '#ffffff';
 const DEFAULT_SECONDARY = '#737373';
 const COLOR_SWATCHES = ['#ffffff', '#f4f4f4', '#e7e5e4', '#0f172a', '#000000'] as const;
 
-function isGlass(): boolean {
-  return ui.state.theme?.surface !== 'solid';
+function currentSurface(): SurfaceId {
+  return surfaceKind(ui.state.theme?.surface) ?? 'glass';
 }
 
 function themeBg(): string {
@@ -879,17 +880,27 @@ function followPrimary(background: string): string {
   return current === contrastFg(themeBg()) ? contrastFg(background) : current;
 }
 
-function commitAppearance(patch: { background?: string; primary?: string; glass?: boolean }): void {
-  const background = parseHex(patch.background) ?? themeBg();
-  const primary = parseHex(patch.primary) ?? followPrimary(background);
-  const glass = patch.glass ?? isGlass();
+function commitAppearance(patch: { background?: string; primary?: string; surface?: SurfaceId }): void {
+  const surface = patch.surface ?? currentSurface();
+  const pack = getSurface(surface);
+  const entering = Boolean(patch.surface && patch.surface !== currentSurface());
+  const background =
+    parseHex(patch.background) ??
+    (entering && pack?.theme?.background ? pack.theme.background : themeBg());
+  const primary =
+    parseHex(patch.primary) ??
+    (entering && pack?.theme?.primary ? pack.theme.primary : followPrimary(background));
+  const secondary =
+    entering && pack?.theme?.secondary
+      ? pack.theme.secondary
+      : parseHex(ui.state.theme?.secondary) ?? DEFAULT_SECONDARY;
   post({
     type: 'setTheme',
     primary,
-    secondary: parseHex(ui.state.theme?.secondary) ?? DEFAULT_SECONDARY,
+    secondary,
     background,
-    surface: glass ? 'glass' : 'solid',
-    chromeGlass: glass,
+    surface,
+    chromeGlass: pack?.frost === true,
     lockContrast: true,
   });
 }
@@ -907,17 +918,21 @@ function previewAppearance(background: string, primary: string): void {
   );
 }
 
-function styleTiles(glass: boolean): HTMLElement {
+function styleTiles(): HTMLElement {
   const row = document.createElement('div');
   row.className = 'og-theme-tiles';
-  row.append(
-    styleTile(tr('themeSurfaceGlass'), 'glass', glass, () => commitAppearance({ glass: true })),
-    styleTile(tr('setFlat'), 'flat', !glass, () => commitAppearance({ glass: false })),
-  );
+  const current = currentSurface();
+  for (const pack of SURFACES) {
+    row.append(
+      styleTile(tr(pack.appearanceKey), pack.tone, current === pack.id, () =>
+        commitAppearance({ surface: pack.id }),
+      ),
+    );
+  }
   return row;
 }
 
-function styleTile(label: string, tone: 'glass' | 'flat', on: boolean, run: () => void): HTMLElement {
+function styleTile(label: string, tone: string, on: boolean, run: () => void): HTMLElement {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = on ? 'og-theme-tile on' : 'og-theme-tile';

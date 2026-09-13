@@ -429,6 +429,14 @@ export class RemoteGateway {
       this.file(res, this.assets.chatCss, 'text/css; charset=utf-8');
       return;
     }
+    if (url.pathname === '/surfaces.css') {
+      this.file(
+        res,
+        path.join(path.dirname(this.assets.chatCss), 'surfaces.css'),
+        'text/css; charset=utf-8',
+      );
+      return;
+    }
     if (url.pathname === '/diff.js' && this.assets.diffJs) {
       this.file(res, this.assets.diffJs, 'application/javascript; charset=utf-8');
       return;
@@ -852,6 +860,7 @@ ${noZoomMeta()}
 <meta name="color-scheme" content="dark light"/>
 <meta http-equiv="Content-Security-Policy" content="${csp}"/>
 <link rel="stylesheet" href="/chat.css"/>
+<link rel="stylesheet" href="/surfaces.css"/>
 ${hostChromeStyle(chrome)}
 <title>Grok Build</title>
 </head><body>

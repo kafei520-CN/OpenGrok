@@ -115,11 +115,11 @@ const TITLEBAR_H = 36;
 type TitleChrome = {
   background: string;
   foreground: string;
-  surface: 'glass' | 'solid';
+  surface: 'glass' | 'solid' | 'endfield';
 };
 
 function overlayFill(chrome: TitleChrome): string {
-  return chrome.surface === 'solid' ? chrome.background : '#00000000';
+  return chrome.surface === 'glass' ? '#00000000' : chrome.background;
 }
 
 function applyTitleBarOverlay(win: BrowserWindow, chrome = readThemeChrome()): void {
@@ -646,7 +646,8 @@ function readThemeChrome(): TitleChrome {
   if (theme && typeof theme === 'object') {
     const row = theme as { background?: unknown; surface?: unknown };
     const background = row.background;
-    const surface = row.surface === 'solid' ? 'solid' : 'glass';
+    const surface =
+      row.surface === 'solid' || row.surface === 'endfield' ? row.surface : 'glass';
     if (typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background)) {
       const hex = background.toLowerCase();
       return { background: hex, foreground: contrastFg(hex), surface };
@@ -1113,7 +1114,10 @@ ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: str
     typeof next?.foreground === 'string' && /^#[0-9a-f]{6}$/i.test(next.foreground)
       ? next.foreground.toLowerCase()
       : fallback.foreground;
-  const surface = next?.surface === 'solid' ? 'solid' : 'glass';
+  const surface =
+    next?.surface === 'solid' || next?.surface === 'endfield' || next?.surface === 'glass'
+      ? next.surface
+      : 'glass';
   win.setBackgroundColor(background);
   applyTitleBarOverlay(win, { background, foreground, surface });
 });

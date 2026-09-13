@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('opengrok', {
       handler(message);
     });
   },
-  setChrome(chrome: { background: string; foreground: string; surface?: 'glass' | 'solid' }) {
+  setChrome(chrome: { background: string; foreground: string; surface?: 'glass' | 'solid' | 'endfield' }) {
     ipcRenderer.send('grok-chrome', chrome);
   },
   window(action: 'min' | 'max' | 'close') {

@@ -43,6 +43,7 @@ describe('theme', () => {
     assert.equal(normalizeTheme({ wallpaper: 'icon', wallpaperOpacity: 40 }).wallpaperOpacity, 40);
     assert.equal(normalizeTheme({ wallpaper: 'custom' }).wallpaper, undefined);
     assert.equal(normalizeTheme({ surface: 'glass' }).surface, 'glass');
+    assert.equal(normalizeTheme({ surface: 'endfield' }).surface, 'endfield');
     assert.equal(
       normalizeTheme({ wallpaper: 'icon', wallpaperScale: 140, wallpaperX: 20, wallpaperY: 80 }).wallpaperScale,
       140,

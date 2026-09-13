@@ -526,12 +526,13 @@ function syncDesktopChrome(): void {
         setChrome?: (chrome: {
           background: string;
           foreground: string;
-          surface?: 'glass' | 'solid';
+          surface?: 'glass' | 'solid' | 'endfield';
         }) => void;
       };
     }
   ).opengrok;
-  const surface = document.getElementById('app')?.dataset.surface === 'solid' ? 'solid' : 'glass';
+  const raw = document.getElementById('app')?.dataset.surface;
+  const surface = raw === 'solid' || raw === 'endfield' || raw === 'glass' ? raw : 'glass';
   host?.setChrome?.({ background, foreground, surface });
 }
 

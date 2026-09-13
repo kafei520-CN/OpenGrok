@@ -1,0 +1,337 @@
+/*
+  Surface packs.
+
+  Add a skin:
+    1. plugin/src/settings/surfaces.ts
+    2. i18n keys
+    3. #app[data-surface='id'] rules in this file
+    4. optional html.opengrok #app[data-surface='id'] for desktop chrome
+
+  glass / solid keep historical rules in chat.css + workbench.css.
+  endfield (and later packs) live here.
+*/
+
+#app[data-surface='endfield'] {
+  --r: 2px;
+  --r-lg: 4px;
+  --endfield-yellow: #fff936;
+  --endfield-white: #ffffff;
+  --endfield-black: #191919;
+  --endfield-steel: #222222;
+  --endfield-ink: #191919;
+  --endfield-line: color-mix(in srgb, var(--endfield-yellow) 32%, rgb(255 255 255 / 14%));
+  --endfield-tick: 12px;
+  --bg: var(--endfield-black);
+  --fg: var(--endfield-white);
+  --accent: var(--endfield-yellow);
+  --on-accent: var(--endfield-black);
+  --ice: var(--endfield-yellow);
+  --ok: var(--endfield-yellow);
+  --shadow: 0 12px 28px rgb(0 0 0 / 38%);
+  --elev: #222222;
+  --muted: rgb(255 255 255 / 55%);
+  --line: color-mix(in srgb, var(--endfield-yellow) 22%, rgb(255 255 255 / 12%));
+  --hover: color-mix(in srgb, var(--endfield-yellow) 14%, rgb(255 255 255 / 8%));
+}
+
+#app[data-surface='endfield'] {
+  padding: 8px;
+}
+
+html.opengrok #app[data-surface='endfield'] {
+  padding: 0;
+  background:
+    radial-gradient(900px 560px at 8% -10%, color-mix(in srgb, var(--endfield-yellow) 16%, transparent), transparent 58%),
+    radial-gradient(720px 480px at 108% 8%, color-mix(in srgb, var(--endfield-white) 10%, transparent), transparent 52%),
+    linear-gradient(165deg, #191919, #191919 46%, #141414);
+}
+
+#app[data-surface='endfield']::before,
+html.opengrok #app[data-surface='endfield']::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--endfield-yellow) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--endfield-yellow) 28%, transparent) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse at 50% 28%, #000 24%, transparent 78%);
+}
+
+#app[data-surface='endfield']::after,
+html.opengrok #app[data-surface='endfield']::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.16;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 2px,
+    rgb(0 0 0 / 22%) 3px
+  );
+}
+
+#app[data-surface='endfield'] #grok-frost {
+  display: block;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--endfield-yellow) 7%, transparent), transparent 18%),
+    color-mix(in srgb, var(--bg) 86%, transparent);
+  border: 1px solid var(--endfield-line);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--endfield-white) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--endfield-yellow) 8%, transparent);
+}
+
+html.opengrok #app[data-surface='endfield'] #grok-frost {
+  inset: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+#app[data-surface='endfield'] #grok-veil {
+  inset: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#app[data-surface='endfield'] .topbar,
+#app[data-surface='endfield'] .body,
+#app[data-surface='endfield'] .composer-wrap {
+  background: transparent;
+  border-color: transparent;
+}
+
+#app[data-surface='endfield'] .topbar {
+  border-bottom: 1px solid var(--endfield-line);
+}
+
+#app[data-surface='endfield'] .composer-wrap {
+  border-top: none;
+}
+
+#app[data-surface='endfield'] .card,
+#app[data-surface='endfield'] .composer-card,
+#app[data-surface='endfield'] .starter,
+#app[data-surface='endfield'] .recent-card,
+#app[data-surface='endfield'] .permission,
+#app[data-surface='endfield'] .ask-card,
+#app[data-surface='endfield'] .msg.user .bubble,
+#app[data-surface='endfield'] .msg.assistant > .md.answer,
+#app[data-surface='endfield'] .tool-row,
+#app[data-surface='endfield'] .work-body,
+#app[data-surface='endfield'] .steps-card,
+#app[data-surface='endfield'] .chip,
+#app[data-surface='endfield'] .attach-tile,
+#app[data-surface='endfield'] .live-edits,
+#app[data-surface='endfield'] .md pre.code,
+#app[data-surface='endfield'] .settings-card,
+#app[data-surface='endfield'] .drawer .dash-card,
+#app[data-surface='endfield'] .turn-error,
+#grok-floats[data-surface='endfield'] .more-menu,
+#grok-floats[data-surface='endfield'] .picker-menu,
+#grok-floats[data-surface='endfield'] .menu,
+#app[data-surface='endfield'] .more-menu,
+#app[data-surface='endfield'] .picker-menu,
+#app[data-surface='endfield'] .menu {
+  border-radius: var(--r);
+  border: 1px solid var(--endfield-line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--endfield-yellow) 8%, transparent), transparent 22%),
+    var(--endfield-steel);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--endfield-yellow) 18%, transparent),
+    0 10px 22px rgb(0 0 0 / 22%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#app[data-surface='endfield'] .composer-card {
+  overflow: visible;
+  border-top-color: var(--endfield-yellow);
+  background:
+    linear-gradient(90deg, var(--endfield-yellow), var(--endfield-white)) top / 100% 1px no-repeat,
+    linear-gradient(180deg, color-mix(in srgb, var(--endfield-yellow) 10%, transparent), transparent 28%),
+    var(--endfield-steel);
+}
+
+#app[data-surface='endfield'] .msg.assistant > .md.answer {
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+#app[data-surface='endfield'] .msg.user .bubble {
+  background: var(--endfield-black);
+  border-color: var(--endfield-yellow);
+  color: var(--endfield-white);
+}
+
+#app[data-surface='endfield'] .icon-btn,
+#app[data-surface='endfield'] .jump-bottom,
+#app[data-surface='endfield'] .picker-btn,
+#app[data-surface='endfield'] .btn:not(.primary),
+#app[data-surface='endfield'] .seg,
+#app[data-surface='endfield'] .change-chip {
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--endfield-yellow) 22%, transparent);
+  background: color-mix(in srgb, var(--endfield-ink) 70%, transparent);
+}
+
+#app[data-surface='endfield'] .btn.primary,
+#app[data-surface='endfield'] .send-fab {
+  border-radius: 2px;
+  border: 1px solid var(--endfield-yellow);
+  background: var(--endfield-yellow);
+  color: var(--endfield-black);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+#app[data-surface='endfield'] .send-fab.stop {
+  background: #e5484d;
+  color: #fff;
+  border-color: #e5484d;
+}
+
+#app[data-surface='endfield'] .settings-kicker,
+#app[data-surface='endfield'] .og-set-card h3,
+html.opengrok #app[data-surface='endfield'] .og-brand,
+html.opengrok #app[data-surface='endfield'] .og-nav-item,
+html.opengrok #app[data-surface='endfield'] .settings-kicker {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+#app[data-surface='endfield'] .recent-card.active,
+#app[data-surface='endfield'] .starter:hover,
+#app[data-surface='endfield'] .recent-card:hover,
+#app[data-surface='endfield'] .session-row.active {
+  box-shadow: inset 2px 0 0 var(--endfield-yellow);
+  border-color: color-mix(in srgb, var(--endfield-yellow) 55%, var(--line));
+}
+
+html.opengrok #app[data-surface='endfield'] #og-rail {
+  background: var(--endfield-ink);
+  border-right: 1px solid var(--endfield-line);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--endfield-white) 18%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='endfield'] .topbar {
+  height: var(--og-title);
+  min-height: var(--og-title);
+  max-height: var(--og-title);
+  padding: 0 16px;
+  padding-right: 140px;
+  display: flex;
+  align-items: center;
+  background: var(--endfield-ink);
+  border-bottom: 1px solid var(--endfield-line);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  -webkit-app-region: drag;
+}
+
+html.opengrok #app[data-surface='endfield'] #og-dash,
+html.opengrok #app[data-surface='endfield'] #og-settings,
+html.opengrok #app[data-surface='endfield'] #og-review {
+  background: var(--endfield-ink);
+  border-left-color: var(--endfield-line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='endfield'] .og-set-card,
+html.opengrok #app[data-surface='endfield'] .og-card,
+html.opengrok #app[data-surface='endfield'] .og-login {
+  border-radius: 4px;
+  border: 1px solid var(--endfield-line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--endfield-yellow) 8%, transparent), transparent 30%),
+    var(--endfield-steel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--endfield-yellow) 16%, transparent);
+}
+
+html.opengrok #app[data-surface='endfield'] #composer-card,
+html.opengrok #app[data-surface='endfield'] .composer-card {
+  width: min(720px, 100%);
+  border-radius: 4px;
+  border: 1px solid var(--endfield-line);
+  background:
+    linear-gradient(90deg, var(--endfield-yellow), var(--endfield-white)) top / 100% 1px no-repeat,
+    linear-gradient(180deg, color-mix(in srgb, var(--endfield-yellow) 10%, transparent), transparent 28%),
+    var(--endfield-steel);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--endfield-yellow) 18%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='endfield'] .send-fab {
+  width: 32px;
+  height: 32px;
+  background: var(--endfield-yellow);
+  color: var(--endfield-black);
+  border-color: transparent;
+}
+
+html.opengrok #app[data-surface='endfield'] .send-fab:disabled {
+  background: color-mix(in srgb, var(--endfield-yellow) 28%, transparent);
+  color: color-mix(in srgb, var(--bg) 40%, var(--fg));
+}
+
+html.opengrok #app[data-surface='endfield'] .og-nav-item.on,
+html.opengrok #app[data-surface='endfield'] .og-set-seg button.on,
+html.opengrok #app[data-surface='endfield'] .settings-seg button.on {
+  background: color-mix(in srgb, var(--endfield-yellow) 16%, transparent);
+  box-shadow: inset 2px 0 0 var(--endfield-yellow);
+}
+
+html.opengrok #app[data-surface='endfield'] .og-theme-tiles {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.og-theme-tile[data-tone='endfield'] span {
+  background:
+    linear-gradient(#fff936, #fff936) 0 0 / 18px 1px no-repeat,
+    linear-gradient(#fff936, #fff936) 0 0 / 1px 18px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 100% 100% / 18px 1px no-repeat,
+    linear-gradient(#ffffff, #ffffff) 100% 100% / 1px 18px no-repeat,
+    linear-gradient(160deg, #222222, #191919 58%, #141414);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff936 40%, transparent);
+  border-radius: 2px;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+#app[data-surface='endfield'] .settings,
+#app[data-surface='endfield'] .drawer {
+  background: color-mix(in srgb, var(--endfield-ink) 92%, transparent);
+  border-color: var(--endfield-line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#app[data-surface='endfield'] .work > summary {
+  border-radius: 2px;
+  border-left: 2px solid var(--endfield-white);
+}
+
+#app[data-surface='endfield'] .ok,
+#app[data-surface='endfield'] .add {
+  color: var(--endfield-yellow);
+}
+
+#app[data-surface='endfield'] .ctx-meter .fill {
+  stroke: var(--endfield-yellow);
+}
