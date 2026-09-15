@@ -82,7 +82,7 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       expression?: string;
       bubbles?: boolean;
     };
-    const enabled = config.enabled !== false;
+    const enabled = config.enabled === true;
     const color = config.color ?? ui.pet.color;
     const size = typeof config.size === 'number' ? config.size : ui.pet.size;
     ui.pet = {

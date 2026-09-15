@@ -266,12 +266,17 @@ export class GrokAgent {
     return result;
   }
 
-  async prompt(blocks: ContentBlock[], extraMeta?: Record<string, unknown>): Promise<unknown> {
-    if (!this.sessionId) {
+  async prompt(
+    blocks: ContentBlock[],
+    extraMeta?: Record<string, unknown>,
+    sessionId?: string,
+  ): Promise<unknown> {
+    const id = sessionId ?? this.sessionId;
+    if (!id) {
       throw new Error('No active session');
     }
     const params: Record<string, unknown> = {
-      sessionId: this.sessionId,
+      sessionId: id,
       prompt: blocks,
     };
     if (extraMeta && Object.keys(extraMeta).length > 0) {
@@ -751,6 +756,7 @@ export function parseSessionUpdate(params: unknown): {
         update['entries'] ??
         update['todos'] ??
         asObject(update['plan'])['entries'],
+      objective: asString(update['objective']),
     },
   };
 }

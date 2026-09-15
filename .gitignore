@@ -5,3 +5,5 @@ release/
 *.log
 .DS_Store
 参考文件夹
+.tmp-anthropic-skills/
+.tmp-community-skills/

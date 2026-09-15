@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { promisify } from 'node:util';
 import { plat } from '../../core/platform';
-import { projectGrokDir, sameFsPath } from '../../core/grokDirs';
+import { pathInside, projectGrokDir, sameFsPath } from '../../core/grokDirs';
 import type { SkillItem } from '../../core/types';
 
 const execFileAsync = promisify(execFile);
@@ -34,24 +34,38 @@ export function globalSkillsDir(): string {
   return path.join(plat().homeDir(), '.grok', 'skills');
 }
 
+export function bundledSkillsDir(): string {
+  return path.join(plat().homeDir(), '.grok', 'bundled', 'skills');
+}
+
 export function projectSkillsDir(): string | undefined {
   return projectGrokDir('skills');
 }
 
 export async function listSkills(): Promise<SkillItem[]> {
   const globalDir = globalSkillsDir();
-  const rows = await collectSkills(globalDir, 'global');
-  const seen = new Set(rows.map((row) => normalizeDir(row.dirPath)));
+  const bundledDir = bundledSkillsDir();
   const projectDir = projectSkillsDir();
-  if (projectDir && !sameFsPath(projectDir, globalDir, plat().os())) {
-    for (const row of await collectSkills(projectDir, 'project')) {
+  const rows: SkillItem[] = [];
+  const seen = new Set<string>();
+  const take = (incoming: SkillItem[]) => {
+    for (const row of incoming) {
+      const name = row.name.trim().toLowerCase();
       const key = normalizeDir(row.dirPath);
-      if (seen.has(key)) {
+      if (seen.has(name) || seen.has(key)) {
         continue;
       }
+      seen.add(name);
       seen.add(key);
       rows.push(row);
     }
+  };
+  if (projectDir && !sameFsPath(projectDir, globalDir, plat().os())) {
+    take(await collectSkills(projectDir, 'project'));
+  }
+  take(await collectSkills(globalDir, 'global'));
+  if (!sameFsPath(bundledDir, globalDir, plat().os())) {
+    take(await collectSkills(bundledDir, 'bundled'));
   }
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -84,6 +98,9 @@ export async function importSkillFolders(paths: string[]): Promise<number> {
 }
 
 export async function toggleSkill(dirPath: string): Promise<void> {
+  if (isBundledSkillDir(dirPath)) {
+    return;
+  }
   const on = path.join(dirPath, SKILL_FILE);
   const off = path.join(dirPath, SKILL_OFF);
   try {
@@ -96,7 +113,14 @@ export async function toggleSkill(dirPath: string): Promise<void> {
 }
 
 export async function deleteSkill(dirPath: string): Promise<void> {
+  if (isBundledSkillDir(dirPath)) {
+    return;
+  }
   await fs.rm(dirPath, { recursive: true, force: true });
+}
+
+function isBundledSkillDir(dirPath: string): boolean {
+  return pathInside(bundledSkillsDir(), dirPath, plat().os());
 }
 
 export async function findSkillRoots(dir: string, depth = 0): Promise<string[]> {

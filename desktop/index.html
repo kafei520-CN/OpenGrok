@@ -1,5 +1,5 @@
 <!doctype html>
-<html class="opengrok" lang="zh-CN" data-version="0.4.2">
+<html class="opengrok" lang="zh-CN" data-version="0.4.3">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -12,8 +12,8 @@
     <link rel="stylesheet" href="../plugin/media/chat.css" />
     <link rel="stylesheet" href="../plugin/media/katex/katex.min.css" />
     <link rel="stylesheet" href="../plugin/media/diff.css" />
-    <link rel="stylesheet" href="./workbench.css" />
     <link rel="stylesheet" href="../plugin/media/surfaces.css" />
+    <link rel="stylesheet" href="./workbench.css" />
   </head>
   <body>
     <div id="app">Starting OpenGrok…</div>
@@ -45,6 +45,21 @@
       window.opengrok.onHost(function (data) {
         window.dispatchEvent(new MessageEvent('message', { data: data }));
       });
+      (function () {
+        var og = window.opengrok;
+        if (!og) {
+          return;
+        }
+        function setMax(on) {
+          document.documentElement.classList.toggle('maximized', Boolean(on));
+        }
+        if (og.onMaximized) {
+          og.onMaximized(setMax);
+        }
+        if (og.maximized) {
+          og.maximized().then(setMax);
+        }
+      })();
     </script>
     <script src="../plugin/dist/webview.js"></script>
   </body>

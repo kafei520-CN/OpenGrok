@@ -112,7 +112,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || steps.ver.outputs.tag }}
           name: OpenGrok ${{ github.ref_type == 'tag' && github.ref_name || steps.ver.outputs.tag }}
-          generate_release_notes: true
+          generate_release_notes: false
           files: release/github/*
           fail_on_unmatched_files: true
           body: |

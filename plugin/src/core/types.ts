@@ -67,6 +67,22 @@ export interface ContextUsage {
   categories?: ContextCategory[];
 }
 
+export type CronKind = 'once' | 'daily' | 'weekly' | 'interval';
+
+export interface CronJob {
+  id: string;
+  title: string;
+  prompt: string;
+  enabled: boolean;
+  kind: CronKind;
+  at?: string;
+  weekday?: number;
+  everyMs?: number;
+  lastRunAt?: number;
+  nextRunAt?: number;
+  createdAt: number;
+}
+
 export type SettingsPage =
   | 'main'
   | 'rules'
@@ -78,6 +94,7 @@ export type SettingsPage =
   | 'mcps'
   | 'agents'
   | 'worktrees'
+  | 'cron'
   | 'extensions'
   | 'memory'
   | 'remote';
@@ -178,7 +195,7 @@ export interface SkillItem {
   description?: string;
   dirPath: string;
   skillFile: string;
-  scope: 'global' | 'project';
+  scope: 'global' | 'project' | 'bundled';
   enabled: boolean;
 }
 
@@ -325,6 +342,8 @@ export interface SessionRow {
   sessionKind?: string;
   numChatMessages?: number;
   numMessages?: number;
+  /** True when this session still has a turn running in the background. */
+  live?: boolean;
 }
 
 export interface MediaItem {
@@ -504,6 +523,12 @@ export interface ChatState {
   timestamps?: boolean;
   multiline?: boolean;
   queue?: string[];
+  goal?: {
+    text: string;
+    status: 'running' | 'paused';
+    startedAt: number;
+    elapsedMs: number;
+  };
   alwaysApprove?: boolean;
   notify?: 'done' | 'fail';
   currentSessionId?: string;
@@ -533,6 +558,7 @@ export interface ChatState {
   marketplace?: MarketplacePlugin[];
   workflows?: WorkflowItem[];
   tasks?: TaskItem[];
+  cronJobs?: CronJob[];
   memoryFiles?: MemoryFile[];
   extTab?: 'plugins' | 'marketplace' | 'hooks' | 'workflows';
   theme?: ThemeColors;
@@ -635,6 +661,7 @@ export interface SessionUpdate {
   streamStartMs?: number;
   agentTimestampMs?: number;
   entries?: unknown;
+  objective?: string;
 }
 
 export interface HostToWebview {
@@ -669,7 +696,27 @@ export type WebviewToHost =
   | { type: 'logout' }
   | { type: 'send'; text: string }
   | { type: 'dropQueue'; index: number }
+  | { type: 'sendNow'; index?: number }
+  | { type: 'openCron' }
+  | { type: 'closeCron' }
+  | {
+      type: 'addCronJob';
+      title: string;
+      prompt: string;
+      kind: CronKind;
+      at?: string;
+      weekday?: number;
+      everyMs?: number;
+    }
+  | { type: 'patchCronJob'; id: string; enabled?: boolean }
+  | { type: 'deleteCronJob'; id: string }
+  | { type: 'runCronJob'; id: string }
   | { type: 'cancel' }
+  | { type: 'pauseGoal' }
+  | { type: 'resumeGoal' }
+  | { type: 'clearGoal' }
+  | { type: 'editGoal'; text: string }
+  | { type: 'goalStatus' }
   | { type: 'newSession' }
   | { type: 'restart' }
   | { type: 'choosePermission'; optionId: string }

@@ -144,14 +144,16 @@ describe('controller reverse requests', () => {
     controller.dispose();
   });
 
-  it('cancels a pending permission on newSession and dispose', async () => {
+  it('keeps a pending permission parked across newSession and cancels it on dispose', async () => {
     bindPlatform(fakePlat());
     const controller = new GrokController();
     const first = controller.requestToolPermission(toolParams);
     await controller.newSession();
-    assert.deepEqual(await first, cancelledPermission());
+    assert.equal(controller.snapshot().permission, undefined);
+    assert.equal(controller.pendingPermissions.size, 1);
     const second = controller.requestToolPermission(toolParams);
     controller.dispose();
+    assert.deepEqual(await first, cancelledPermission());
     assert.deepEqual(await second, cancelledPermission());
   });
 

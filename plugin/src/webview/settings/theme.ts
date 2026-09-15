@@ -17,7 +17,9 @@ import type { ThemeColors } from '../../core/types';
 import {
   DEFAULT_CHROME_BLUR,
   DEFAULT_GLASS_BLUR,
+  DEFAULT_GLASS_OPACITY,
   DEFAULT_WALLPAPER_OPACITY,
+  MAX_GLASS_BLUR,
 } from '../../settings/wallpaper';
 import { isDesktop, isRemoteWeb, post, tr, ui } from '../app';
 import { iconChevron } from '../icons';
@@ -255,10 +257,26 @@ function surfaceCard(initial: ThemeColors): HTMLElement {
     hint,
     row,
     sliderRow(
+      'fill',
+      tr('themeGlassOpacity'),
+      0,
+      100,
+      initial.glassOpacity ?? DEFAULT_GLASS_OPACITY,
+      current !== 'glass',
+      (n, persist) => {
+        live = { ...live, glassOpacity: n };
+        if (persist) {
+          commit(live, true);
+        } else {
+          applyLive();
+        }
+      },
+    ),
+    sliderRow(
       'blur',
       tr('themeGlassBlur'),
       0,
-      72,
+      MAX_GLASS_BLUR,
       initial.glassBlur ?? DEFAULT_GLASS_BLUR,
       current !== 'glass',
       (n, persist) => {
@@ -269,13 +287,12 @@ function surfaceCard(initial: ThemeColors): HTMLElement {
           applyLive();
         }
       },
-      'px',
     ),
     sliderRow(
       'chrome-blur',
       tr('themeChromeBlur'),
       0,
-      72,
+      MAX_GLASS_BLUR,
       initial.chromeBlur ?? DEFAULT_CHROME_BLUR,
       current !== 'glass',
       (n, persist) => {
@@ -286,7 +303,6 @@ function surfaceCard(initial: ThemeColors): HTMLElement {
           applyLive();
         }
       },
-      'px',
     ),
   );
   return card;
@@ -338,13 +354,6 @@ function wallpaperCard(initial: ThemeColors): HTMLElement {
   hint.textContent = tr('themeWallpaperHint');
   const actions = document.createElement('div');
   actions.className = 'settings-actions';
-  const icon = document.createElement('button');
-  icon.type = 'button';
-  icon.className = 'btn';
-  icon.textContent = tr('themeWallpaperIcon');
-  icon.addEventListener('click', () => {
-    commit({ ...live, wallpaper: 'icon' }, true);
-  });
   const pick = document.createElement('button');
   pick.type = 'button';
   pick.className = 'btn';
@@ -371,7 +380,7 @@ function wallpaperCard(initial: ThemeColors): HTMLElement {
   preview.textContent = tr('themePreviewOpen');
   preview.disabled = !initial.wallpaper;
   preview.addEventListener('click', () => post({ type: 'openThemePreview' }));
-  actions.append(icon, pick, clear, preview);
+  actions.append(pick, clear, preview);
   card.append(
     hint,
     actions,
@@ -384,7 +393,6 @@ function wallpaperCard(initial: ThemeColors): HTMLElement {
       }
     }),
   );
-  icon.classList.toggle('primary', initial.wallpaper === 'icon');
   return card;
 }
 
@@ -509,6 +517,14 @@ function fontStatusText(theme: ThemeColors): string {
   return tr('themeFontFile', { name: base });
 }
 
+function paintRangeFill(el: HTMLInputElement): void {
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const val = Number(el.value);
+  const pct = max === min ? 0 : ((val - min) / (max - min)) * 100;
+  el.style.setProperty('--fill', `${pct}%`);
+}
+
 function sliderRow(
   key: string,
   label: string,
@@ -534,12 +550,14 @@ function sliderRow(
   slider.disabled = disabled;
   slider.setAttribute('aria-label', label);
   slider.dataset.key = key;
+  paintRangeFill(slider);
   const readout = document.createElement('span');
   readout.className = 'theme-opacity-value';
   readout.textContent = `${slider.value}${unit}`;
   slider.addEventListener('input', () => {
     const n = Number(slider.value);
     readout.textContent = `${n}${unit}`;
+    paintRangeFill(slider);
     onChange(n, false);
   });
   slider.addEventListener('change', () => onChange(Number(slider.value), true));

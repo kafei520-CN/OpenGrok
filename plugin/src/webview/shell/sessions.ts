@@ -6,7 +6,7 @@ import { iconEdit, iconFolder, iconTrash } from '../icons';
 import { escapeHtml } from '../transcript/markdown';
 
 export function listedSessions(): SessionRow[] {
-  return (ui.state.sessions ?? []).filter((row) => Boolean(row.title.trim()));
+  return (ui.state.sessions ?? []).filter((row) => Boolean(row.title?.trim()));
 }
 
 export function mountSessionsDrawer(parent: HTMLElement): void {
@@ -116,10 +116,16 @@ function workspaceOverview(sessions: SessionRow[]): HTMLElement {
 export function sessionButton(row: SessionRow): HTMLElement {
   const item = document.createElement('div');
   item.className = row.id === ui.state.currentSessionId ? 'session-row active' : 'session-row';
+  if (row.live) {
+    item.classList.add('is-live');
+  }
   const open = document.createElement('button');
   open.type = 'button';
   open.className = 'session-main';
-  open.innerHTML = `<span class="session-title">${escapeHtml(row.title)}</span><span class="session-time">${escapeHtml(formatRelativeTime(loc(), row.updatedAt))}</span>`;
+  const live = row.live
+    ? `<span class="session-live" title="${escapeHtml(tr('sessionsLive'))}"></span>`
+    : '';
+  open.innerHTML = `<span class="session-title">${live}${escapeHtml(row.title)}</span><span class="session-time">${escapeHtml(formatRelativeTime(loc(), row.updatedAt))}</span>`;
   open.addEventListener('click', () =>
     post({ type: 'loadSession', sessionId: row.id, cwd: row.cwd }),
   );

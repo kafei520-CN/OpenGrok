@@ -1,11 +1,15 @@
 {
   "name": "opengrok",
   "productName": "OpenGrok",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Desktop workbench for the Grok Build CLI",
   "author": "mckafei_CN",
   "license": "Apache-2.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kafei520-CN/OpenGrok.git"
+  },
   "main": "dist/main.js",
   "scripts": {
     "compile": "node esbuild.mjs",
@@ -18,8 +22,16 @@
     "productName": "OpenGrok",
     "asar": true,
     "compression": "maximum",
-    "electronLanguages": ["en-US", "zh-CN"],
+    "electronLanguages": [
+      "en-US",
+      "zh-CN"
+    ],
     "afterPack": "./scripts/after-pack.cjs",
+    "publish": {
+      "provider": "github",
+      "owner": "kafei520-CN",
+      "repo": "OpenGrok"
+    },
     "directories": {
       "output": "release"
     },
@@ -73,7 +85,8 @@
           "logo.svg",
           "SuperGrok.svg",
           "SuperGrokHeavy.svg",
-          "pet/*.png"
+          "pet/*.png",
+          "skills/**"
         ]
       }
     ],
@@ -83,11 +96,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -108,11 +125,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -126,24 +149,33 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "rpm",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "tar.gz",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     }
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "iconv-lite": "^0.7.3",
     "katex": "^0.18.7"
   },

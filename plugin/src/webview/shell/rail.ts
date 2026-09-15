@@ -12,6 +12,7 @@ import {
   iconSearch,
   iconSun,
 } from '../icons';
+import { pinFloating, releaseByClass } from '../chrome/popover';
 import { listedSessions, sessionButton } from './sessions';
 import { reviewBack, reviewNav, reviewOpen, reviewSearch } from './reviewStage';
 import { openDeskTab, settingsNavItems } from './settingsStage';
@@ -60,7 +61,7 @@ export function patchRail(parent: HTMLElement): void {
 function railKey(): string {
   const sessions = listedSessions()
     .slice(0, 24)
-    .map((row) => `${row.id}:${row.title}:${row.updatedAt}`)
+    .map((row) => `${row.id}:${row.title}:${row.updatedAt}:${row.live ? '1' : '0'}`)
     .join('|');
   return [
     ui.state.locale ?? 'en',
@@ -367,6 +368,7 @@ function bindAccountMenuDismiss(): void {
       return;
     }
     accountMenuOpen = false;
+    releaseByClass('og-account-menu');
     document.getElementById('og-account-menu')?.remove();
   });
 }
@@ -397,10 +399,11 @@ function footer(): HTMLElement {
   chip.addEventListener('click', (event) => {
     event.stopPropagation();
     accountMenuOpen = !accountMenuOpen;
+    releaseByClass('og-account-menu');
     document.getElementById('og-account-menu')?.remove();
     if (accountMenuOpen) {
       post({ type: 'refreshBilling' });
-      el.append(accountMenu());
+      pinAccountMenu(chip);
     }
   });
   const gear = document.createElement('button');
@@ -412,13 +415,19 @@ function footer(): HTMLElement {
   gear.addEventListener('click', (event) => {
     event.stopPropagation();
     accountMenuOpen = false;
+    releaseByClass('og-account-menu');
     openDeskTab('agent');
   });
   el.append(chip, gear);
   if (accountMenuOpen) {
-    el.append(accountMenu());
+    pinAccountMenu(chip);
   }
   return el;
+}
+
+function pinAccountMenu(anchor: HTMLElement): void {
+  const menu = accountMenu();
+  pinFloating(menu, anchor, { prefer: 'above', align: 'start', matchWidth: true, gap: 8 });
 }
 
 function accountLabel(): string {

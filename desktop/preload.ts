@@ -23,6 +23,26 @@ contextBridge.exposeInMainWorld('opengrok', {
       handler(value);
     });
   },
+  updateState() {
+    return ipcRenderer.invoke('grok-update-state');
+  },
+  checkUpdate() {
+    return ipcRenderer.invoke('grok-update-check');
+  },
+  downloadUpdate() {
+    return ipcRenderer.invoke('grok-update-download');
+  },
+  installUpdate() {
+    return ipcRenderer.invoke('grok-update-install');
+  },
+  setAutoUpdate(on: boolean) {
+    return ipcRenderer.invoke('grok-update-auto', on);
+  },
+  onUpdate(handler: (state: unknown) => void) {
+    ipcRenderer.on('grok-update', (_event, state) => {
+      handler(state);
+    });
+  },
 });
 
 contextBridge.exposeInMainWorld('opengrokPet', {

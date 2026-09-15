@@ -38,6 +38,26 @@ export function iconStop(): string {
   return '<svg viewBox="0 0 16 16" width="10" height="10"><rect x="4" y="4" width="8" height="8" rx="1.2" fill="currentColor"/></svg>';
 }
 
+export function iconTarget(): string {
+  return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.4"/><circle cx="8" cy="8" r="2.4"/><circle cx="8" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>';
+}
+
+export function iconPause(): string {
+  return '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><rect x="4.2" y="3.2" width="2.4" height="9.6" rx="0.7"/><rect x="9.4" y="3.2" width="2.4" height="9.6" rx="0.7"/></svg>';
+}
+
+export function iconPlay(): string {
+  return '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M5.2 3.4 12.4 8 5.2 12.6z"/></svg>';
+}
+
+export function iconSendNow(): string {
+  return '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M2.4 3.2 8.2 8 2.4 12.8z"/><path d="M8.6 3.2 14.4 8 8.6 12.8z"/></svg>';
+}
+
+export function iconExpand(): string {
+  return '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M9.5 3.5h3v3M13.5 3.5 9.2 7.8M6.5 12.5h-3v-3M2.5 12.5 6.8 8.2"/></svg>';
+}
+
 export function iconCopy(): string {
   return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V3.8A1.3 1.3 0 0 0 9.2 2.5H3.8A1.3 1.3 0 0 0 2.5 3.8v5.4A1.3 1.3 0 0 0 3.8 10.5H5.5"/></svg>';
 }

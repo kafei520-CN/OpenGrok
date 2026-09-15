@@ -4,11 +4,11 @@ export const DEFAULT_WALLPAPER_OPACITY = 22;
 export const DEFAULT_WALLPAPER_SCALE = 100;
 export const MIN_WALLPAPER_SCALE = 20;
 export const MAX_WALLPAPER_SCALE = 800;
-export const DEFAULT_GLASS_OPACITY = 36;
-export const DEFAULT_GLASS_BLUR = 24;
-export const DEFAULT_CHROME_BLUR = 32;
+export const DEFAULT_GLASS_OPACITY = 16;
+export const DEFAULT_GLASS_BLUR = 12;
+export const DEFAULT_CHROME_BLUR = 40;
 export const DEFAULT_CHROME_GLASS_OPACITY = 38;
-export const MAX_GLASS_BLUR = 72;
+export const MAX_GLASS_BLUR = 100;
 /** Layer 1 is the wallpaper slider. Layers 2–7 follow the component blur slider. */
 const GLASS_LAYER_FACTOR = [0, 1, 1.25, 1.45, 1.65, 1.85, 2.05, 2.25] as const;
 export const ICON_WALLPAPER = 'grok-symbol.png';
@@ -130,7 +130,7 @@ export function clampChromeGlassOpacity(raw: unknown): number {
 
 export function glassLayerBlur(basePx: number, layer: number): number {
   const factor = GLASS_LAYER_FACTOR[layer] ?? GLASS_LAYER_FACTOR[7];
-  return Math.min(80, Math.round(Math.max(0, basePx) * factor));
+  return Math.min(MAX_GLASS_BLUR, Math.round(Math.max(0, basePx) * factor));
 }
 
 /** Component frost from the chrome blur slider. Independent of wallpaper blur. */

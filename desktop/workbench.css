@@ -29,17 +29,24 @@ html.opengrok {
   --bad: #f85149;
   --warn: #f59e0b;
   --r: 12px;
-  --glass-edge: color-mix(in srgb, #fff 58%, color-mix(in srgb, var(--fg) 16%, transparent));
+  --og-inset: 10px;
+  --og-card-r: 16px;
+  --glass-edge: color-mix(in srgb, #fff 48%, color-mix(in srgb, var(--fg) 16%, transparent));
   --glass-border: 1px solid var(--glass-edge);
-  --glass-sheen: inset 0 1px 0 rgb(255 255 255 / 70%), inset 0 -1px 0 rgb(255 255 255 / 10%);
-  --glass-shadow: var(--glass-sheen), 0 12px 40px color-mix(in srgb, #000 12%, transparent);
-  --glass-shadow-sm: var(--glass-sheen), 0 8px 22px color-mix(in srgb, #000 8%, transparent);
+  --glass-border-sm: 1px solid var(--glass-edge);
+  --glass-sheen: inset 0 1px 0 rgb(255 255 255 / 36%), inset 0 -1px 0 rgb(255 255 255 / 8%);
+  --glass-shadow: var(--glass-sheen), 0 10px 28px rgb(0 0 0 / 12%);
+  --glass-shadow-sm: var(--glass-sheen), 0 6px 16px rgb(0 0 0 / 8%);
+  --glass-liquid: var(--glass-shadow);
   --glass-film: color-mix(
     in srgb,
-    var(--bg) min(46%, var(--chrome-fill, 38%)),
-    rgb(255 255 255 / 28%)
+    var(--bg) min(52%, var(--chrome-fill, 38%)),
+    rgb(255 255 255 / 14%)
   );
-  --glass-frost: blur(var(--glass-3-blur, 46px)) saturate(1.85) brightness(1.08);
+  --glass-frost: none;
+  --glass-plate-filter: none;
+  --glass-chrome-filter: none;
+  --glass-2-filter: none;
   --glass-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   --pane: color-mix(in srgb, var(--fg) 6%, transparent);
   --pane-strong: color-mix(in srgb, var(--fg) 10%, transparent);
@@ -150,28 +157,45 @@ body.og-max .og-win button[data-win="max"]::before {
   color: #fff;
 }
 
+html.opengrok,
+html.opengrok body {
+  background: transparent !important;
+}
+
+html.opengrok:has(#app[data-surface='solid']),
+html.opengrok:has(#app[data-surface='solid']) body,
+html.opengrok:has(#app[data-surface='endfield']),
+html.opengrok:has(#app[data-surface='endfield']) body {
+  background: var(--bg) !important;
+}
+
 html.opengrok #app {
-  position: relative;
-  inset: auto;
-  flex: 1;
+  position: absolute;
+  inset: 0;
   display: grid;
   grid-template-columns: var(--og-rail) minmax(0, 1fr);
   grid-template-rows: var(--og-title) minmax(0, 1fr) auto;
   background: var(--bg);
   padding: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 html.opengrok #app[data-surface='glass'] {
-  background:
-    radial-gradient(1100px 720px at 8% -8%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 58%),
-    radial-gradient(860px 560px at 108% 6%, color-mix(in srgb, var(--fg) 12%, transparent), transparent 52%),
-    radial-gradient(780px 520px at 72% 118%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--bg) 78%, #c5d0e6) 0%,
-      var(--bg) 46%,
-      color-mix(in srgb, var(--bg) 86%, #d4dbe8) 100%
-    );
+  background: transparent !important;
+  padding: var(--og-inset);
+  gap: var(--og-inset);
+  overflow: visible;
+}
+
+html.opengrok.maximized #app[data-surface='glass'] {
+  padding: 0;
+  gap: 0;
+}
+
+html.opengrok.maximized #app[data-surface='glass'] #og-rail,
+html.opengrok.maximized #app[data-surface='glass'] #og-dash {
+  border-radius: 0;
 }
 
 html.opengrok #app.og-dash-on,
@@ -195,34 +219,13 @@ html.opengrok #app:has(#og-dash) #grok-veil {
   display: none !important;
 }
 
-html.opengrok #app[data-surface='glass'],
 html.opengrok #app[data-surface='solid'] {
   padding: 0;
 }
 
-html.opengrok #app[data-surface='glass']::before {
-  content: "";
-  position: absolute;
-  inset: -12%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(42% 36% at 18% 22%, color-mix(in srgb, #fff 55%, transparent), transparent 70%),
-    radial-gradient(38% 32% at 86% 12%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%),
-    radial-gradient(46% 38% at 70% 78%, color-mix(in srgb, #fff 40%, transparent), transparent 70%);
-  filter: blur(28px);
-}
-
+html.opengrok #app[data-surface='glass']::before,
 html.opengrok #app[data-surface='glass']::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.07;
-  background-image: var(--glass-noise);
-  background-size: 180px 180px;
-  mix-blend-mode: overlay;
+  display: none;
 }
 
 html.opengrok #grok-wallpaper,
@@ -238,6 +241,38 @@ html.opengrok #grok-frost {
   box-shadow: none;
   background: transparent;
   display: none;
+}
+
+html.opengrok #app[data-surface='glass'] #grok-wallpaper,
+html.opengrok #app[data-surface='glass'] #grok-frost {
+  position: absolute;
+  inset: 0 !important;
+  grid-column: auto;
+  grid-row: auto;
+  width: auto;
+  height: auto;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+html.opengrok.maximized #app[data-surface='glass'] #grok-wallpaper,
+html.opengrok.maximized #app[data-surface='glass'] #grok-frost {
+  border-radius: 0 !important;
+}
+
+html.opengrok #app[data-surface='glass'] #grok-wallpaper {
+  z-index: 0;
+  overflow: hidden;
+}
+
+html.opengrok #app[data-surface='glass'] #grok-frost {
+  display: block;
+  z-index: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg) var(--glass-fill, 16%), transparent);
+  -webkit-backdrop-filter: var(--glass-plate-filter, none);
+  backdrop-filter: var(--glass-plate-filter, none);
 }
 
 #og-rail,
@@ -268,6 +303,58 @@ html.opengrok #app[data-surface='solid'] #og-rail {
   background: var(--elev);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] #og-rail {
+  --r: var(--og-card-r);
+  --tr: 18%;
+  z-index: 2;
+  border: var(--glass-border);
+  border-radius: var(--og-card-r);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+  box-shadow: var(--glass-liquid);
+  overflow: visible;
+  filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] #og-rail::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 16px);
+  height: min(240px, 36%);
+  border-radius: inherit;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  filter: blur(8px);
+}
+
+html.opengrok #app[data-surface='glass'] #og-rail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    transparent var(--tr, 18%),
+    transparent calc(100% - var(--tr, 18%)),
+    rgba(255, 255, 255, 0.8) 100%
+  );
+  filter: blur(3px);
+  opacity: 0.4;
+}
+
+html.opengrok #app[data-surface='glass'] #og-rail > * {
+  position: relative;
+  z-index: 2;
 }
 
 .og-brand {
@@ -506,6 +593,15 @@ html.opengrok #app[data-surface='solid'] #og-dash {
   backdrop-filter: none;
 }
 
+html.opengrok #app[data-surface='glass'] #og-dash {
+  border: var(--glass-border);
+  border-radius: var(--og-card-r);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+  box-shadow: var(--glass-liquid);
+}
+
 .og-dash-head {
   display: flex;
   align-items: center;
@@ -546,6 +642,10 @@ html.opengrok #app[data-surface='solid'] #og-dash {
   gap: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
+}
+
+html.opengrok #app[data-surface='glass'] .og-footer {
+  border-top: none;
 }
 
 .og-account {
@@ -602,6 +702,12 @@ html.opengrok #app[data-surface='solid'] #og-dash {
   background: var(--bg);
   border: 1px solid var(--line);
   box-shadow: 0 12px 40px color-mix(in srgb, #000 16%, transparent);
+}
+
+.og-account-menu.pin {
+  left: auto;
+  right: auto;
+  bottom: auto;
 }
 
 .og-account-quota {
@@ -718,12 +824,19 @@ html.opengrok #app[data-surface='solid'] .topbar {
   -webkit-app-region: drag;
 }
 
-html.opengrok .topbar,
-html.opengrok #app[data-surface='glass'] .topbar {
+html.opengrok .topbar {
   background: var(--glass-film);
   -webkit-backdrop-filter: var(--glass-frost);
   backdrop-filter: var(--glass-frost);
   box-shadow: var(--glass-sheen);
+}
+
+html.opengrok #app[data-surface='glass'] .topbar {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  border-bottom: none;
 }
 
 html.opengrok #app[data-surface='solid'] .topbar {
@@ -785,8 +898,8 @@ html.opengrok #app[data-surface='glass'] .send-fab.stop:hover:not(:disabled) {
 }
 
 html.opengrok .composer-bar .seg {
-  background: var(--pane);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: none;
 }
 
 html.opengrok .settings,
@@ -972,7 +1085,7 @@ html.opengrok .og-card.tone-fix .og-card-icon {
 }
 
 html.opengrok .composer-wrap {
-  background: transparent;
+  background: transparent !important;
   padding: 8px 24px 28px;
   display: flex;
   flex-direction: column;
@@ -987,12 +1100,33 @@ html.opengrok #composer-card,
 html.opengrok .composer-card,
 html.opengrok #app[data-surface='glass'] .composer-card {
   width: min(720px, 100%);
-  border-radius: 18px;
+  --tr: 15%;
+  border-radius: var(--og-card-r);
   border: var(--glass-border);
   background: var(--glass-film);
-  -webkit-backdrop-filter: var(--glass-frost);
-  backdrop-filter: var(--glass-frost);
-  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-2-filter, none);
+  backdrop-filter: var(--glass-2-filter, none);
+  box-shadow: var(--glass-liquid);
+  filter: none;
+  overflow: visible;
+}
+
+html.opengrok #app[data-surface='glass'] .composer-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.8) 0%,
+    transparent var(--tr, 15%),
+    transparent calc(100% - var(--tr, 15%)),
+    rgba(255, 255, 255, 0.8) 100%
+  );
+  filter: blur(3px);
+  opacity: 0.18;
 }
 
 html.opengrok #app[data-surface='solid'] #composer-card,
@@ -1068,8 +1202,8 @@ html.opengrok .switch {
   height: 24px;
   padding: 2px;
   border: none;
-  background: color-mix(in srgb, var(--fg) 16%, var(--bg));
-  box-shadow: inset 0 0 0 1px var(--line);
+  background: #e9e9ea;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 6%);
   transition:
     background-color var(--motion-spring),
     box-shadow var(--motion);
@@ -1078,8 +1212,8 @@ html.opengrok .switch {
 html.opengrok .switch .knob {
   width: 20px;
   height: 20px;
-  background: var(--bg);
-  box-shadow: 0 1px 3px color-mix(in srgb, #000 22%, transparent);
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 22%), 0 1px 1px rgb(0 0 0 / 8%);
   transition:
     transform var(--motion-spring),
     background-color var(--motion),
@@ -1091,7 +1225,7 @@ html.opengrok .switch:active .knob {
 }
 
 html.opengrok .switch.on {
-  background: var(--fg);
+  background: #34c759;
   box-shadow: none;
 }
 
@@ -1534,8 +1668,8 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  padding: 8px 28px 16px 12px;
+  overflow: auto;
+  padding: 12px 36px 28px 16px;
 }
 
 .og-deck {
@@ -1766,6 +1900,7 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   box-shadow: var(--glass-shadow-sm);
   border-radius: 16px;
   padding: 16px 18px 14px;
+  overflow: visible;
 }
 
 html.opengrok #app[data-surface='solid'] .og-set-card {
@@ -1857,7 +1992,8 @@ html.opengrok #app[data-surface='solid'] .og-set-card {
 }
 
 .og-set-line input[type='range'] {
-  width: 160px;
+  width: 100%;
+  min-width: 0;
   accent-color: var(--ok, #22c55e);
 }
 
@@ -1869,6 +2005,38 @@ html.opengrok #app[data-surface='solid'] .og-set-card {
   gap: 16px;
   padding: 10px 0;
   border-top: 1px solid var(--line);
+}
+
+.og-set-line.theme-opacity-row {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.og-set-line.theme-opacity-row > span:first-child {
+  min-width: 0;
+}
+
+.og-set-line.theme-opacity-row .theme-opacity {
+  width: 100%;
+  min-width: 0;
+}
+
+.og-set-line.theme-opacity-row .theme-opacity-value {
+  width: 3.6em;
+  flex-shrink: 0;
+}
+
+.og-set-line.theme-opacity-row,
+.og-set-line.theme-opacity-row .theme-opacity {
+  overflow: visible;
+}
+
+html.opengrok .theme-opacity input[type='range'] {
+  overflow: visible;
+  box-sizing: border-box;
+  padding-inline: 9px;
 }
 
 .og-set-card > :first-child {
@@ -2306,6 +2474,28 @@ html.opengrok .og-about-copy span {
   font-size: 13px;
 }
 
+html.opengrok .og-update-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+html.opengrok .cron-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+html.opengrok .cron-field .settings-field {
+  width: 100%;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 9px;
+  color: inherit;
+  font: inherit;
+}
+
 html.opengrok .og-set-card {
   border-radius: 16px;
 }
@@ -2324,6 +2514,503 @@ html.opengrok .menu {
 html.opengrok .permission,
 html.opengrok .ask-card {
   border-radius: 14px;
+}
+
+html.opengrok .goal-bar {
+  margin: 0 auto 10px;
+  width: min(720px, 100%);
+  min-height: 36px;
+  padding: 4px 6px 4px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 90%, var(--elev));
+  box-shadow: 0 6px 16px rgb(0 0 0 / 6%);
+}
+
+html.opengrok .goal-copy {
+  font-size: 13px;
+  gap: 8px;
+}
+
+html.opengrok .goal-time {
+  font-weight: 600;
+}
+
+html.opengrok .goal-acts .icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+}
+
+html.opengrok #app[data-surface='glass'] #grok-body,
+html.opengrok #app[data-surface='glass'] #composer-wrap,
+html.opengrok #app[data-surface='glass'] #og-settings,
+html.opengrok #app[data-surface='glass'] .composer-wrap {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-pane {
+  background: transparent;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck {
+  --og-deck-r: 16px;
+  --og-deck-pad: 16px;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-layers {
+  display: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-sheet {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  border-top: none;
+  border-radius: 0 var(--og-deck-r) var(--og-deck-r) var(--og-deck-r);
+  padding: var(--og-deck-pad);
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-tab {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--fg) 12%, transparent);
+  border-radius: 12px 12px 0 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-tab.on {
+  background: transparent;
+  color: var(--fg);
+  height: var(--og-tab-h);
+  margin-bottom: -1px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-tab.on::after {
+  display: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-tabs {
+  margin-bottom: 0;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-tabs::after {
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+  align-self: flex-end;
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-card {
+  border-radius: var(--og-card-r);
+}
+
+html.opengrok #app[data-surface='glass'] {
+  grid-template-rows: var(--og-title) minmax(0, 1fr);
+}
+
+html.opengrok #app[data-surface='glass'] #grok-body {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+html.opengrok #app[data-surface='glass'] #composer-wrap,
+html.opengrok #app[data-surface='glass'] .composer-wrap {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  z-index: 6;
+  padding: 0 16px 12px;
+  pointer-events: none;
+}
+
+html.opengrok #app[data-surface='glass'] #composer-wrap > *,
+html.opengrok #app[data-surface='glass'] .composer-wrap > * {
+  pointer-events: auto;
+}
+
+html.opengrok #app[data-surface='glass'] .transcript,
+html.opengrok #app[data-surface='glass'] .home {
+  padding-bottom: 168px;
+}
+
+html.opengrok #app[data-surface='glass'] .jump-bottom {
+  bottom: 132px;
+}
+
+html.opengrok #app.ws-on[data-surface='glass'] #composer-wrap,
+html.opengrok #app.ws-on[data-surface='glass'] .composer-wrap,
+html.opengrok #app.ws-on[data-surface='glass'] #grok-body {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+html.opengrok #app.og-dash-on[data-surface='glass'] #composer-wrap,
+html.opengrok #app.og-dash-on[data-surface='glass'] .composer-wrap,
+html.opengrok #app:has(#og-dash)[data-surface='glass'] #composer-wrap {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+html.opengrok #app[data-surface='glass'] .composer-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+html.opengrok #app[data-surface='glass'] .menu,
+html.opengrok #app[data-surface='glass'] .picker-menu,
+html.opengrok #app[data-surface='glass'] .more-menu,
+html.opengrok #app[data-surface='glass'] .og-account-menu,
+html.opengrok #grok-floats[data-surface='glass'] .menu,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu,
+html.opengrok #grok-floats[data-surface='glass'] .more-menu,
+html.opengrok #grok-floats[data-surface='glass'] .og-account-menu,
+html.opengrok #grok-floats .og-account-menu {
+  --tr: 22%;
+  border: var(--glass-border);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+  box-shadow: var(--glass-liquid);
+  overflow: visible;
+}
+
+html.opengrok #app[data-surface='glass'] .msg.assistant > .md.answer,
+html.opengrok #app[data-surface='glass'] .starter,
+html.opengrok #app[data-surface='glass'] .recent-card,
+html.opengrok #app[data-surface='glass'] .permission,
+html.opengrok #app[data-surface='glass'] .ask-card,
+html.opengrok #app[data-surface='glass'] .steps-card {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-shadow-sm);
+  filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab,
+html.opengrok #app[data-surface='glass'] .send-fab.stop {
+  --tr: 25%;
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  background: var(--glass-film);
+  color: var(--fg);
+  border: var(--glass-border);
+  box-shadow: var(--glass-liquid);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+  filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab.stop {
+  color: #c23a40;
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab:disabled {
+  background: rgba(255, 255, 255, 0.03);
+  color: color-mix(in srgb, #3e3e3e 45%, transparent);
+  filter: brightness(1);
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab:hover:not(:disabled),
+html.opengrok #app[data-surface='glass'] .send-fab.stop:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 32%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  border-radius: inherit;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  filter: blur(5px);
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    transparent var(--tr, 25%),
+    transparent calc(100% - var(--tr, 25%)),
+    rgba(255, 255, 255, 0.85) 100%
+  );
+  filter: blur(2px);
+  opacity: 0.7;
+}
+
+html.opengrok #app[data-surface='glass'] .send-fab svg {
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 10px 2px rgba(102, 102, 102, 0.18));
+}
+
+html.opengrok #app[data-surface='glass'] .goal-bar,
+html.opengrok #app[data-surface='glass'] .jump-bottom,
+html.opengrok #app[data-surface='glass'] .og-account,
+html.opengrok #app[data-surface='glass'] .og-search,
+html.opengrok #app[data-surface='glass'] .og-project,
+html.opengrok #app[data-surface='glass'] .og-set-card,
+html.opengrok #app[data-surface='glass'] .settings-card,
+html.opengrok #app[data-surface='glass'] .attach-tile,
+html.opengrok #app[data-surface='glass'] .live-edits,
+html.opengrok #app[data-surface='glass'] .chip,
+html.opengrok #app[data-surface='glass'] .tool-row,
+html.opengrok #app[data-surface='glass'] .work > summary,
+html.opengrok #app[data-surface='glass'] .seg,
+html.opengrok #app[data-surface='glass'] .picker-btn,
+html.opengrok #app[data-surface='glass'] .change-chip,
+html.opengrok #app[data-surface='glass'] .og-login,
+html.opengrok #app[data-surface='glass'] .drawer .dash-card {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .session-row {
+  border: 1px double transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.opengrok #app[data-surface='glass'] .session-row:hover,
+html.opengrok #app[data-surface='glass'] .session-row.active {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .icon-btn:hover,
+html.opengrok #app[data-surface='glass'] .icon-btn.open,
+html.opengrok #app[data-surface='glass'] .btn:not(.primary) {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .switch {
+  background: #e9e9ea;
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .switch .knob {
+  background: #fff;
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .switch.on {
+  background: #34c759;
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .seg {
+  overflow: visible;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-liquid);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+}
+
+html.opengrok #app[data-surface='glass'] .seg button {
+  border-radius: 999px;
+  background: transparent;
+}
+
+html.opengrok #app[data-surface='glass'] .seg button.on {
+  background: rgba(255, 255, 255, 0.28);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+  color: var(--fg);
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-seg,
+html.opengrok #app[data-surface='glass'] .og-set-pills,
+html.opengrok #app[data-surface='glass'] .settings-seg {
+  overflow: visible;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-liquid);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-seg button.on,
+html.opengrok #app[data-surface='glass'] .og-set-pills button.on,
+html.opengrok #app[data-surface='glass'] .settings-seg button.on {
+  background: rgba(255, 255, 255, 0.34);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+  color: var(--fg);
+}
+
+html.opengrok #app[data-surface='glass'] .picker-btn {
+  border-radius: 999px;
+  box-shadow: var(--glass-liquid);
+  overflow: visible;
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-card,
+html.opengrok #app[data-surface='glass'] .og-search,
+html.opengrok #app[data-surface='glass'] .og-account,
+html.opengrok #app[data-surface='glass'] .og-project,
+html.opengrok #app[data-surface='glass'] .queue,
+html.opengrok #app[data-surface='glass'] .seg,
+html.opengrok #app[data-surface='glass'] .og-set-seg,
+html.opengrok #app[data-surface='glass'] .settings-seg,
+html.opengrok #app[data-surface='glass'] .composer-card,
+html.opengrok #app[data-surface='glass'] .send-fab,
+html.opengrok #app[data-surface='glass'] .menu,
+html.opengrok #app[data-surface='glass'] .picker-menu,
+html.opengrok #app[data-surface='glass'] .more-menu,
+html.opengrok #grok-floats[data-surface='glass'] .menu,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu,
+html.opengrok #grok-floats[data-surface='glass'] .more-menu,
+html.opengrok #grok-floats .og-account-menu {
+  overflow: visible;
+}
+
+html.opengrok #og-settings.wp-editor {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  background: var(--bg);
+}
+
+html.opengrok #app[data-surface='glass'] .queue {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-shadow-sm);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+}
+
+html.opengrok #app[data-surface='glass'] .queue-item {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+html.opengrok #app[data-surface='glass'] .queue-now {
+  border: var(--glass-border);
+  background: var(--glass-film);
+  box-shadow: var(--glass-shadow-sm);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-line input[type='range'],
+html.opengrok #app[data-surface='glass'] .theme-opacity input[type='range'] {
+  appearance: none;
+  height: 22px;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  accent-color: transparent;
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-line input[type='range']::-webkit-slider-runnable-track,
+html.opengrok #app[data-surface='glass'] .theme-opacity input[type='range']::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  border: var(--glass-border);
+  background: linear-gradient(
+    to right,
+    #3a3a3c 0,
+    #3a3a3c var(--fill, 0%),
+    rgba(255, 255, 255, 0.16) var(--fill, 0%),
+    rgba(255, 255, 255, 0.16) 100%
+  );
+  box-shadow:
+    inset 2px -2px 1px -1px rgba(255, 255, 255, 0.55),
+    inset -2px 2px 1px -1px rgba(255, 255, 255, 0.28),
+    inset 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-line input[type='range']::-webkit-slider-thumb,
+html.opengrok #app[data-surface='glass'] .theme-opacity input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -5px;
+  border-radius: 50%;
+  border: var(--glass-border);
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow: var(--glass-shadow-sm);
+  -webkit-backdrop-filter: var(--glass-chrome-filter, none);
+  backdrop-filter: var(--glass-chrome-filter, none);
+  cursor: pointer;
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-line input[type='range']::-moz-range-track,
+html.opengrok #app[data-surface='glass'] .theme-opacity input[type='range']::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  border: var(--glass-border);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-line input[type='range']::-moz-range-progress,
+html.opengrok #app[data-surface='glass'] .theme-opacity input[type='range']::-moz-range-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: #3a3a3c;
+}
+
+html.opengrok #app[data-surface='glass'] .og-set-line input[type='range']::-moz-range-thumb,
+html.opengrok #app[data-surface='glass'] .theme-opacity input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: var(--glass-border);
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+html.opengrok #app[data-surface='glass'] .starter::after,
+html.opengrok #app[data-surface='glass'] .recent-card::after,
+html.opengrok #app[data-surface='glass'] .permission::after,
+html.opengrok #app[data-surface='glass'] .ask-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    transparent 22%,
+    transparent 78%,
+    rgba(255, 255, 255, 0.75) 100%
+  );
+  filter: blur(3px);
+  opacity: 0.22;
 }
 
 

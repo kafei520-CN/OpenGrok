@@ -35,6 +35,17 @@ import { buildPromptBlocks } from './prompt';
 import { formatAgentError, formatErrorLine, isCancelError } from '../core/errors';
 import { readGrokSettings } from '../settings/settings';
 import {
+  CRON_STATE_KEY,
+  CRON_TICK_MS,
+  dueJobs,
+  jobFromDraft,
+  markJobRan,
+  readCronJobs,
+  stampJob,
+  type CronDraft,
+} from './cronJobs';
+import type { CronJob } from '../core/types';
+import {
   applyRestoredTurnModels,
   applySessionUpdate,
   finalizeReplayTimes,
@@ -153,6 +164,14 @@ import {
 import { BUNDLED_RELAY_TOKEN, PublicRelay } from '../remote/publicRelay';
 import type { RemoteAccessInfo } from '../core/types';
 import type { NotifyCue } from '../core/runtime/notify';
+import {
+  goalDelivered,
+  parseGoalWireStatus,
+  pauseGoalClock,
+  resumeGoalClock,
+  type GoalState,
+} from './goal';
+import { emptyParked, overlayLiveSessions, type ParkedSession } from './liveSessions';
 
 export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   agent?: GrokAgent;
@@ -160,6 +179,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   messages: ChatMessage[] = [];
   attachments: Attachment[] = [];
   queue: string[] = [];
+  goal?: GoalState;
   compactMode = false;
   timestamps = false;
   multiline = false;
@@ -228,6 +248,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private commands: SlashCommandInfo[] = FALLBACK_COMMANDS;
   sessions?: SessionRow[];
   currentSessionId?: string;
+  private readonly parked = new Map<string, ParkedSession>();
   private sessionCwd?: string;
   private restoringSession = false;
   private replaying = false;
@@ -254,6 +275,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   /** grok.com / cached_token id to restore after a relay turn used xai.api_key. */
   private sessionAuthMethodId?: string;
   private runGen = 0;
+  private goalFinishTimer?: ReturnType<typeof setTimeout>;
   private agentGen = 0;
   private sessionOp = 0;
   private hideSessionPreview = false;
@@ -262,6 +284,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   dashTimer?: ReturnType<typeof setTimeout>;
   taskSeq = 0;
   taskTimer?: ReturnType<typeof setTimeout>;
+  cronJobs: CronJob[] = [];
+  private cronTimer?: ReturnType<typeof setInterval>;
+  private cronBusy = false;
   private readonly disposables: Array<{ dispose(): void }> = [];
   readonly journal: EditJournal;
   private readonly workspaceImages = new Map<string, WorkspaceImage>();
@@ -295,6 +320,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       savedUrl === advertisedPublicUrl(this.remoteHost, 8787) ? '' : savedUrl;
     this.remoteCodeMode = plat().getState('ui.remoteCodeMode', 'random') === 'custom' ? 'custom' : 'random';
     this.remoteCustomCode = sanitizeRemoteSecret(plat().getState('ui.remoteCustomCode', ''));
+    this.cronJobs = readCronJobs(plat().getState(CRON_STATE_KEY, []));
+    this.startCronTimer();
     this.disposables.push(this.tunnel.onChange(() => this.emit()));
     this.disposables.push(this.relay.onChange(() => this.emit()));
     this.journal = new EditJournal({
@@ -329,6 +356,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     drawers.stopDashboardPoll(this);
     drawers.stopTaskPoll(this);
     this.stopBillingPoll();
+    this.stopCronTimer();
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
       this.searchTimer = undefined;
@@ -384,7 +412,12 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       attachments: this.attachments,
       agentVersion: this.agentVersion,
       commands: this.commands,
-      sessions: this.sessions,
+      sessions: overlayLiveSessions(
+        this.sessions,
+        this.currentSessionId,
+        this.status,
+        this.parked,
+      ),
       history: this.history,
       drawer: this.drawer,
       drawerTab: this.drawerTab,
@@ -392,6 +425,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       fileHits: this.fileHits,
       compactMode: this.compactMode,
       timestamps: this.timestamps,
+      goal: this.goal,
       multiline: this.multiline,
       queue: this.queue,
       currentSessionId: this.currentSessionId,
@@ -421,6 +455,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       marketplace: this.marketplace,
       workflows: this.workflows,
       tasks: this.tasks,
+      cronJobs: this.cronJobs,
       memoryFiles: this.memoryFiles,
       extTab: this.extTab,
       theme: drawers.themeForUi(this.theme),
@@ -477,7 +512,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   async newSession(): Promise<void> {
     this.sessionOp += 1;
-    this.cancelTurn();
+    this.parkForeground();
+    this.clearGoalFinishTimer();
+    this.goal = undefined;
     this.agent?.clearSession();
     this.messages = [];
     this.journal.clear();
@@ -490,6 +527,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.hideSessionPreview = true;
     this.currentSessionId = undefined;
     this.sessionCwd = undefined;
+    this.permission = undefined;
+    this.ask = undefined;
+    this.attachments = [];
+    this.queue = [];
+    this.error = undefined;
     this.setStatus('ready');
   }
 
@@ -640,7 +682,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
   }
 
-  async send(text: string): Promise<void> {
+  async send(text: string, opts?: { hidden?: boolean }): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed && this.attachments.length === 0) {
       return;
@@ -664,15 +706,27 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         return;
       }
     }
+    const sid = agent.sessionId;
+    if (!sid) {
+      return;
+    }
     if (this.status === 'streaming') {
+      if (this.modeId === 'goal') {
+        return;
+      }
       this.queue = [...this.queue, trimmed];
       this.emit();
       return;
     }
+    let outgoing = trimmed;
+    if (this.modeId === 'goal' && !opts?.hidden && !trimmed.startsWith('/goal')) {
+      outgoing = this.prepareGoalPrompt(trimmed);
+      this.emit();
+    }
     await this.applySelectedCustomModel(agent);
     this.error = undefined;
     const run = ++this.runGen;
-    const blocks = await buildPromptBlocks(trimmed, this.attachments);
+    const blocks = await buildPromptBlocks(outgoing, this.attachments);
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: `user-${++this.turn}`,
@@ -697,37 +751,203 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       createdAt: now,
       ...this.turnModelFields(),
     };
-    this.messages = [...this.messages, userMessage, assistant];
-    void persistTurnModels(this.currentSessionId ?? agent.sessionId, this.messages);
+    this.messages = opts?.hidden
+      ? [...this.messages, assistant]
+      : [...this.messages, userMessage, assistant];
+    void persistTurnModels(this.currentSessionId ?? sid, this.messages);
     this.attachments = [];
     this.setStatus('streaming');
     try {
-      await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) });
+      await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) }, sid);
     } catch (error) {
-      if (run !== this.runGen) {
+      if (!this.runBelongs(sid, run)) {
         return;
       }
       if (isCancelError(error)) {
-        this.endStreaming();
+        this.endTurnOn(sid);
         return;
       }
-      this.fail(tr('turnError'), error);
+      this.failOn(sid, tr('turnError'), error);
       return;
     }
-    if (run !== this.runGen) {
+    if (!this.runBelongs(sid, run)) {
       return;
     }
-    this.endStreaming('done');
-    await this.flushQueue();
+    this.endTurnOn(sid, 'done');
+    if (this.currentSessionId === sid) {
+      await this.flushQueue();
+    }
   }
 
   cancelTurn(): void {
+    const pauseGoal = this.modeId === 'goal' && this.goal?.status === 'running';
+    this.clearGoalFinishTimer();
     this.runGen += 1;
     abortClientRpcs(this, 'cancel');
     this.agent?.cancelTurn();
     this.queue = [];
     if (this.status === 'streaming') {
       this.endStreaming();
+    }
+    if (pauseGoal) {
+      this.pauseActiveGoal();
+      void this.nudgeGoalSlash('pause');
+    }
+  }
+
+  async pauseGoal(): Promise<void> {
+    if (!this.goal || this.goal.status !== 'running') {
+      return;
+    }
+    if (this.status === 'streaming') {
+      this.cancelTurn();
+      return;
+    }
+    this.pauseActiveGoal();
+    void this.nudgeGoalSlash('pause');
+    this.emit();
+  }
+
+  async resumeGoal(): Promise<void> {
+    if (!this.goal || this.goal.status !== 'paused') {
+      return;
+    }
+    this.goal = resumeGoalClock(this.goal);
+    this.emit();
+    await this.send('/goal resume', { hidden: true });
+  }
+
+  async clearGoal(): Promise<void> {
+    this.clearGoalFinishTimer();
+    if (this.status === 'streaming') {
+      this.runGen += 1;
+      abortClientRpcs(this, 'cancel');
+      this.agent?.cancelTurn();
+      this.endStreaming();
+    }
+    const had = Boolean(this.goal);
+    this.goal = undefined;
+    this.emit();
+    if (had) {
+      void this.nudgeGoalSlash('clear');
+    }
+  }
+
+  async editGoal(text: string): Promise<void> {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    if (this.status === 'streaming') {
+      this.runGen += 1;
+      abortClientRpcs(this, 'cancel');
+      this.agent?.cancelTurn();
+      this.endStreaming();
+    }
+    this.goal = undefined;
+    await this.send(trimmed);
+  }
+
+  private prepareGoalPrompt(text: string): string {
+    if (!this.goal) {
+      this.goal = { text, status: 'running', startedAt: Date.now(), elapsedMs: 0 };
+      return `/goal ${text}`;
+    }
+    if (this.goal.status === 'paused') {
+      this.goal = resumeGoalClock(this.goal);
+      return text ? `/goal resume\n${text}` : '/goal resume';
+    }
+    return text;
+  }
+
+  private pauseActiveGoal(): void {
+    if (this.goal?.status === 'running') {
+      this.goal = pauseGoalClock(this.goal);
+    }
+  }
+
+  private async nudgeGoalSlash(verb: 'pause' | 'resume' | 'clear'): Promise<void> {
+    const agent = this.agent;
+    if (!agent?.sessionId) {
+      return;
+    }
+    try {
+      await agent.prompt([{ type: 'text', text: `/goal ${verb}` }], { mode: 'agent' });
+    } catch {
+      /* CLI may already have stopped. */
+    }
+  }
+
+  private clearGoalFinishTimer(): void {
+    if (this.goalFinishTimer) {
+      clearTimeout(this.goalFinishTimer);
+      this.goalFinishTimer = undefined;
+    }
+  }
+
+  private applyGoalUpdated(update: SessionUpdate): void {
+    const wire = parseGoalWireStatus(update.status);
+    if (!wire) {
+      return;
+    }
+    if (wire === 'done') {
+      void this.finishGoal({ stopLoop: false });
+      return;
+    }
+    this.clearGoalFinishTimer();
+    if (wire === 'paused') {
+      this.pauseActiveGoal();
+      this.emit();
+      return;
+    }
+    const text = update.objective?.trim() || this.goal?.text || '';
+    if (!this.goal) {
+      this.goal = { text, status: 'running', startedAt: Date.now(), elapsedMs: 0 };
+    } else if (this.goal.status === 'paused') {
+      this.goal = resumeGoalClock({ ...this.goal, text: text || this.goal.text });
+    } else if (text && text !== this.goal.text) {
+      this.goal = { ...this.goal, text };
+    }
+    this.emit();
+  }
+
+  private maybeFinishGoalFromWork(): void {
+    if (this.modeId !== 'goal' || this.goal?.status !== 'running') {
+      this.clearGoalFinishTimer();
+      return;
+    }
+    const last = this.messages.filter((item) => item.role === 'assistant').at(-1);
+    if (!goalDelivered(last?.steps, last?.text)) {
+      this.clearGoalFinishTimer();
+      return;
+    }
+    if (this.goalFinishTimer) {
+      return;
+    }
+    this.goalFinishTimer = setTimeout(() => {
+      this.goalFinishTimer = undefined;
+      void this.finishGoal({ stopLoop: true });
+    }, 1200);
+  }
+
+  private async finishGoal(opts: { stopLoop: boolean }): Promise<void> {
+    this.clearGoalFinishTimer();
+    if (!this.goal) {
+      return;
+    }
+    if (opts.stopLoop && this.status === 'streaming') {
+      this.runGen += 1;
+      abortClientRpcs(this, 'cancel');
+      this.agent?.cancelTurn();
+    }
+    this.goal = undefined;
+    if (this.status === 'streaming') {
+      this.endStreaming();
+    } else {
+      this.emit();
+    }
+    if (opts.stopLoop) {
+      void this.nudgeGoalSlash('clear');
     }
   }
 
@@ -766,6 +986,165 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       /* already dead */
     }
     disposeAllTerminals();
+    this.parked.clear();
+  }
+
+  private parkForeground(): void {
+    const id = this.currentSessionId;
+    if (!id) {
+      return;
+    }
+    this.parked.set(id, {
+      id,
+      cwd: this.sessionCwd,
+      messages: this.messages,
+      turn: this.turn,
+      status: this.status,
+      error: this.error,
+      goal: this.goal,
+      modeId: this.modeId,
+      attachments: this.attachments,
+      queue: this.queue,
+      runGen: this.runGen,
+      permission: this.permission,
+      ask: this.ask,
+    });
+  }
+
+  private restoreParked(id: string): void {
+    const row = this.parked.get(id);
+    if (!row) {
+      return;
+    }
+    this.parked.delete(id);
+    this.currentSessionId = id;
+    this.sessionCwd = row.cwd;
+    this.messages = row.messages;
+    this.turn = row.turn;
+    this.error = row.error;
+    this.goal = row.goal;
+    this.modeId = row.modeId;
+    this.attachments = row.attachments;
+    this.queue = row.queue;
+    this.runGen = row.runGen;
+    this.permission = row.permission;
+    this.ask = row.ask;
+    this.status = row.status === 'streaming' ? 'streaming' : 'ready';
+  }
+
+  private runBelongs(sid: string, run: number): boolean {
+    if (this.currentSessionId === sid) {
+      return this.runGen === run;
+    }
+    return this.parked.get(sid)?.runGen === run;
+  }
+
+  private endTurnOn(sid: string, cue?: NotifyCue): void {
+    if (this.currentSessionId === sid) {
+      this.endStreaming(cue);
+      return;
+    }
+    const row = this.parked.get(sid);
+    if (!row) {
+      return;
+    }
+    const assistant = row.messages.filter((item) => item.role === 'assistant').at(-1);
+    if (assistant) {
+      assistant.streaming = false;
+      freezeTurnSteps(assistant);
+    }
+    row.status = 'ready';
+    void persistTurnModels(sid, row.messages);
+    this.emit();
+  }
+
+  private failOn(sid: string, message: string, error?: unknown): void {
+    if (this.currentSessionId === sid) {
+      this.fail(message, error);
+      return;
+    }
+    const parsed = error !== undefined ? formatAgentError(error) : { message };
+    const line =
+      parsed.message === message ? formatErrorLine(parsed) : `${message}: ${formatErrorLine(parsed)}`;
+    const row = this.parked.get(sid);
+    if (!row) {
+      return;
+    }
+    row.error = line;
+    row.status = 'ready';
+    const assistant = row.messages.filter((item) => item.role === 'assistant').at(-1);
+    if (assistant) {
+      assistant.error = parsed;
+      assistant.streaming = false;
+      freezeTurnSteps(assistant);
+    }
+    this.emit();
+  }
+
+  private applyBackgroundUpdate(sessionId: string, update: SessionUpdate, isReplay: boolean): void {
+    let row = this.parked.get(sessionId);
+    if (!row) {
+      row = emptyParked(sessionId);
+      this.parked.set(sessionId, row);
+    }
+    const parked = row;
+    const view = {
+      replaying: isReplay,
+      replayUpdate: isReplay,
+      messages: parked.messages,
+      nextTurn: () => {
+        parked.turn += 1;
+        return parked.turn;
+      },
+      modeId: parked.modeId,
+      models: this.models,
+      commands: this.commands,
+      meter: this.meter,
+      rememberFile: async () => {},
+      capturePrevious: () => {},
+      displayPath: (filePath: string) => this.displayPath(filePath),
+      emitUnlessReplaying: () => this.emit(),
+      termEncoding: readGrokSettings().termEncoding,
+    };
+    applySessionUpdate(view, update);
+    parked.modeId = view.modeId;
+    if (update.sessionUpdate === 'goal_updated') {
+      const wire = parseGoalWireStatus(update.status);
+      if (wire === 'done') {
+        parked.goal = undefined;
+      } else if (wire === 'paused' && parked.goal) {
+        parked.goal = pauseGoalClock(parked.goal);
+      }
+    }
+    const last = parked.messages.filter((item) => item.role === 'assistant').at(-1);
+    if (last?.streaming) {
+      parked.status = 'streaming';
+    }
+    this.emit();
+  }
+
+  private async adoptBackgroundSessions(): Promise<void> {
+    try {
+      const roster = (await this.agent?.listRoster()) ?? [];
+      this.roster = roster;
+      for (const item of roster) {
+        if (item.id === this.currentSessionId) {
+          continue;
+        }
+        if (item.activity !== 'working' && item.activity !== 'needs_input') {
+          continue;
+        }
+        if (this.parked.has(item.id)) {
+          continue;
+        }
+        const stub = emptyParked(item.id, item.cwd);
+        stub.status = item.activity === 'working' ? 'streaming' : 'ready';
+        this.parked.set(item.id, stub);
+      }
+      this.emit();
+    } catch (error) {
+      logWarn(`adopt sessions: ${error instanceof Error ? error.message : error}`);
+    }
   }
 
   private onAgentLost(epoch: number, error: Error): void {
@@ -938,7 +1317,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       plat().info(tr('busyLock'));
       return;
     }
-    const order = ['ask', 'plan', 'default'];
+    const order = ['ask', 'plan', 'default', 'goal'];
     const i = order.indexOf(this.modeId);
     const next = order[(i + 1) % order.length];
     await this.setMode(next);
@@ -956,8 +1335,17 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   async applySessionMode(modeId: string): Promise<void> {
-    await this.agent?.setMode(modeId);
+    if (this.modeId === 'goal' && modeId !== 'goal' && this.goal) {
+      await this.clearGoal();
+    }
     this.modeId = modeId;
+    if (modeId === 'goal') {
+      this.queue = [];
+      this.note(`Mode: ${modeLabel(modeId)}`);
+      this.emit();
+      return;
+    }
+    await this.agent?.setMode(modeId);
     this.note(`Mode: ${modeLabel(modeId)}`);
     this.emit();
   }
@@ -1102,7 +1490,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     try {
       await this.agent?.deleteSession(sessionId);
       await this.journal.dropSession(sessionId);
+      this.parked.delete(sessionId);
       if (sessionId === this.currentSessionId) {
+        this.currentSessionId = undefined;
         await this.newSession();
       }
       await this.refreshSessionsSilent();
@@ -1157,10 +1547,22 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     const op = ++this.sessionOp;
-    this.cancelTurn();
+    this.parkForeground();
+    const parked = this.parked.get(sessionId);
+    if (parked && parked.messages.length > 0) {
+      this.restoreParked(sessionId);
+      agent.sessionId = sessionId;
+      this.hideSessionPreview = false;
+      this.restoringSession = false;
+      this.replaying = false;
+      this.emit();
+      return;
+    }
+    this.parked.delete(sessionId);
     const cwd =
       sessionCwd ??
       this.sessions?.find((row) => row.id === sessionId)?.cwd ??
+      parked?.cwd ??
       this.cwd();
     this.messages = [];
     this.journal.clear();
@@ -2038,6 +2440,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     if (sessionId && this.currentSessionId && sessionId !== this.currentSessionId) {
+      this.applyBackgroundUpdate(sessionId, update, isReplay);
       return;
     }
     const view = {
@@ -2073,6 +2476,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.commands = view.commands;
     if (!isReplay && !this.replaying) {
       void this.rescueWorkspaceImage(update);
+      if (update.sessionUpdate === 'goal_updated') {
+        this.applyGoalUpdated(update);
+      } else {
+        this.maybeFinishGoalFromWork();
+      }
     }
     const next = this.messages.at(-1);
     const after = next?.role === 'assistant' ? stepsStamp(next.steps) : '';
@@ -2156,6 +2564,128 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     this.queue = this.queue.filter((_, i) => i !== index);
     this.emit();
+  }
+
+  openCron(): void {
+    this.settingsOpen = true;
+    this.settingsPage = 'cron';
+    this.emit();
+  }
+
+  closeCron(): void {
+    if (this.settingsPage === 'cron') {
+      this.settingsPage = 'main';
+    }
+    this.emit();
+  }
+
+  addCronJob(draft: CronDraft): void {
+    const job = jobFromDraft(draft);
+    if (!job) {
+      return;
+    }
+    this.cronJobs = [...this.cronJobs, job];
+    this.persistCronJobs();
+    this.emit();
+  }
+
+  patchCronJob(id: string, patch: { enabled?: boolean }): void {
+    this.cronJobs = this.cronJobs.map((job) => {
+      if (job.id !== id) {
+        return job;
+      }
+      return stampJob({ ...job, enabled: patch.enabled ?? job.enabled });
+    });
+    this.persistCronJobs();
+    this.emit();
+  }
+
+  deleteCronJob(id: string): void {
+    this.cronJobs = this.cronJobs.filter((job) => job.id !== id);
+    this.persistCronJobs();
+    this.emit();
+  }
+
+  async runCronJob(id: string): Promise<void> {
+    const job = this.cronJobs.find((row) => row.id === id);
+    if (!job) {
+      return;
+    }
+    await this.fireCronJob(job);
+  }
+
+  private startCronTimer(): void {
+    if (this.cronTimer) {
+      return;
+    }
+    this.cronTimer = setInterval(() => {
+      void this.tickCronJobs();
+    }, CRON_TICK_MS);
+  }
+
+  private stopCronTimer(): void {
+    if (!this.cronTimer) {
+      return;
+    }
+    clearInterval(this.cronTimer);
+    this.cronTimer = undefined;
+  }
+
+  private persistCronJobs(): void {
+    void plat().setState(CRON_STATE_KEY, this.cronJobs);
+  }
+
+  private async tickCronJobs(): Promise<void> {
+    if (this.cronBusy) {
+      return;
+    }
+    if (this.status !== 'ready' && this.status !== 'streaming') {
+      return;
+    }
+    const due = dueJobs(this.cronJobs, Date.now());
+    if (!due.length) {
+      return;
+    }
+    this.cronBusy = true;
+    try {
+      for (const job of due) {
+        await this.fireCronJob(job);
+      }
+    } finally {
+      this.cronBusy = false;
+    }
+  }
+
+  private async fireCronJob(job: CronJob): Promise<void> {
+    this.cronJobs = this.cronJobs.map((row) => (row.id === job.id ? markJobRan(row) : row));
+    this.persistCronJobs();
+    this.emit();
+    try {
+      plat().info(tr('cronFired', { title: job.title }));
+      await this.send(job.prompt);
+    } catch (error) {
+      logWarn(`cron ${job.id}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  async sendNow(index = 0): Promise<void> {
+    if (index < 0 || index >= this.queue.length) {
+      return;
+    }
+    const next = this.queue[index];
+    if (!next) {
+      return;
+    }
+    this.queue = this.queue.filter((_, i) => i !== index);
+    if (this.status === 'streaming') {
+      this.runGen += 1;
+      abortClientRpcs(this, 'cancel');
+      this.agent?.cancelTurn();
+      if (this.status === 'streaming') {
+        this.endStreaming();
+      }
+    }
+    await this.send(next);
   }
 
   private async flushQueue(): Promise<void> {
@@ -2480,6 +3010,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     setTimeout(() => {
       if (epoch === this.agentGen) {
         void this.refreshSessionsSilent();
+        void this.adoptBackgroundSessions();
       }
     }, 800);
   }
@@ -2691,6 +3222,12 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.notify = cue;
     this.setStatus('ready');
     this.notify = undefined;
+    if (this.goal?.status === 'running') {
+      const last = this.messages.filter((item) => item.role === 'assistant').at(-1);
+      if (goalDelivered(last?.steps, last?.text)) {
+        void this.finishGoal({ stopLoop: true });
+      }
+    }
   }
 
   private setStatus(status: ChatStatus): void {
@@ -2721,6 +3258,12 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     this.notify = interrupted ? 'fail' : undefined;
     logError(message, error);
+    if (interrupted && this.modeId === 'goal' && this.goal?.status === 'running') {
+      this.pauseActiveGoal();
+      if (this.agent) {
+        void this.nudgeGoalSlash('pause');
+      }
+    }
     this.emit();
     this.notify = undefined;
   }

@@ -320,12 +320,14 @@ export function modeLabel(id: string): string {
       return 'Plan';
     case 'ask':
       return 'Ask';
+    case 'goal':
+      return 'Goal';
     default:
       return 'Agent';
   }
 }
 
-/** `_meta.mode` on session/prompt. CLI maps ask/plan; anything else is Agent. */
+/** `_meta.mode` on session/prompt. CLI maps ask/plan; goal stays Agent. */
 export function promptModeMeta(modeId: string): string {
   if (modeId === 'ask' || modeId === 'plan') {
     return modeId;

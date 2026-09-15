@@ -36,6 +36,7 @@ export const ui = {
   state: prefsOnly(vscode.getState()),
   sessionsMode: readSessionsMode(vscode.getState()),
   draft: '',
+  editingGoal: false,
   menu: undefined as 'slash' | 'files' | undefined,
   picker: undefined as 'mode' | 'model' | 'effort' | undefined,
   composerFocused: false,
@@ -94,7 +95,7 @@ export const ui = {
   chosenModelId: undefined as string | undefined,
   chosenEffort: undefined as string | undefined,
   pet: {
-    enabled: true,
+    enabled: false,
     size: 128,
     color: 'ink',
     shape: 'star',
@@ -131,7 +132,8 @@ export type DeskTab =
   | 'cli'
   | 'remote'
   | 'about'
-  | 'pet';
+  | 'pet'
+  | 'cron';
 
 export function loc(): UiLocale {
   return ui.state.locale === 'zh-CN' ? 'zh-CN' : 'en';

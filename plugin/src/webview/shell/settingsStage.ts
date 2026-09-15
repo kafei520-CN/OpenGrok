@@ -9,14 +9,28 @@ import {
   type HeatmapDay,
 } from '../../billing/heatmapStats';
 import { DEFAULT_SETTINGS, type SettingsPage } from '../../core/types';
-import { applyThemeTo, contrastFg, DEFAULT_DESKTOP_THEME, parseHex } from '../../settings/theme';
+import {
+  applyThemeTo,
+  contrastFg,
+  DEFAULT_DESKTOP_THEME,
+  lockContrastEnabled,
+  parseHex,
+} from '../../settings/theme';
+import {
+  DEFAULT_CHROME_BLUR,
+  DEFAULT_GLASS_BLUR,
+  DEFAULT_GLASS_OPACITY,
+  DEFAULT_WALLPAPER_OPACITY,
+  MAX_GLASS_BLUR,
+} from '../../settings/wallpaper';
 import { SURFACES, getSurface, surfaceKind, type SurfaceId } from '../../settings/surfaces';
-import { loc, type DeskTab, post, render, tr, ui } from '../app';
+import { isDesktop, loc, type DeskTab, post, render, tr, ui } from '../app';
 import { button } from '../dom';
 import { escapeHtml } from '../transcript/markdown';
 import {
   iconChat,
   iconChip,
+  iconClock,
   iconEdit,
   iconGear,
   iconInfo,
@@ -24,6 +38,7 @@ import {
   iconPet,
   iconPlug,
 } from '../icons';
+import { mountCronBody } from '../settings/cron';
 import { mountApiFormBody, mountApisBody } from '../settings/api';
 import { mountAgentsBody } from '../settings/agents';
 import { mountExtBody } from '../settings/ext';
@@ -32,6 +47,7 @@ import { mountMemoryBody } from '../settings/memory';
 import { mountRemoteBody } from '../settings/remote';
 import { mountRulesBody } from '../settings/rules';
 import { mountSkillsBody } from '../settings/skills';
+import { mountThemePreview } from '../settings/themePreview';
 import { mountWorktreesBody } from '../settings/worktrees';
 import {
   PET_COLORS,
@@ -82,6 +98,8 @@ function tabFromPage(page?: SettingsPage): DeskTab | undefined {
       return 'models';
     case 'remote':
       return 'remote';
+    case 'cron':
+      return 'cron';
     case 'extensions':
     case 'mcps':
     case 'skills':
@@ -115,6 +133,11 @@ function stageKey(tab: DeskTab): string {
     ui.state.theme?.background ?? '',
     ui.state.theme?.primary ?? '',
     ui.state.theme?.surface ?? '',
+    ui.state.theme?.fontColor ?? '',
+    String(ui.state.theme?.lockContrast ?? ''),
+    ui.state.theme?.wallpaper ?? '',
+    ui.state.theme?.wallpaperUrl ?? '',
+    String(ui.state.theme?.wallpaperOpacity ?? ''),
     JSON.stringify(ui.state.settings ?? {}),
     String(ui.state.compactMode),
     String(ui.state.timestamps),
@@ -126,6 +149,7 @@ function stageKey(tab: DeskTab): string {
     String(ui.pet.bubbles),
     String(ui.pet.size),
     ui.petTab,
+    (ui.state.cronJobs ?? []).map((job) => `${job.id}:${job.enabled}:${job.nextRunAt ?? ''}`).join('|'),
     remoteKey(ui.state.remote),
   ].join('~');
 }
@@ -154,6 +178,11 @@ function remoteKey(remote: typeof ui.state.remote): string {
 function mountStage(tab: DeskTab): HTMLElement {
   const el = document.createElement('section');
   el.id = 'og-settings';
+  if (ui.state.settingsPage === 'theme-preview') {
+    el.className = 'og-settings wp-editor';
+    el.append(mountThemePreview());
+    return el;
+  }
   el.append(pane(tab));
   return el;
 }
@@ -168,6 +197,7 @@ export type SettingsNavItem = {
 export function settingsNavItems(): SettingsNavItem[] {
   return [
     { id: 'agent', label: tr('setGeneral'), icon: iconGear(), group: 'person' },
+    { id: 'cron', label: tr('cronTitle'), icon: iconClock(), group: 'person' },
     { id: 'appearance', label: tr('setAppearance'), icon: iconEdit(), group: 'person' },
     { id: 'pet', label: tr('petTitle'), icon: iconPet(), group: 'person' },
     { id: 'account', label: tr('setAccount'), icon: iconPerson(), group: 'person' },
@@ -305,6 +335,8 @@ function deckPages(tab: DeskTab): DeckPage[] {
       ];
     case 'agent':
       return [{ id: 'agent', label: tr('setGeneral'), body: () => generalPane() }];
+    case 'cron':
+      return [{ id: 'cron', label: tr('cronTitle'), body: () => wrapBody(mountCronBody()) }];
     case 'cli':
       return [{ id: 'cli', label: tr('setCli'), body: () => cliPane() }];
     case 'remote':
@@ -603,8 +635,57 @@ function linkBtn(label: string, url: string): HTMLElement {
 
 function appearancePane(): HTMLElement {
   const el = document.createElement('div');
+  const glass = currentSurface() === 'glass';
+  const theme = ui.state.theme;
   el.append(
-    card(tr('setStyle'), [styleTiles()]),
+    card(tr('setStyle'), [
+      styleTiles(),
+      rangeRow(
+        tr('themeGlassOpacity'),
+        0,
+        100,
+        theme?.glassOpacity ?? DEFAULT_GLASS_OPACITY,
+        '%',
+        !glass,
+        (n, persist) => {
+          if (persist) {
+            commitAppearance({ glassOpacity: n });
+          } else {
+            previewGlass({ glassOpacity: n });
+          }
+        },
+      ),
+      rangeRow(
+        tr('themeGlassBlur'),
+        0,
+        MAX_GLASS_BLUR,
+        theme?.glassBlur ?? DEFAULT_GLASS_BLUR,
+        '%',
+        !glass,
+        (n, persist) => {
+          if (persist) {
+            commitAppearance({ glassBlur: n });
+          } else {
+            previewGlass({ glassBlur: n });
+          }
+        },
+      ),
+      rangeRow(
+        tr('themeChromeBlur'),
+        0,
+        MAX_GLASS_BLUR,
+        theme?.chromeBlur ?? DEFAULT_CHROME_BLUR,
+        '%',
+        !glass,
+        (n, persist) => {
+          if (persist) {
+            commitAppearance({ chromeBlur: n });
+          } else {
+            previewGlass({ chromeBlur: n });
+          }
+        },
+      ),
+    ]),
     card(tr('setColors'), [
       p(tr('setMainColorHint')),
       colorRow(tr('setMainColor'), themeBg(), (hex, persist) => {
@@ -621,8 +702,51 @@ function appearancePane(): HTMLElement {
           previewAppearance(themeBg(), hex);
         }
       }),
+      colorRow(tr('themeFontColor'), themeFont(), (hex, persist) => {
+        if (persist) {
+          commitAppearance({ fontColor: hex, lockContrast: false });
+        } else {
+          previewGlass({ fontColor: hex, lockContrast: false });
+        }
+      }),
+      toggle(
+        tr('themeLockContrast'),
+        tr('themeLockContrastHint'),
+        lockContrastEnabled(theme ?? {}),
+        () =>
+          commitAppearance({
+            lockContrast: !lockContrastEnabled(theme ?? {}),
+          }),
+      ),
       swatches(themeBg()),
       actions([button(tr('themeResetDefault'), () => resetAppearance())]),
+    ]),
+    card(tr('themeWallpaper'), [
+      p(tr('themeWallpaperHint')),
+      actions([
+        button(tr('themeWallpaperPick'), () => post({ type: 'pickThemeWallpaper' })),
+        button(tr('themeWallpaperClear'), () => commitAppearance({ wallpaper: '' })),
+        (() => {
+          const preview = button(tr('themePreviewOpen'), () => post({ type: 'openThemePreview' }));
+          preview.disabled = !theme?.wallpaper;
+          return preview;
+        })(),
+      ]),
+      rangeRow(
+        tr('themeWallpaperOpacity'),
+        0,
+        100,
+        theme?.wallpaperOpacity ?? DEFAULT_WALLPAPER_OPACITY,
+        '%',
+        !theme?.wallpaper,
+        (n, persist) => {
+          if (persist) {
+            commitAppearance({ wallpaperOpacity: n });
+          } else {
+            previewGlass({ wallpaperOpacity: n });
+          }
+        },
+      ),
     ]),
   );
   return el;
@@ -854,7 +978,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
-  const version = document.documentElement.dataset.version || '0.4.2';
+  const version = document.documentElement.dataset.version || '0.4.3';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';
   const logo = document.createElement('img');
@@ -874,10 +998,95 @@ function aboutPane(): HTMLElement {
     copy.append(agent);
   }
   hero.append(logo, copy);
-  el.append(
-    card('', [hero, p(tr('appTag')), p(tr('setUnofficial')), p(tr('setAboutLicense'))]),
-  );
+  const blocks = [card('', [hero, p(tr('appTag')), p(tr('setUnofficial')), p(tr('setAboutLicense'))])];
+  if (isDesktop()) {
+    blocks.push(updateCard());
+  }
+  el.append(...blocks);
   return el;
+}
+
+type DeskUpdate = {
+  kind: 'idle' | 'checking' | 'available' | 'none' | 'downloading' | 'ready' | 'error' | 'dev';
+  version?: string;
+  current?: string;
+  percent?: number;
+  message?: string;
+  auto: boolean;
+  packaged: boolean;
+};
+
+function deskApi():
+  | {
+      updateState: () => Promise<DeskUpdate>;
+      checkUpdate: () => Promise<DeskUpdate>;
+      downloadUpdate: () => Promise<DeskUpdate>;
+      installUpdate: () => Promise<void>;
+      setAutoUpdate: (on: boolean) => Promise<DeskUpdate>;
+      onUpdate: (handler: (state: DeskUpdate) => void) => void;
+    }
+  | undefined {
+  return (window as unknown as { opengrok?: ReturnType<typeof deskApi> }).opengrok;
+}
+
+function updateStatusText(state: DeskUpdate): string {
+  if (state.kind === 'checking') {
+    return tr('updateChecking');
+  }
+  if (state.kind === 'available' && state.version) {
+    return tr('updateAvailable', { v: state.version });
+  }
+  if (state.kind === 'downloading') {
+    return tr('updateDownloading', { p: state.percent ?? 0 });
+  }
+  if (state.kind === 'ready' && state.version) {
+    return tr('updateReady', { v: state.version });
+  }
+  if (state.kind === 'none') {
+    return tr('updateLatest');
+  }
+  if (state.kind === 'dev') {
+    return tr('updateDev');
+  }
+  if (state.kind === 'error') {
+    return tr('updateFailed', { e: state.message || '' });
+  }
+  return tr('updateIdle');
+}
+
+function updateCard(): HTMLElement {
+  const status = document.createElement('p');
+  status.className = 'og-update-status';
+  const check = button(tr('updateCheck'), () => {
+    void deskApi()?.checkUpdate();
+  });
+  const install = button(tr('updateNow'), () => {
+    void deskApi()?.installUpdate();
+  });
+  install.hidden = true;
+  const download = button(tr('updateDownload'), () => {
+    void deskApi()?.downloadUpdate();
+  });
+  download.hidden = true;
+  const autoWrap = document.createElement('div');
+  const paint = (state: DeskUpdate) => {
+    status.textContent = updateStatusText(state);
+    check.disabled = state.kind === 'checking' || state.kind === 'downloading';
+    download.hidden = state.kind !== 'available';
+    install.hidden = state.kind !== 'ready';
+    autoWrap.replaceChildren(
+      toggle(tr('updateAuto'), tr('updateAutoHint'), state.auto, () => {
+        void deskApi()?.setAutoUpdate(!state.auto);
+      }),
+    );
+  };
+  autoWrap.replaceChildren(toggle(tr('updateAuto'), tr('updateAutoHint'), true, () => undefined));
+  const api = deskApi();
+  if (api) {
+    api.onUpdate(paint);
+    void api.updateState().then(paint);
+  }
+  return card(tr('updateTitle'), [status, autoWrap, actions([check, download, install])]);
 }
 
 const DEFAULT_BG = '#ffffff';
@@ -896,6 +1105,10 @@ function themePrimary(): string {
   return parseHex(ui.state.theme?.primary) ?? contrastFg(themeBg());
 }
 
+function themeFont(): string {
+  return parseHex(ui.state.theme?.fontColor) ?? contrastFg(themeBg());
+}
+
 function followPrimary(background: string): string {
   const current = themePrimary();
   return current === contrastFg(themeBg()) ? contrastFg(background) : current;
@@ -910,14 +1123,31 @@ function resetAppearance(): void {
     background: def.background ?? '#ffffff',
     surface: def.surface ?? 'glass',
     chromeGlass: true,
+    glassOpacity: def.glassOpacity ?? DEFAULT_GLASS_OPACITY,
+    glassBlur: def.glassBlur ?? DEFAULT_GLASS_BLUR,
+    chromeBlur: def.chromeBlur ?? DEFAULT_CHROME_BLUR,
     wallpaper: '',
+    wallpaperOpacity: DEFAULT_WALLPAPER_OPACITY,
     fontPath: '',
-    fontColor: '',
+    fontColor: def.fontColor ?? '',
     lockContrast: true,
   });
 }
 
-function commitAppearance(patch: { background?: string; primary?: string; surface?: SurfaceId }): void {
+function commitAppearance(
+  patch: {
+    background?: string;
+    primary?: string;
+    surface?: SurfaceId;
+    glassOpacity?: number;
+    glassBlur?: number;
+    chromeBlur?: number;
+    wallpaper?: string;
+    wallpaperOpacity?: number;
+    fontColor?: string;
+    lockContrast?: boolean;
+  },
+): void {
   const surface = patch.surface ?? currentSurface();
   const pack = getSurface(surface);
   const entering = Boolean(patch.surface && patch.surface !== currentSurface());
@@ -938,8 +1168,33 @@ function commitAppearance(patch: { background?: string; primary?: string; surfac
     background,
     surface,
     chromeGlass: pack?.frost === true,
-    lockContrast: true,
+    glassOpacity: patch.glassOpacity,
+    glassBlur: patch.glassBlur,
+    chromeBlur: patch.chromeBlur,
+    wallpaper: patch.wallpaper,
+    wallpaperOpacity: patch.wallpaperOpacity,
+    fontColor: patch.fontColor,
+    lockContrast: patch.lockContrast,
   });
+}
+
+function previewGlass(patch: {
+  glassOpacity?: number;
+  glassBlur?: number;
+  chromeBlur?: number;
+  wallpaperOpacity?: number;
+  fontColor?: string;
+  lockContrast?: boolean;
+}): void {
+  applyThemeTo(
+    document.documentElement.style,
+    {
+      ...ui.state.theme,
+      ...patch,
+      lockContrast: true,
+    },
+    ui.state.hostChrome,
+  );
 }
 
 function previewAppearance(background: string, primary: string): void {
@@ -991,6 +1246,52 @@ function swatches(current: string): HTMLElement {
     btn.addEventListener('click', () => commitAppearance({ background: hex }));
     row.append(btn);
   }
+  return row;
+}
+
+function paintRangeFill(el: HTMLInputElement): void {
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const val = Number(el.value);
+  const pct = max === min ? 0 : ((val - min) / (max - min)) * 100;
+  el.style.setProperty('--fill', `${pct}%`);
+}
+
+function rangeRow(
+  label: string,
+  min: number,
+  max: number,
+  value: number,
+  unit: string,
+  disabled: boolean,
+  onChange: (n: number, persist: boolean) => void,
+): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'og-set-line theme-opacity-row';
+  const name = document.createElement('span');
+  name.textContent = label;
+  const tools = document.createElement('div');
+  tools.className = 'theme-opacity';
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = String(min);
+  slider.max = String(max);
+  slider.value = String(value);
+  slider.disabled = disabled;
+  slider.setAttribute('aria-label', label);
+  paintRangeFill(slider);
+  const readout = document.createElement('span');
+  readout.className = 'theme-opacity-value';
+  readout.textContent = `${value}${unit}`;
+  slider.addEventListener('input', () => {
+    const n = Number(slider.value);
+    readout.textContent = `${n}${unit}`;
+    paintRangeFill(slider);
+    onChange(n, false);
+  });
+  slider.addEventListener('change', () => onChange(Number(slider.value), true));
+  tools.append(slider, readout);
+  row.append(name, tools);
   return row;
 }
 

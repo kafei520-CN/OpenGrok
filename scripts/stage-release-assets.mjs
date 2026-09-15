@@ -24,8 +24,11 @@ function walk(dir, acc = []) {
 
 function mapName(file) {
   const base = path.basename(file);
-  if (/\.blockmap$/i.test(base) || /latest.*\.yml$/i.test(base) || base === 'catalog.json') {
+  if (base === 'catalog.json') {
     return null;
+  }
+  if (/^latest.*\.yml$/i.test(base) || /\.blockmap$/i.test(base)) {
+    return { name: base, alias: base };
   }
   if (/setup\.exe$/i.test(base) || (base.endsWith('.exe') && /win/i.test(base))) {
     return { name: `OpenGrok_${VER}_x64-setup.exe`, alias: 'OpenGrok_x64-setup.exe' };
@@ -73,11 +76,19 @@ for (const file of files) {
   if (!mapped) {
     continue;
   }
+  const original = path.basename(file);
   const to = path.join(destDir, mapped.name);
   copyFileSync(file, to);
-  copyFileSync(file, path.join(destDir, mapped.alias));
-  staged.push(mapped.name, mapped.alias);
-  console.log(`${path.basename(file)} → ${mapped.name} + ${mapped.alias}`);
+  staged.push(mapped.name);
+  if (mapped.alias && mapped.alias !== mapped.name) {
+    copyFileSync(file, path.join(destDir, mapped.alias));
+    staged.push(mapped.alias);
+  }
+  if (original !== mapped.name && original !== mapped.alias) {
+    copyFileSync(file, path.join(destDir, original));
+    staged.push(original);
+  }
+  console.log(`${original} → ${mapped.name}`);
 }
 
 const sums = [];

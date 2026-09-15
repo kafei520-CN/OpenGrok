@@ -57,11 +57,11 @@ describe('theme', () => {
       140,
     );
     assert.equal(normalizeTheme({ wallpaper: 'icon' }).wallpaperScale, undefined);
-    assert.equal(normalizeTheme({ surface: 'glass' }).glassOpacity, 36);
+    assert.equal(normalizeTheme({ surface: 'glass' }).glassOpacity, 16);
     assert.equal(normalizeTheme({ surface: 'glass', glassOpacity: 70 }).glassOpacity, 70);
-    assert.equal(normalizeTheme({ surface: 'glass' }).glassBlur, 24);
+    assert.equal(normalizeTheme({ surface: 'glass' }).glassBlur, 12);
     assert.equal(normalizeTheme({ surface: 'glass', glassBlur: 28 }).glassBlur, 28);
-    assert.equal(normalizeTheme({ surface: 'glass' }).chromeBlur, 32);
+    assert.equal(normalizeTheme({ surface: 'glass' }).chromeBlur, 40);
     assert.equal(normalizeTheme({ surface: 'glass', chromeBlur: 30 }).chromeBlur, 30);
     assert.equal(normalizeTheme({ surface: 'glass' }).chromeGlass, undefined);
     assert.equal(normalizeTheme({ chromeGlass: true }).chromeGlass, true);
@@ -134,10 +134,27 @@ describe('theme', () => {
     assert.equal(props.get('--chrome-fill'), '40%');
     assert.equal(props.get('--glass-1-blur'), '30px');
     assert.equal(props.get('--glass-bg-pad'), '1.08');
-    assert.equal(props.get('--glass-2-blur'), '40px');
-    assert.equal(props.get('--glass-3-blur'), '46px');
-    assert.equal(props.get('--glass-5-blur'), '59px');
-    assert.equal(props.get('--glass-7-blur'), '72px');
+    assert.equal(props.get('--glass-plate-filter'), 'blur(30px) saturate(1.45)');
+    assert.equal(props.get('--glass-2-blur'), '50px');
+    assert.equal(props.get('--glass-3-blur'), '58px');
+    assert.equal(props.get('--glass-5-blur'), '74px');
+    assert.equal(props.get('--glass-7-blur'), '90px');
+    applyThemeTo(
+      {
+        setProperty: (name, value) => props.set(name, value),
+        removeProperty: (name) => {
+          props.delete(name);
+        },
+      },
+      { surface: 'glass', glassBlur: 0, chromeBlur: 0 },
+    );
+    assert.equal(props.get('--glass-1-blur'), '0px');
+    assert.equal(props.get('--glass-bg-pad'), '1');
+    assert.equal(props.get('--glass-plate-filter'), 'none');
+    assert.equal(props.get('--glass-frost'), 'none');
+    assert.equal(props.get('--glass-chrome-filter'), 'none');
+    assert.equal(props.get('--glass-2-blur'), '0px');
+    assert.equal(props.get('--glass-7-blur'), '0px');
     applyThemeTo(
       {
         setProperty: (name, value) => props.set(name, value),
@@ -148,7 +165,7 @@ describe('theme', () => {
       { surface: 'glass', glassBlur: 0, chromeBlur: 30 },
     );
     assert.equal(props.get('--glass-1-blur'), '0px');
-    assert.equal(props.get('--glass-bg-pad'), '1');
+    assert.equal(props.get('--glass-plate-filter'), 'none');
     assert.equal(props.get('--glass-2-blur'), '38px');
     assert.equal(props.get('--glass-7-blur'), '68px');
   });

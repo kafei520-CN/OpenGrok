@@ -72,7 +72,13 @@ function skillRow(skill: NonNullable<typeof ui.state.skills>[number]): HTMLEleme
   name.textContent = skill.name;
   const hint = document.createElement('div');
   hint.className = 'settings-hint';
-  const scope = tr(skill.scope === 'project' ? 'settingsSkillsProject' : 'settingsSkillsGlobal');
+  const scope = tr(
+    skill.scope === 'project'
+      ? 'settingsSkillsProject'
+      : skill.scope === 'bundled'
+        ? 'settingsSkillsBundled'
+        : 'settingsSkillsGlobal',
+  );
   hint.textContent = skill.description ? `${scope} · ${skill.description}` : scope;
   copy.append(name, hint);
   copy.addEventListener('click', () => post({ type: 'openSkill', id: skill.id }));
@@ -89,17 +95,25 @@ function skillRow(skill: NonNullable<typeof ui.state.skills>[number]): HTMLEleme
   toggle.append(knob);
   toggle.addEventListener('click', (event) => {
     event.stopPropagation();
+    if (skill.scope === 'bundled') {
+      return;
+    }
     post({ type: 'toggleSkill', id: skill.id });
   });
-  const del = document.createElement('button');
-  del.type = 'button';
-  del.className = 'btn';
-  del.textContent = tr('settingsSkillsDelete');
-  del.addEventListener('click', (event) => {
-    event.stopPropagation();
-    post({ type: 'deleteSkill', id: skill.id });
-  });
-  tools.append(toggle, del);
+  if (skill.scope !== 'bundled') {
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn';
+    del.textContent = tr('settingsSkillsDelete');
+    del.addEventListener('click', (event) => {
+      event.stopPropagation();
+      post({ type: 'deleteSkill', id: skill.id });
+    });
+    tools.append(toggle, del);
+  } else {
+    toggle.disabled = true;
+    tools.append(toggle);
+  }
   row.append(copy, tools);
   return row;
 }

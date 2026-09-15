@@ -5,6 +5,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { DEFAULT_DESKTOP_THEME } from '../plugin/src/settings/theme';
+import {
+  attachUpdater,
+  checkForUpdates,
+  downloadUpdate,
+  installUpdate,
+  setAutoUpdate,
+  updateSnapshot,
+} from './updater';
 
 const electron = resolveElectron();
 const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = electron;
@@ -41,6 +49,7 @@ type AppState = {
   cwd?: string;
   bounds?: { x: number; y: number; width: number; height: number };
   pet?: PetState;
+  autoUpdate?: boolean;
 };
 
 type HostRequest = {
@@ -63,7 +72,7 @@ let petDoneTimer: ReturnType<typeof setTimeout> | undefined;
 let isQuitting = false;
 
 const DEFAULT_PET: PetState = {
-  enabled: true,
+  enabled: false,
   size: 128,
   color: 'ink',
   shape: 'star',
@@ -111,6 +120,37 @@ function grokBin(): string {
   return path.join(os.homedir(), '.grok', 'bin');
 }
 
+function seedOfficeSkills(): void {
+  const srcRoot = path.join(rootDir(), 'resources', 'skills');
+  if (!fs.existsSync(srcRoot)) {
+    return;
+  }
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(srcRoot);
+  } catch {
+    return;
+  }
+  const destRoots = [
+    path.join(os.homedir(), '.grok', 'skills'),
+    path.join(os.homedir(), '.grok', 'bundled', 'skills'),
+  ];
+  for (const name of names) {
+    const src = path.join(srcRoot, name);
+    if (!fs.existsSync(path.join(src, 'SKILL.md'))) {
+      continue;
+    }
+    for (const destRoot of destRoots) {
+      const dest = path.join(destRoot, name);
+      if (fs.existsSync(path.join(dest, 'SKILL.md'))) {
+        continue;
+      }
+      fs.mkdirSync(destRoot, { recursive: true });
+      fs.cpSync(src, dest, { recursive: true });
+    }
+  }
+}
+
 const TITLEBAR_H = 36;
 
 type TitleChrome = {
@@ -118,6 +158,10 @@ type TitleChrome = {
   foreground: string;
   surface: 'glass' | 'solid' | 'endfield';
 };
+
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('enable-transparent-visuals');
+}
 
 function overlayFill(chrome: TitleChrome): string {
   return chrome.surface === 'glass' ? '#00000000' : chrome.background;
@@ -146,7 +190,6 @@ function createWindow(): BrowserWindow {
     y: bounds?.y,
     minWidth: 960,
     minHeight: 640,
-    frame: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: overlayFill(chrome),
@@ -155,7 +198,11 @@ function createWindow(): BrowserWindow {
     },
     autoHideMenuBar: true,
     alwaysOnTop: false,
-    backgroundColor: chrome.background,
+    transparent: true,
+    roundedCorners: true,
+    hasShadow: true,
+    backgroundColor: chrome.surface === 'glass' ? '#00000000' : chrome.background,
+    backgroundMaterial: chrome.surface === 'glass' ? 'acrylic' : 'none',
     title: APP_NAME,
     icon: iconPath(),
     webPreferences: {
@@ -295,7 +342,7 @@ function readPet(): PetState {
   const expression =
     typeof raw.expression === 'string' && faces.has(raw.expression) ? raw.expression : DEFAULT_PET.expression;
   return {
-    enabled: raw.enabled !== false,
+    enabled: raw.enabled === true,
     x: typeof raw.x === 'number' ? raw.x : undefined,
     y: typeof raw.y === 'number' ? raw.y : undefined,
     size: Number.isFinite(size) ? (size <= 112 ? 96 : size >= 144 ? 160 : 128) : DEFAULT_PET.size,
@@ -582,6 +629,14 @@ function buildTrayMenu() {
     {
       label: pet.enabled ? '隐藏宠物' : '显示宠物',
       click: () => applyPetPatch({ enabled: !pet.enabled }),
+    },
+    { type: 'separator' },
+    {
+      label: '检查更新',
+      click: () => {
+        showMainWindow();
+        void checkForUpdates();
+      },
     },
     { type: 'separator' },
     { label: '退出', click: () => quitApp() },
@@ -975,7 +1030,18 @@ if (!gotLock) {
       app.setAppUserModelId('cn.mckafei.opengrok');
     }
     writeState({ cwd: defaultCwd() });
+    seedOfficeSkills();
     seedTheme();
+    attachUpdater({
+      getWindow: () => mainWindow,
+      prepareQuit: () => {
+        isQuitting = true;
+      },
+      getAuto: () => readState().autoUpdate !== false,
+      setAuto: (on) => writeState({ autoUpdate: on }),
+      packaged: () => app.isPackaged,
+      version: () => VERSION,
+    });
     createTray();
     mainWindow = createWindow();
     mainWindow.webContents.on('did-finish-load', () => {
@@ -1117,7 +1183,13 @@ ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: str
     next?.surface === 'solid' || next?.surface === 'endfield' || next?.surface === 'glass'
       ? next.surface
       : 'glass';
-  win.setBackgroundColor(background);
+  const glass = surface === 'glass';
+  try {
+    win.setBackgroundMaterial(glass ? 'acrylic' : 'none');
+  } catch {
+    /* Windows 11+ */
+  }
+  win.setBackgroundColor(glass ? '#00000000' : background);
   applyTitleBarOverlay(win, { background, foreground, surface });
 });
 
@@ -1142,6 +1214,14 @@ ipcMain.on('grok-window', (_event, action: 'min' | 'max' | 'close') => {
 });
 
 ipcMain.handle('grok-maximized', () => Boolean(mainWindow?.isMaximized()));
+
+ipcMain.handle('grok-update-state', () => updateSnapshot());
+ipcMain.handle('grok-update-check', () => checkForUpdates());
+ipcMain.handle('grok-update-download', () => downloadUpdate());
+ipcMain.handle('grok-update-install', () => {
+  installUpdate();
+});
+ipcMain.handle('grok-update-auto', (_event, on: unknown) => setAutoUpdate(on === true));
 
 ipcMain.handle('grok-prompt-config', () => promptConfig);
 
