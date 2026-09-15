@@ -148,6 +148,12 @@ function fillBody(el: HTMLElement): void {
   }
   if (ui.state.messages.length === 0) {
     el.append(home());
+    if (ui.state.permission) {
+      el.append(permissionBar());
+    }
+    if (visibleAsk()) {
+      el.append(askBar());
+    }
   } else {
     const transcript = document.createElement('div');
     transcript.className = 'transcript';
@@ -156,13 +162,13 @@ function fillBody(el: HTMLElement): void {
     grouped.forEach((turn, index) => {
       transcript.append(turnEl(turn, index < grouped.length - 1));
     });
+    if (ui.state.permission) {
+      transcript.append(permissionBar());
+    }
+    if (visibleAsk()) {
+      transcript.append(askBar());
+    }
     el.append(transcript);
-  }
-  if (ui.state.permission) {
-    el.append(permissionBar());
-  }
-  if (visibleAsk()) {
-    el.append(askBar());
   }
   if (ui.state.error && status === 'error') {
     el.append(errorBanner(ui.state.error));
@@ -184,7 +190,7 @@ function patchTranscript(): void {
     return;
   }
   const grouped = groupTurns(ui.state.messages);
-  const nodes = [...transcript.children] as HTMLElement[];
+  const nodes = turnNodes(transcript);
   for (let i = 0; i < grouped.length; i++) {
     const turn = grouped[i];
     const id = turnId(turn);
@@ -195,7 +201,7 @@ function patchTranscript(): void {
       if (node) {
         node.replaceWith(fresh);
       } else {
-        transcript.append(fresh);
+        insertTurn(transcript, fresh);
       }
       continue;
     }
@@ -219,9 +225,10 @@ function patchTranscript(): void {
       }
     }
   }
-  while (transcript.children.length > grouped.length) {
-    transcript.lastElementChild?.remove();
+  while (turnNodes(transcript).length > grouped.length) {
+    turnNodes(transcript).at(-1)?.remove();
   }
+  dockPrompts(transcript);
   scrollTranscript();
   syncWorkClock();
 }
@@ -246,7 +253,7 @@ function patchLastStreamingTurn(transcript: HTMLElement): boolean {
   if (!turn?.assistant?.streaming) {
     return false;
   }
-  const node = transcript.lastElementChild as HTMLElement | null;
+  const node = turnNodes(transcript).at(-1);
   if (!node || node.dataset.turnId !== turnId(turn)) {
     return false;
   }
@@ -492,8 +499,37 @@ function visibleAsk(): ChatState['ask'] {
   return ask;
 }
 
+function promptHost(body: HTMLElement): HTMLElement {
+  return document.getElementById('transcript') ?? body;
+}
+
+function turnNodes(transcript: HTMLElement): HTMLElement[] {
+  return [...transcript.children].filter(
+    (el): el is HTMLElement => el instanceof HTMLElement && el.classList.contains('turn'),
+  );
+}
+
+function promptAnchor(transcript: HTMLElement): Element | null {
+  return transcript.querySelector(':scope > .permission, :scope > .ask-card.ask-prompt');
+}
+
+function insertTurn(transcript: HTMLElement, turn: HTMLElement): void {
+  const anchor = promptAnchor(transcript);
+  if (anchor) {
+    transcript.insertBefore(turn, anchor);
+    return;
+  }
+  transcript.append(turn);
+}
+
+function dockPrompts(transcript: HTMLElement): void {
+  for (const el of [...transcript.querySelectorAll(':scope > .permission, :scope > .ask-card.ask-prompt')]) {
+    transcript.append(el);
+  }
+}
+
 function promptAskCards(body: HTMLElement): HTMLElement[] {
-  return [...body.querySelectorAll(':scope > .ask-card.ask-prompt')] as HTMLElement[];
+  return [...promptHost(body).querySelectorAll(':scope > .ask-card.ask-prompt')] as HTMLElement[];
 }
 
 function clearAskLocal(): void {
@@ -544,23 +580,26 @@ function patchAsk(body: HTMLElement): void {
   }
   if (existing) {
     fillAskCard(existing);
+    promptHost(body).append(existing);
     return;
   }
-  body.append(fillAskCard());
+  promptHost(body).append(fillAskCard());
 }
 
 function patchPermission(body: HTMLElement): void {
-  const existing = body.querySelector('.permission') as HTMLElement | null;
+  const host = promptHost(body);
+  const existing = host.querySelector(':scope > .permission') as HTMLElement | null;
   const perm = ui.state.permission;
   if (!perm) {
     existing?.remove();
     return;
   }
   if (existing?.dataset.id === perm.requestId) {
+    host.append(existing);
     return;
   }
   existing?.remove();
-  body.append(permissionBar());
+  host.append(permissionBar());
 }
 
 function patchErrorBanner(body: HTMLElement): void {

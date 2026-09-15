@@ -538,6 +538,11 @@ textarea:focus-visible {
   border-radius: 8px;
 }
 
+.transcript > .ask-card,
+.transcript > .permission {
+  margin: 10px 0 4px;
+}
+
 .turn {
   display: flex;
   flex-direction: column;
