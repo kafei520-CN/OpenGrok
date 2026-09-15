@@ -86,7 +86,7 @@ export function attachUpdater(next: Host): void {
     }
   });
   autoUpdater.on('error', (error) => {
-    emit({ kind: 'error', message: error?.message || String(error) });
+    emit({ kind: 'error', message: shortUpdateError(error) });
   });
 
   if (packaged() && next.getAuto()) {
@@ -107,7 +107,7 @@ export async function checkForUpdates(): Promise<UpdateState> {
     emit({ kind: 'checking' });
     await autoUpdater.checkForUpdates();
   } catch (error) {
-    emit({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
+    emit({ kind: 'error', message: shortUpdateError(error) });
   }
   return updateSnapshot();
 }
@@ -120,7 +120,7 @@ export async function downloadUpdate(): Promise<UpdateState> {
   try {
     await autoUpdater.downloadUpdate();
   } catch (error) {
-    emit({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
+    emit({ kind: 'error', message: shortUpdateError(error) });
   }
   return updateSnapshot();
 }
@@ -128,6 +128,15 @@ export async function downloadUpdate(): Promise<UpdateState> {
 export function installUpdate(): void {
   host?.prepareQuit();
   autoUpdater.quitAndInstall(false, true);
+}
+
+function shortUpdateError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const first = raw.split('\n')[0]?.trim() || 'unknown error';
+  if (/latest\.yml/i.test(raw) && /404|cannot find/i.test(raw)) {
+    return 'GitHub Release 里还没有 latest.yml 更新清单。';
+  }
+  return first.slice(0, 180);
 }
 
 export function setAutoUpdate(on: boolean): UpdateState {

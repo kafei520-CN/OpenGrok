@@ -83,6 +83,8 @@ jobs:
             release/*.deb
             release/*.rpm
             release/*.tar.gz
+            release/*.yml
+            release/*.blockmap
 
   publish:
     needs: build

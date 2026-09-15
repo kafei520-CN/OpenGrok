@@ -1,7 +1,6 @@
-import { copyFileSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 
 const VER = JSON.parse(readFileSync('package.json', 'utf8')).version;
 const srcDir = process.argv[2] || 'release';
@@ -24,7 +23,7 @@ function walk(dir, acc = []) {
 
 function mapName(file) {
   const base = path.basename(file);
-  if (base === 'catalog.json') {
+  if (base === 'catalog.json' || base === 'SHA256SUMS' || base === 'builder-debug.yml') {
     return null;
   }
   if (/^latest.*\.yml$/i.test(base) || /\.blockmap$/i.test(base)) {
@@ -69,6 +68,59 @@ function mapName(file) {
   return null;
 }
 
+function sha512Base64(file) {
+  return createHash('sha512').update(readFileSync(file)).digest('base64');
+}
+
+function writeUpdateYml(filePath, urlName, destYml) {
+  const st = statSync(filePath);
+  const sha = sha512Base64(filePath);
+  writeFileSync(
+    destYml,
+    [
+      `version: ${VER}`,
+      'files:',
+      `  - url: ${urlName}`,
+      `    sha512: ${sha}`,
+      `    size: ${st.size}`,
+      `path: ${urlName}`,
+      `sha512: ${sha}`,
+      `releaseDate: '${new Date().toISOString()}'`,
+      '',
+    ].join('\n'),
+  );
+}
+
+function ymlPathField(text) {
+  const match = /^path:\s*(.+)$/m.exec(text);
+  return match ? match[1].trim() : '';
+}
+
+function ensureYml(dir, ymlName, matchers) {
+  const names = readdirSync(dir);
+  const tests = Array.isArray(matchers) ? matchers : [matchers];
+  let target;
+  for (const matchFile of tests) {
+    target = names.find(matchFile);
+    if (target) {
+      break;
+    }
+  }
+  if (!target) {
+    return;
+  }
+  const ymlPath = path.join(dir, ymlName);
+  if (existsSync(ymlPath)) {
+    const pointed = ymlPathField(readFileSync(ymlPath, 'utf8'));
+    if (pointed && names.includes(pointed)) {
+      return;
+    }
+  }
+  writeUpdateYml(path.join(dir, target), target, ymlPath);
+  staged.push(ymlName);
+  console.log(`wrote ${ymlName} → ${target}`);
+}
+
 const files = walk(srcDir);
 const staged = [];
 for (const file of files) {
@@ -91,13 +143,23 @@ for (const file of files) {
   console.log(`${original} → ${mapped.name}`);
 }
 
+ensureYml(destDir, 'latest.yml', [
+  (name) => /win-.*-setup\.exe$/i.test(name),
+  (name) => /_x64-setup\.exe$/i.test(name),
+]);
+ensureYml(destDir, 'latest-mac.yml', [
+  (name) => /\.zip$/i.test(name) && /mac-x64/i.test(name),
+  (name) => /\.zip$/i.test(name) && /mac|darwin/i.test(name) && !/win|portable/i.test(name),
+]);
+ensureYml(destDir, 'latest-linux.yml', [(name) => /\.AppImage$/i.test(name)]);
+
 const sums = [];
 for (const name of [...new Set(staged)].sort()) {
   const buf = readFileSync(path.join(destDir, name));
   sums.push(`${createHash('sha256').update(buf).digest('hex')}  ${name}`);
 }
 writeFileSync(path.join(destDir, 'SHA256SUMS'), `${sums.join('\n')}\n`);
-console.log(`staged ${staged.length / 2} installers in ${destDir}`);
+console.log(`staged ${[...new Set(staged)].length} files in ${destDir}`);
 if (!staged.length) {
   process.exit(1);
 }
