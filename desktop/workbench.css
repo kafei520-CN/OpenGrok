@@ -645,13 +645,35 @@ html.opengrok #app[data-surface='glass'] #og-dash {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
 
+.og-footer-tray {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+}
+
 html.opengrok #app[data-surface='glass'] .og-footer {
   border-top: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-footer-tray {
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+  border: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.og-footer-tray .og-account {
+  background: var(--elev, var(--bg));
 }
 
 .og-account {
@@ -661,7 +683,7 @@ html.opengrok #app[data-surface='glass'] .og-footer {
   gap: 8px;
   min-width: 0;
   padding: 6px 8px;
-  border-radius: 12px;
+  border-radius: 999px;
   color: var(--fg);
   font-size: 13px;
   font-weight: 600;
@@ -798,7 +820,8 @@ html.opengrok #app[data-surface='glass'] .og-footer {
 .og-gear {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  flex-shrink: 0;
+  border-radius: 999px;
   color: var(--muted);
   display: grid;
   place-items: center;
@@ -1695,7 +1718,7 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   align-content: flex-end;
   min-height: var(--og-tab-h);
   height: auto;
-  gap: 8px;
+  gap: 0;
   flex-shrink: 0;
   position: relative;
   z-index: 6;
@@ -1731,10 +1754,16 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   overflow: hidden;
 }
 
+.og-deck-tab + .og-deck-tab {
+  margin-left: -1px;
+}
+
 .og-deck-tab.on {
   z-index: 2;
   height: calc(var(--og-tab-h) + 6px);
-  margin: 0 0 -1px;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: -1px;
   padding-bottom: 6px;
   border-bottom: none;
   background: var(--bg);
@@ -2628,16 +2657,24 @@ html.opengrok #app[data-surface='glass'] .og-deck-tab {
   background: transparent;
   border-color: color-mix(in srgb, var(--fg) 12%, transparent);
   border-radius: 12px 12px 0 0;
-  margin: 0;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] .og-deck-tab + .og-deck-tab {
+  margin-left: -1px;
 }
 
 html.opengrok #app[data-surface='glass'] .og-deck-tab.on {
   background: transparent;
   color: var(--fg);
   height: var(--og-tab-h);
-  margin: 0;
+  margin-top: 0;
+  margin-right: 0;
+  margin-bottom: 0;
   padding-bottom: 0;
   border-bottom: none;
 }
@@ -2648,7 +2685,7 @@ html.opengrok #app[data-surface='glass'] .og-deck-tab.on::after {
 
 html.opengrok #app[data-surface='glass'] .og-deck-tabs {
   margin-bottom: 0;
-  gap: 8px;
+  gap: 0;
 }
 
 html.opengrok #app[data-surface='glass'] .og-deck-tabs::after {

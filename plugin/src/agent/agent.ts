@@ -25,6 +25,7 @@ import { parseRosterList, parseSubagentList } from '../models/roster';
 import { parseTaskList } from '../hosts/tasks/tasksHost';
 import { parseWorktreeApply, parseWorktreeList } from '../hosts/worktrees/worktreeHost';
 import { parseSessionRow, sessionHasHistory } from '../session/sessionRow';
+import { parseAccountInfo } from '../core/account';
 import { asErrorText, asNum, asObject, asString, timesFromMeta } from '../core/wire';
 import type {
   AccountInfo,
@@ -234,13 +235,7 @@ export class GrokAgent {
 
   async authInfo(): Promise<AccountInfo> {
     const raw = await this.extMethod(EXT.authInfo, {});
-    const value = unwrapExt(raw);
-    return {
-      email: asString(value['email']),
-      firstName: asString(value['firstName']) ?? asString(value['first_name']),
-      lastName: asString(value['lastName']) ?? asString(value['last_name']),
-      methodId: asString(value['methodId']) ?? asString(value['method_id']),
-    };
+    return parseAccountInfo(unwrapExt(raw));
   }
 
   async setApiKey(key: string): Promise<void> {

@@ -12,6 +12,7 @@ import {
   iconSearch,
   iconSun,
 } from '../icons';
+import { applyAvatar } from './avatar';
 import { pinFloating, releaseByClass } from '../chrome/popover';
 import { listedSessions, sessionButton } from './sessions';
 import { reviewBack, reviewNav, reviewOpen, reviewSearch } from './reviewStage';
@@ -383,8 +384,8 @@ function footer(): HTMLElement {
   chip.title = tr('setAccount');
   const avatar = document.createElement('img');
   avatar.className = 'og-account-avatar';
-  avatar.src = '../resources/logo.png';
   avatar.alt = '';
+  applyAvatar(avatar, ui.state.account?.avatarUrl);
   const name = document.createElement('span');
   name.className = 'og-account-name';
   name.textContent = accountLabel();
@@ -418,7 +419,10 @@ function footer(): HTMLElement {
     releaseByClass('og-account-menu');
     openDeskTab('agent');
   });
-  el.append(chip, gear);
+  const tray = document.createElement('div');
+  tray.className = 'og-footer-tray';
+  tray.append(chip, gear);
+  el.append(tray);
   if (accountMenuOpen) {
     pinAccountMenu(chip);
   }

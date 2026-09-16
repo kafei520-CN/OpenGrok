@@ -25,6 +25,7 @@ import {
 } from '../../settings/wallpaper';
 import { SURFACES, getSurface, surfaceKind, type SurfaceId } from '../../settings/surfaces';
 import { isDesktop, loc, type DeskTab, post, render, tr, ui } from '../app';
+import { applyAvatar } from './avatar';
 import { button } from '../dom';
 import { escapeHtml } from '../transcript/markdown';
 import {
@@ -526,8 +527,8 @@ function profileCard(): HTMLElement {
   top.className = 'og-profile';
   const avatar = document.createElement('img');
   avatar.className = 'og-avatar';
-  avatar.src = '../resources/logo.png';
   avatar.alt = '';
+  applyAvatar(avatar, ui.state.account?.avatarUrl);
   const copy = document.createElement('div');
   copy.className = 'og-profile-copy';
   const who = document.createElement('strong');

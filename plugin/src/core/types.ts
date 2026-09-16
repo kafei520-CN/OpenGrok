@@ -19,6 +19,7 @@ export interface AccountInfo {
   firstName?: string;
   lastName?: string;
   methodId?: string;
+  avatarUrl?: string;
 }
 
 export interface BillingProduct {
