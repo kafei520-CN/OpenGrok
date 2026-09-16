@@ -16,6 +16,7 @@ import { bindFileDrop, syncDropHint } from './chrome/drop';
 import { bindQuoteMenu } from './chrome/quoteMenu';
 import { patchBody, scrollTranscript, syncWorkClock } from './transcript';
 import { chromeKeepers, overlayKind, syncSurface, syncThemeFontFace, syncWallpaper } from './chrome/wallpaper';
+import { syncBorderGlow } from './chrome/borderGlow';
 import { playNotify } from './chrome/notify';
 import { hideRemoteOverlays, showRemoteDiff, showRemoteFile } from './shell/remoteOverlay';
 import { reflowFloating } from './chrome/popover';
@@ -399,6 +400,7 @@ function render(): void {
       removeSlot('grok-lightbox');
     }
     syncWallpaper(root, ui.state.theme);
+    syncBorderGlow(root);
     scrollTranscript();
     syncWorkClock();
     reflowFloating();

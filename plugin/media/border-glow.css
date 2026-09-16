@@ -1,0 +1,173 @@
+/* BorderGlow (React Bits) — glass plates only. Layers are extra DOM, not ::before/::after. */
+
+#app[data-surface='glass'] [data-border-glow] {
+  --edge-proximity: 0;
+  --cursor-angle: 45deg;
+  --edge-sensitivity: 30;
+  --color-sensitivity: calc(var(--edge-sensitivity) + 20);
+  --glow-padding: 16px;
+  --cone-spread: 38;
+  --fill-opacity: 0.42;
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+#app[data-surface='glass'] [data-border-glow] > .border-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
+#app[data-surface='glass'] [data-border-glow] > *:not(.border-glow) {
+  position: relative;
+  z-index: 2;
+}
+
+#app[data-surface='glass'] [data-border-glow] .border-glow-mesh,
+#app[data-surface='glass'] [data-border-glow] .border-glow-fill,
+#app[data-surface='glass'] [data-border-glow] .edge-light {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+
+#app[data-surface='glass'] [data-border-glow]:not(:hover):not(.sweep-active) .border-glow-mesh,
+#app[data-surface='glass'] [data-border-glow]:not(:hover):not(.sweep-active) .border-glow-fill,
+#app[data-surface='glass'] [data-border-glow]:not(:hover):not(.sweep-active) .edge-light {
+  opacity: 0;
+  transition: opacity 0.75s ease-in-out;
+}
+
+#app[data-surface='glass'] [data-border-glow] .border-glow-mesh {
+  z-index: 0;
+  -webkit-mask-image: conic-gradient(
+    from var(--cursor-angle) at center,
+    #000 calc(var(--cone-spread) * 1%),
+    transparent calc((var(--cone-spread) + 15) * 1%),
+    transparent calc((100 - var(--cone-spread) - 15) * 1%),
+    #000 calc((100 - var(--cone-spread)) * 1%)
+  );
+  mask-image: conic-gradient(
+    from var(--cursor-angle) at center,
+    #000 calc(var(--cone-spread) * 1%),
+    transparent calc((var(--cone-spread) + 15) * 1%),
+    transparent calc((100 - var(--cone-spread) - 15) * 1%),
+    #000 calc((100 - var(--cone-spread)) * 1%)
+  );
+  opacity: calc((var(--edge-proximity) - var(--color-sensitivity)) / (100 - var(--color-sensitivity)));
+}
+
+#app[data-surface='glass'] [data-border-glow] .border-glow-mesh-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background:
+    var(--gradient-one, radial-gradient(at 80% 55%, #c084fc 0px, transparent 50%)),
+    var(--gradient-two, radial-gradient(at 69% 34%, #f472b6 0px, transparent 50%)),
+    var(--gradient-three, radial-gradient(at 8% 6%, #38bdf8 0px, transparent 50%)),
+    var(--gradient-four, radial-gradient(at 41% 38%, #c084fc 0px, transparent 50%)),
+    var(--gradient-five, radial-gradient(at 86% 85%, #f472b6 0px, transparent 50%)),
+    var(--gradient-six, radial-gradient(at 82% 18%, #38bdf8 0px, transparent 50%)),
+    var(--gradient-seven, radial-gradient(at 51% 4%, #f472b6 0px, transparent 50%)),
+    var(--gradient-base, linear-gradient(#c084fc 0 100%));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+#app[data-surface='glass'] [data-border-glow] .border-glow-fill {
+  z-index: 0;
+  background:
+    var(--gradient-one, radial-gradient(at 80% 55%, #c084fc 0px, transparent 50%)),
+    var(--gradient-two, radial-gradient(at 69% 34%, #f472b6 0px, transparent 50%)),
+    var(--gradient-three, radial-gradient(at 8% 6%, #38bdf8 0px, transparent 50%)),
+    var(--gradient-four, radial-gradient(at 41% 38%, #c084fc 0px, transparent 50%)),
+    var(--gradient-five, radial-gradient(at 86% 85%, #f472b6 0px, transparent 50%)),
+    var(--gradient-six, radial-gradient(at 82% 18%, #38bdf8 0px, transparent 50%)),
+    var(--gradient-seven, radial-gradient(at 51% 4%, #f472b6 0px, transparent 50%)),
+    var(--gradient-base, linear-gradient(#c084fc 0 100%));
+  mask-image:
+    linear-gradient(to bottom, #000, #000),
+    radial-gradient(ellipse at 50% 50%, #000 40%, transparent 65%),
+    radial-gradient(ellipse at 66% 66%, #000 5%, transparent 40%),
+    radial-gradient(ellipse at 33% 33%, #000 5%, transparent 40%),
+    radial-gradient(ellipse at 66% 33%, #000 5%, transparent 40%),
+    radial-gradient(ellipse at 33% 66%, #000 5%, transparent 40%),
+    conic-gradient(from var(--cursor-angle) at center, transparent 5%, #000 15%, #000 85%, transparent 95%);
+  -webkit-mask-image:
+    linear-gradient(to bottom, #000, #000),
+    radial-gradient(ellipse at 50% 50%, #000 40%, transparent 65%),
+    radial-gradient(ellipse at 66% 66%, #000 5%, transparent 40%),
+    radial-gradient(ellipse at 33% 33%, #000 5%, transparent 40%),
+    radial-gradient(ellipse at 66% 33%, #000 5%, transparent 40%),
+    radial-gradient(ellipse at 33% 66%, #000 5%, transparent 40%),
+    conic-gradient(from var(--cursor-angle) at center, transparent 5%, #000 15%, #000 85%, transparent 95%);
+  mask-composite: subtract, add, add, add, add, add;
+  -webkit-mask-composite: xor, source-over, source-over, source-over, source-over, source-over;
+  opacity: calc(var(--fill-opacity, 0.42) * (var(--edge-proximity) - var(--color-sensitivity)) / (100 - var(--color-sensitivity)));
+  mix-blend-mode: soft-light;
+}
+
+#app[data-surface='glass'] [data-border-glow] > .border-glow > .edge-light {
+  inset: calc(var(--glow-padding) * -1);
+  z-index: 1;
+  -webkit-mask-image: conic-gradient(
+    from var(--cursor-angle) at center,
+    #000 2.5%,
+    transparent 10%,
+    transparent 90%,
+    #000 97.5%
+  );
+  mask-image: conic-gradient(
+    from var(--cursor-angle) at center,
+    #000 2.5%,
+    transparent 10%,
+    transparent 90%,
+    #000 97.5%
+  );
+  opacity: calc((var(--edge-proximity) - var(--edge-sensitivity)) / (100 - var(--edge-sensitivity)));
+  mix-blend-mode: plus-lighter;
+}
+
+#app[data-surface='glass'] [data-border-glow='light'] > .border-glow > .edge-light {
+  mix-blend-mode: normal;
+}
+
+#app[data-surface='glass'] [data-border-glow] > .border-glow > .edge-light::before {
+  content: "";
+  position: absolute;
+  inset: var(--glow-padding);
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px var(--glow-color, hsl(40deg 80% 80% / 100%)),
+    inset 0 0 2px 0 var(--glow-color-60, hsl(40deg 80% 80% / 60%)),
+    inset 0 0 5px 0 var(--glow-color-50, hsl(40deg 80% 80% / 50%)),
+    inset 0 0 9px 0 var(--glow-color-40, hsl(40deg 80% 80% / 40%)),
+    inset 0 0 22px 0 var(--glow-color-30, hsl(40deg 80% 80% / 30%)),
+    inset 0 0 38px 3px var(--glow-color-20, hsl(40deg 80% 80% / 20%)),
+    inset 0 0 75px 3px var(--glow-color-10, hsl(40deg 80% 80% / 10%)),
+    0 0 2px 0 var(--glow-color-60, hsl(40deg 80% 80% / 60%)),
+    0 0 5px 0 var(--glow-color-50, hsl(40deg 80% 80% / 50%)),
+    0 0 9px 0 var(--glow-color-40, hsl(40deg 80% 80% / 40%)),
+    0 0 22px 0 var(--glow-color-30, hsl(40deg 80% 80% / 30%)),
+    0 0 38px 3px var(--glow-color-20, hsl(40deg 80% 80% / 20%)),
+    0 0 75px 3px var(--glow-color-10, hsl(40deg 80% 80% / 10%));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app[data-surface='glass'] [data-border-glow] > .border-glow {
+    display: none;
+  }
+}

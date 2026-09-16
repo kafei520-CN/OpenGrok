@@ -138,10 +138,10 @@ html.opengrok #app[data-surface='endfield'] #grok-frost {
 #app[data-surface='endfield'] .drawer .dash-card,
 #app[data-surface='endfield'] .turn-error,
 #grok-floats[data-surface='endfield'] .more-menu,
-#grok-floats[data-surface='endfield'] .picker-menu,
+#grok-floats[data-surface='endfield'] .picker-menu:not(.picker-wheel),
 #grok-floats[data-surface='endfield'] .menu,
 #app[data-surface='endfield'] .more-menu,
-#app[data-surface='endfield'] .picker-menu,
+#app[data-surface='endfield'] .picker-menu:not(.picker-wheel),
 #app[data-surface='endfield'] .menu {
   border-radius: var(--r);
   border: 1px solid var(--endfield-line);

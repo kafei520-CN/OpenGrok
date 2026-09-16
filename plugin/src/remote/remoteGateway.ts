@@ -437,6 +437,22 @@ export class RemoteGateway {
       );
       return;
     }
+    if (url.pathname === '/border-glow.css') {
+      this.file(
+        res,
+        path.join(path.dirname(this.assets.chatCss), 'border-glow.css'),
+        'text/css; charset=utf-8',
+      );
+      return;
+    }
+    if (url.pathname === '/option-wheel.css') {
+      this.file(
+        res,
+        path.join(path.dirname(this.assets.chatCss), 'option-wheel.css'),
+        'text/css; charset=utf-8',
+      );
+      return;
+    }
     if (url.pathname === '/diff.js' && this.assets.diffJs) {
       this.file(res, this.assets.diffJs, 'application/javascript; charset=utf-8');
       return;
@@ -861,6 +877,8 @@ ${noZoomMeta()}
 <meta http-equiv="Content-Security-Policy" content="${csp}"/>
 <link rel="stylesheet" href="/chat.css"/>
 <link rel="stylesheet" href="/surfaces.css"/>
+<link rel="stylesheet" href="/border-glow.css"/>
+<link rel="stylesheet" href="/option-wheel.css"/>
 ${hostChromeStyle(chrome)}
 <title>Grok Build</title>
 </head><body>

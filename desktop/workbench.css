@@ -322,7 +322,7 @@ html.opengrok #app[data-surface='glass'] #og-rail {
 html.opengrok #app[data-surface='glass'] #og-rail::before {
   content: "";
   position: absolute;
-  z-index: 1;
+  z-index: 0;
   top: 12%;
   left: 50%;
   transform: translateX(-50%);
@@ -338,7 +338,7 @@ html.opengrok #app[data-surface='glass'] #og-rail::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 0;
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(
@@ -352,9 +352,14 @@ html.opengrok #app[data-surface='glass'] #og-rail::after {
   opacity: 0.4;
 }
 
-html.opengrok #app[data-surface='glass'] #og-rail > * {
+html.opengrok #app[data-surface='glass'] #og-rail > *:not(.border-glow) {
   position: relative;
   z-index: 2;
+}
+
+html.opengrok #app[data-surface='glass'] #og-rail > .border-glow,
+html.opengrok #app[data-surface='glass'] .composer-card > .border-glow {
+  z-index: 1;
 }
 
 .og-brand {
@@ -600,6 +605,7 @@ html.opengrok #app[data-surface='glass'] #og-dash {
   -webkit-backdrop-filter: var(--glass-chrome-filter, none);
   backdrop-filter: var(--glass-chrome-filter, none);
   box-shadow: var(--glass-liquid);
+  overflow: visible;
 }
 
 .og-dash-head {
@@ -1117,7 +1123,7 @@ html.opengrok #app[data-surface='glass'] .composer-card::after {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
   background: linear-gradient(
     45deg,
     rgba(255, 255, 255, 0.8) 0%,
@@ -1684,12 +1690,16 @@ html.opengrok #app[data-surface='solid'] #og-settings {
 
 .og-deck-tabs {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
-  height: var(--og-tab-h);
-  gap: 0;
+  align-content: flex-end;
+  min-height: var(--og-tab-h);
+  height: auto;
+  gap: 8px;
+  flex-shrink: 0;
   position: relative;
   z-index: 6;
-  margin-bottom: -1px;
+  margin: 0;
   overflow: visible;
 }
 
@@ -1702,9 +1712,12 @@ html.opengrok #app[data-surface='solid'] #og-settings {
 
 .og-deck-tab {
   position: relative;
+  isolation: isolate;
+  z-index: 1;
   height: var(--og-tab-h);
-  margin-right: -6px;
-  padding: 0 22px;
+  margin: 0;
+  padding: 0 16px;
+  flex: 0 0 auto;
   border-radius: 12px 12px 0 0;
   border: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -1715,16 +1728,18 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .og-deck-tab.on {
-  z-index: 8;
+  z-index: 2;
   height: calc(var(--og-tab-h) + 6px);
-  margin-bottom: -6px;
+  margin: 0 0 -1px;
   padding-bottom: 6px;
   border-bottom: none;
   background: var(--bg);
   color: var(--fg);
+  overflow: visible;
 }
 
 .og-deck-tab.on::after {
@@ -1881,15 +1896,23 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   text-decoration: underline;
 }
 
-.og-set-body {
+.og-set-body,
+.og-set-stack,
+.og-set-embed {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   max-width: 760px;
 }
 
 .og-deck-sheet .og-set-body {
   max-width: none;
+}
+
+.og-set-stack > * + *,
+.og-set-embed > * + *,
+.og-set-card + .og-set-card {
+  margin-top: 20px;
 }
 
 .og-set-card {
@@ -1901,6 +1924,12 @@ html.opengrok #app[data-surface='solid'] #og-settings {
   border-radius: 16px;
   padding: 16px 18px 14px;
   overflow: visible;
+  position: relative;
+  z-index: 1;
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  flex: 0 0 auto;
 }
 
 html.opengrok #app[data-surface='solid'] .og-set-card {
@@ -2039,7 +2068,8 @@ html.opengrok .theme-opacity input[type='range'] {
   padding-inline: 9px;
 }
 
-.og-set-card > :first-child {
+.og-set-card > :first-child,
+.og-set-card > .border-glow + * {
   border-top: none;
   padding-top: 0;
 }
@@ -2511,6 +2541,25 @@ html.opengrok .menu {
   box-shadow: 0 16px 40px rgb(0 0 0 / 12%);
 }
 
+html.opengrok .picker-menu.picker-wheel {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.opengrok .picker-menu.picker-wheel.picker-bar-wheel {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: 32px;
+  overflow: visible;
+  box-shadow: none;
+}
+
 html.opengrok .permission,
 html.opengrok .ask-card {
   border-radius: 14px;
@@ -2579,6 +2628,7 @@ html.opengrok #app[data-surface='glass'] .og-deck-tab {
   background: transparent;
   border-color: color-mix(in srgb, var(--fg) 12%, transparent);
   border-radius: 12px 12px 0 0;
+  margin: 0;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -2587,7 +2637,7 @@ html.opengrok #app[data-surface='glass'] .og-deck-tab.on {
   background: transparent;
   color: var(--fg);
   height: var(--og-tab-h);
-  margin-bottom: -1px;
+  margin: 0;
   padding-bottom: 0;
   border-bottom: none;
 }
@@ -2598,6 +2648,7 @@ html.opengrok #app[data-surface='glass'] .og-deck-tab.on::after {
 
 html.opengrok #app[data-surface='glass'] .og-deck-tabs {
   margin-bottom: 0;
+  gap: 8px;
 }
 
 html.opengrok #app[data-surface='glass'] .og-deck-tabs::after {
@@ -2656,17 +2707,17 @@ html.opengrok #app:has(#og-dash)[data-surface='glass'] #composer-wrap {
   grid-row: 2;
 }
 
-html.opengrok #app[data-surface='glass'] .composer-card > * {
+html.opengrok #app[data-surface='glass'] .composer-card > *:not(.border-glow) {
   position: relative;
   z-index: 2;
 }
 
 html.opengrok #app[data-surface='glass'] .menu,
-html.opengrok #app[data-surface='glass'] .picker-menu,
+html.opengrok #app[data-surface='glass'] .picker-menu:not(.picker-wheel),
 html.opengrok #app[data-surface='glass'] .more-menu,
 html.opengrok #app[data-surface='glass'] .og-account-menu,
 html.opengrok #grok-floats[data-surface='glass'] .menu,
-html.opengrok #grok-floats[data-surface='glass'] .picker-menu,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu:not(.picker-wheel),
 html.opengrok #grok-floats[data-surface='glass'] .more-menu,
 html.opengrok #grok-floats[data-surface='glass'] .og-account-menu,
 html.opengrok #grok-floats .og-account-menu {
@@ -2676,6 +2727,21 @@ html.opengrok #grok-floats .og-account-menu {
   -webkit-backdrop-filter: var(--glass-chrome-filter, none);
   backdrop-filter: var(--glass-chrome-filter, none);
   box-shadow: var(--glass-liquid);
+  overflow: visible;
+}
+
+html.opengrok #app[data-surface='glass'] .picker-menu.picker-wheel,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu.picker-wheel {
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html.opengrok #app[data-surface='glass'] .picker-menu.picker-wheel.picker-bar-wheel,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu.picker-wheel.picker-bar-wheel {
   overflow: visible;
 }
 
@@ -2873,6 +2939,21 @@ html.opengrok #app[data-surface='glass'] .picker-btn {
   border-radius: 999px;
   box-shadow: var(--glass-liquid);
   overflow: visible;
+  padding: 5px 14px;
+}
+
+html.opengrok #app[data-surface='glass'] .picker-menu.picker-wheel,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu.picker-wheel {
+  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.opengrok #app[data-surface='glass'] .picker-menu.picker-wheel.picker-bar-wheel,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu.picker-wheel.picker-bar-wheel {
+  overflow: visible;
 }
 
 html.opengrok #app[data-surface='glass'] .og-set-card,
@@ -2886,10 +2967,10 @@ html.opengrok #app[data-surface='glass'] .settings-seg,
 html.opengrok #app[data-surface='glass'] .composer-card,
 html.opengrok #app[data-surface='glass'] .send-fab,
 html.opengrok #app[data-surface='glass'] .menu,
-html.opengrok #app[data-surface='glass'] .picker-menu,
+html.opengrok #app[data-surface='glass'] .picker-menu:not(.picker-wheel),
 html.opengrok #app[data-surface='glass'] .more-menu,
 html.opengrok #grok-floats[data-surface='glass'] .menu,
-html.opengrok #grok-floats[data-surface='glass'] .picker-menu,
+html.opengrok #grok-floats[data-surface='glass'] .picker-menu:not(.picker-wheel),
 html.opengrok #grok-floats[data-surface='glass'] .more-menu,
 html.opengrok #grok-floats .og-account-menu {
   overflow: visible;

@@ -1,0 +1,62 @@
+.option-wheel {
+  --ow-text-color: var(--muted, #a6a6a6);
+  --ow-active-color: var(--fg, #ffffff);
+  --ow-font-size: 3rem;
+  --ow-inset: 80px;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  outline: none;
+}
+
+.option-wheel--dragging {
+  cursor: grabbing;
+}
+
+.option-wheel__item {
+  position: absolute;
+  top: 50%;
+  left: var(--ow-inset);
+  white-space: nowrap;
+  font-size: var(--ow-font-size);
+  line-height: 1;
+  font-weight: 500;
+  transform-origin: left center;
+  cursor: pointer;
+  will-change: transform, opacity, filter;
+  color: color-mix(in srgb, var(--ow-active-color) calc(var(--ow-p, 0) * 100%), var(--ow-text-color));
+}
+
+.option-wheel--right .option-wheel__item {
+  left: auto;
+  right: var(--ow-inset);
+  transform-origin: right center;
+}
+
+.option-wheel--horizontal .option-wheel__item {
+  top: 50%;
+}
+
+.option-wheel--horizontal .option-wheel__sizer {
+  display: none;
+}
+
+.option-wheel__item--selected {
+  font-weight: 650;
+}
+
+.option-wheel__sizer {
+  display: block;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: var(--ow-font-size);
+  font-weight: 650;
+  line-height: 1;
+  padding: 0 var(--ow-inset);
+}

@@ -366,6 +366,7 @@ function extensionPages(): DeckPage[] {
 
 function officialAccountBody(): HTMLElement {
   const el = document.createElement('div');
+  el.className = 'og-set-stack';
   el.append(p(tr('setAccountHint')), profileCard());
   const quota = quotaCard();
   if (quota) {
@@ -635,6 +636,7 @@ function linkBtn(label: string, url: string): HTMLElement {
 
 function appearancePane(): HTMLElement {
   const el = document.createElement('div');
+  el.className = 'og-set-stack';
   const glass = currentSurface() === 'glass';
   const theme = ui.state.theme;
   el.append(
@@ -813,6 +815,7 @@ function petLookPane(): HTMLElement {
 
 function petBubblesPane(): HTMLElement {
   const el = document.createElement('div');
+  el.className = 'og-set-stack';
   el.append(
     card(tr('petBubbles'), [
       toggle(tr('petBubblesOn'), tr('petBubblesHint'), ui.pet.bubbles, () => {
@@ -894,6 +897,7 @@ function petColorGrid(): HTMLElement {
 
 function generalPane(): HTMLElement {
   const el = document.createElement('div');
+  el.className = 'og-set-stack';
   el.append(
     card(tr('settingsUi'), [
       toggle(tr('settingsCompact'), tr('settingsCompactHint'), Boolean(ui.state.compactMode), () =>
@@ -948,6 +952,7 @@ function generalPane(): HTMLElement {
 
 function cliPane(): HTMLElement {
   const el = document.createElement('div');
+  el.className = 'og-set-stack';
   el.append(
     card(tr('settingsCli'), [
       line(tr('settingsCliPath'), settings().cliPath || 'grok'),
@@ -978,6 +983,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
+  el.className = 'og-set-stack';
   const version = document.documentElement.dataset.version || '0.4.5';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';

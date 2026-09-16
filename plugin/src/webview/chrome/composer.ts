@@ -10,7 +10,8 @@ import { scrollTranscript } from '../transcript';
 import { iconButton } from '../dom';
 import { pickRemoteFiles, sendBrowserFiles } from './drop';
 import { bindHoverPin, findPinned, pinFloating, releaseByClass } from './popover';
-import { iconChevron, iconClose, iconDown, iconExpand, iconPause, iconPlay, iconPlus, iconSendNow, iconStar, iconStop, iconTarget, iconTrash } from '../icons';
+import { iconClose, iconDown, iconExpand, iconPause, iconPlay, iconPlus, iconSendNow, iconStar, iconStop, iconTarget, iconTrash } from '../icons';
+import { mountOptionWheel, type OptionWheelSide } from './optionWheel';
 import { formatGoalChip, goalElapsedMs, truncateGoal } from '../../chat/goal';
 
 function iconSend(): string {
@@ -61,6 +62,7 @@ let barKey = '';
 let chipKey = '';
 let menuKey = '';
 let pendingEffortModel: string | undefined;
+let pendingBarWheel: HTMLElement | undefined;
 let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function patchComposer(): void {
@@ -248,7 +250,17 @@ function fillComposerBar(bar: HTMLElement, input: HTMLTextAreaElement): void {
     send.addEventListener('click', () => sendFrom(input));
   }
   releaseByClass('picker-menu');
-  bar.replaceChildren(plus, modePicker(), modelEffortPicker(), contextMeter(), send);
+  pendingBarWheel = undefined;
+  const mode = modePicker();
+  const model = modelEffortPicker();
+  const wheel = pendingBarWheel;
+  pendingBarWheel = undefined;
+  if (wheel) {
+    bar.replaceChildren(plus, mode, wheel, model, contextMeter(), send);
+    queueMicrotask(() => wheel.focus());
+  } else {
+    bar.replaceChildren(plus, mode, model, contextMeter(), send);
+  }
 }
 
 function composerBarKey(): string {
@@ -501,7 +513,6 @@ function modelEffortPicker(): HTMLElement {
   text.className = 'picker-label';
   text.textContent = combinedModelEffortLabel();
   btn.append(text);
-  btn.insertAdjacentHTML('beforeend', iconChevron());
   btn.addEventListener('click', (event) => {
     event.stopPropagation();
     if (locked) {
@@ -526,6 +537,8 @@ function modelEffortPicker(): HTMLElement {
     const model = modelById(pendingEffortModel) ?? currentModel();
     const selectedEffort = currentEffortValue(model);
     const efforts = effortChoices(model);
+    const modelName =
+      modelDisplayName(model?.id ?? pendingEffortModel, model?.name) || combinedModelEffortLabel();
     const list = pickerMenu(
       efforts.map((level) => ({
         id: level,
@@ -541,8 +554,15 @@ function modelEffortPicker(): HTMLElement {
         }
         render();
       },
+      {
+        side: 'right',
+        ariaLabel: tr('switchModel'),
+        onHighlight: (item) => {
+          text.textContent = `${modelName} · ${item.label}`;
+        },
+      },
     );
-    pinFloating(list, btn, { prefer: 'above', align: 'end' });
+    showPickerWheel(list);
     return wrap;
   }
   if (models.length === 0) {
@@ -572,8 +592,15 @@ function modelEffortPicker(): HTMLElement {
       }
       render();
     },
+    {
+      side: 'right',
+      ariaLabel: tr('switchModel'),
+      onHighlight: (item) => {
+        text.textContent = item.label;
+      },
+    },
   );
-  pinFloating(list, btn, { prefer: 'above', align: 'end' });
+  showPickerWheel(list);
   return wrap;
 }
 
@@ -599,7 +626,6 @@ function pickerControl(opts: {
   text.className = 'picker-label';
   text.textContent = opts.label;
   btn.append(text);
-  btn.insertAdjacentHTML('beforeend', iconChevron());
   btn.addEventListener('click', (event) => {
     event.stopPropagation();
     if (opts.disabled) {
@@ -613,17 +639,24 @@ function pickerControl(opts: {
   });
   wrap.append(btn);
   if (ui.picker === opts.kind && opts.items.length > 0 && !ui.state.settingsOpen) {
-    const list = pickerMenu(opts.items, (item) => {
-      ui.picker = undefined;
-      if (!item.selected) {
-        opts.onPick(item.id);
-      }
-      render();
-    });
-    pinFloating(list, btn, {
-      prefer: 'above',
-      align: 'start',
-    });
+    const list = pickerMenu(
+      opts.items,
+      (item) => {
+        ui.picker = undefined;
+        if (!item.selected) {
+          opts.onPick(item.id);
+        }
+        render();
+      },
+      {
+        side: 'left',
+        ariaLabel: opts.title,
+        onHighlight: (item) => {
+          text.textContent = item.label;
+        },
+      },
+    );
+    showPickerWheel(list);
   }
   return wrap;
 }
@@ -631,21 +664,53 @@ function pickerControl(opts: {
 function pickerMenu(
   items: Array<{ id: string; label: string; selected: boolean }>,
   onPick: (item: { id: string; label: string; selected: boolean }) => void,
+  opts?: {
+    side?: OptionWheelSide;
+    ariaLabel?: string;
+    onHighlight?: (item: { id: string; label: string; selected: boolean }) => void;
+  },
 ): HTMLElement {
-  const list = document.createElement('div');
-  list.className = 'picker-menu';
-  list.setAttribute('role', 'listbox');
+  const selected = Math.max(
+    0,
+    items.findIndex((item) => item.selected),
+  );
+  const list = mountOptionWheel({
+    items: items.map((item) => ({ id: item.id, label: item.label })),
+    selectedIndex: selected,
+    side: opts?.side ?? 'left',
+    axis: 'vertical',
+    fontSize: 1.25,
+    spacing: 1.6,
+    curve: 1,
+    tilt: 20,
+    blur: 1.4,
+    fade: 0.2,
+    minOpacity: 0.08,
+    smoothing: 160,
+    inset: 5,
+    loop: items.length > 8,
+    draggable: true,
+    className: 'picker-menu picker-wheel picker-bar-wheel',
+    ariaLabel: opts?.ariaLabel,
+    onChange: (index) => {
+      const item = items[index];
+      if (item) {
+        opts?.onHighlight?.(item);
+      }
+    },
+    onCommit: (index) => {
+      const item = items[index];
+      if (item) {
+        onPick(item);
+      }
+    },
+  });
   list.addEventListener('click', (event) => event.stopPropagation());
-  for (const item of items) {
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = item.selected ? 'picker-item on' : 'picker-item';
-    option.setAttribute('role', 'option');
-    option.textContent = item.label;
-    option.addEventListener('click', () => onPick(item));
-    list.append(option);
-  }
   return list;
+}
+
+function showPickerWheel(list: HTMLElement): void {
+  pendingBarWheel = list;
 }
 
 function pinComposerMenu(el: HTMLElement, input: HTMLElement): void {

@@ -128,6 +128,12 @@ export class GrokChatViewProvider implements vscode.WebviewViewProvider, vscode.
     const surfacesUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'surfaces.css'),
     );
+    const borderGlowUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'border-glow.css'),
+    );
+    const optionWheelUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'option-wheel.css'),
+    );
     const katexUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'katex', 'katex.min.css'),
     );
@@ -140,6 +146,8 @@ export class GrokChatViewProvider implements vscode.WebviewViewProvider, vscode.
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="${styleUri}" />
   <link rel="stylesheet" href="${surfacesUri}" />
+  <link rel="stylesheet" href="${borderGlowUri}" />
+  <link rel="stylesheet" href="${optionWheelUri}" />
   <link rel="stylesheet" href="${katexUri}" />
   <title>Grok Build</title>
 </head>

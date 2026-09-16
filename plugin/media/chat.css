@@ -926,6 +926,36 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+.shiny-text {
+  display: inline-block;
+  --shiny-color: var(--muted);
+  --shiny-shine: #ffffff;
+  background-image: linear-gradient(
+    120deg,
+    var(--shiny-color) 0%,
+    var(--shiny-color) 35%,
+    var(--shiny-shine) 50%,
+    var(--shiny-color) 65%,
+    var(--shiny-color) 100%
+  );
+  background-size: 200% auto;
+  background-position: 150% center;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: shiny-sweep 2s linear infinite;
+}
+
+@keyframes shiny-sweep {
+  from {
+    background-position: 150% center;
+  }
+  to {
+    background-position: -50% center;
+  }
+}
+
 .term-elapsed {
   font-size: 10px;
   color: rgb(255 255 255 / 72%);
@@ -2448,6 +2478,9 @@ textarea:focus-visible {
   flex-shrink: 0;
   padding-top: 6px;
   border-top: 1px solid var(--line);
+  position: relative;
+  z-index: 5;
+  overflow: visible;
 }
 
 .seg {
@@ -2515,16 +2548,17 @@ textarea:focus-visible {
 .picker-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   width: auto;
   max-width: 100%;
   background: color-mix(in srgb, var(--bg) 45%, transparent);
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 5px 14px;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .picker-btn:hover,
@@ -2576,6 +2610,57 @@ textarea:focus-visible {
   border-radius: 12px;
   padding: 4px;
   z-index: 30;
+}
+
+.picker-menu.picker-wheel,
+.picker-menu.picker-wheel.pin {
+  overflow: hidden;
+  width: max-content;
+  min-width: 148px;
+  max-width: min(320px, 90vw);
+  max-height: min(260px, 70vh);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.picker-bar-wheel,
+.picker-menu.picker-wheel.picker-bar-wheel {
+  position: relative;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 0;
+  width: auto;
+  max-width: none;
+  height: 32px;
+  min-height: 32px;
+  max-height: none;
+  overflow: visible;
+  z-index: 6;
+}
+
+.option-wheel.picker-bar-wheel {
+  overflow: visible;
+}
+
+.composer-bar:has(.picker-bar-wheel) .picker.model {
+  margin-left: 0;
+}
+
+.composer-bar .picker.mode + .picker-bar-wheel {
+  margin-left: -6px;
+}
+
+.composer-bar .picker-bar-wheel.option-wheel--right {
+  margin-right: -6px;
 }
 
 .picker-item {
@@ -3971,9 +4056,9 @@ kbd {
 }
 
 #app[data-surface='glass'] .more-menu,
-#app[data-surface='glass'] .picker-menu,
+#app[data-surface='glass'] .picker-menu:not(.picker-wheel),
 #grok-floats[data-surface='glass'] .more-menu,
-#grok-floats[data-surface='glass'] .picker-menu {
+#grok-floats[data-surface='glass'] .picker-menu:not(.picker-wheel) {
   --glass-pane-blur: var(--glass-4-blur, 52px);
   background: var(--glass-film);
   border: var(--glass-border);
@@ -3991,6 +4076,21 @@ kbd {
 #grok-floats[data-surface='glass'] .picker-menu,
 #grok-floats[data-surface='glass'] .menu {
   overflow: auto;
+}
+
+#app[data-surface='glass'] .picker-menu.picker-wheel,
+#grok-floats[data-surface='glass'] .picker-menu.picker-wheel {
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#app[data-surface='glass'] .picker-menu.picker-wheel.picker-bar-wheel,
+#grok-floats[data-surface='glass'] .picker-menu.picker-wheel.picker-bar-wheel {
+  overflow: visible;
 }
 
 #app[data-surface='glass'] .more-menu button,
@@ -4102,11 +4202,11 @@ kbd {
 #app[data-surface='glass'][data-wp-kind='image'] .jump-bottom::before,
 #app[data-surface='glass'][data-wp-kind='image'] .more-menu::before,
 #grok-floats[data-surface='glass'][data-wp-kind='image'] .more-menu::before,
-#grok-floats[data-surface='glass'][data-wp-kind='image'] .picker-menu::before,
+#grok-floats[data-surface='glass'][data-wp-kind='image'] .picker-menu:not(.picker-wheel)::before,
 #grok-floats[data-surface='glass'][data-wp-kind='image'] .menu::before,
 #app[data-surface='glass'][data-wp-kind='image'] .settings-card::before,
 #app[data-surface='glass'][data-wp-kind='image'] .drawer .dash-card::before,
-#app[data-surface='glass'][data-wp-kind='image'] .picker-menu::before,
+#app[data-surface='glass'][data-wp-kind='image'] .picker-menu:not(.picker-wheel)::before,
 #app[data-surface='glass'][data-wp-kind='image'] .menu::before {
   content: '';
   position: absolute;
@@ -4157,11 +4257,11 @@ kbd {
 #app[data-surface='glass'][data-wp-kind='image'] .jump-bottom,
 #app[data-surface='glass'][data-wp-kind='image'] .more-menu,
 #grok-floats[data-surface='glass'][data-wp-kind='image'] .more-menu,
-#grok-floats[data-surface='glass'][data-wp-kind='image'] .picker-menu,
+#grok-floats[data-surface='glass'][data-wp-kind='image'] .picker-menu:not(.picker-wheel),
 #grok-floats[data-surface='glass'][data-wp-kind='image'] .menu,
 #app[data-surface='glass'][data-wp-kind='image'] .settings-card,
 #app[data-surface='glass'][data-wp-kind='image'] .drawer .dash-card,
-#app[data-surface='glass'][data-wp-kind='image'] .picker-menu,
+#app[data-surface='glass'][data-wp-kind='image'] .picker-menu:not(.picker-wheel),
 #app[data-surface='glass'][data-wp-kind='image'] .menu {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;

@@ -1276,7 +1276,7 @@ function workBlock(message: ChatMessage): HTMLDetailsElement {
   mark.innerHTML = iconStar();
   const label = document.createElement('span');
   label.className = 'work-label';
-  label.textContent = workLabel(message);
+  paintWorkLabel(label, message);
   summary.append(mark, label);
   const body = document.createElement('div');
   body.className = 'work-body';
@@ -1316,8 +1316,8 @@ function paintWorkLabels(): void {
       continue;
     }
     const label = node.querySelector('.work-label');
-    if (label) {
-      label.textContent = workLabel(live);
+    if (label instanceof HTMLElement) {
+      paintWorkLabel(label, live);
     }
   }
   const tools = new Map(live.tools.map((tool) => [tool.id, tool]));
@@ -1330,6 +1330,12 @@ function paintWorkLabels(): void {
       paintTermElapsed(node, tool);
     }
   }
+}
+
+function paintWorkLabel(el: HTMLElement, message: ChatMessage): void {
+  const text = workLabel(message);
+  el.textContent = text;
+  el.classList.toggle('shiny-text', Boolean(message.streaming && durationText(message)));
 }
 
 function workLabel(message: ChatMessage): string {

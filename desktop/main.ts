@@ -198,7 +198,7 @@ function createWindow(): BrowserWindow {
     },
     autoHideMenuBar: true,
     alwaysOnTop: false,
-    transparent: true,
+    // transparent: true uses per-pixel alpha and blocks Windows 11 DWM corners.
     roundedCorners: true,
     hasShadow: true,
     backgroundColor: chrome.surface === 'glass' ? '#00000000' : chrome.background,
