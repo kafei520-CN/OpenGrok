@@ -230,6 +230,36 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function watchTryReload(win: BrowserWindow): void {
+  if (process.env['OPENGROK_TRY'] !== '1') {
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const reload = () => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => {
+      if (!win.isDestroyed()) {
+        win.webContents.reloadIgnoringCache();
+      }
+    }, 180);
+  };
+  const targets = [
+    path.join(rootDir(), 'desktop', 'workbench.css'),
+    path.join(rootDir(), 'desktop', 'index.html'),
+    path.join(rootDir(), 'plugin', 'media'),
+    path.join(rootDir(), 'plugin', 'dist', 'webview.js'),
+  ];
+  for (const target of targets) {
+    try {
+      fs.watch(target, { recursive: fs.statSync(target).isDirectory() }, reload);
+    } catch {
+      /* missing on first boot */
+    }
+  }
+}
+
 function iconPath(): string {
   const ico = path.join(rootDir(), 'resources', 'icon.ico');
   if (fs.existsSync(ico)) {
@@ -1044,6 +1074,7 @@ if (!gotLock) {
     });
     createTray();
     mainWindow = createWindow();
+    watchTryReload(mainWindow);
     mainWindow.webContents.on('did-finish-load', () => {
       startSidecar(readState().cwd || defaultCwd());
       notifyPetSettings();

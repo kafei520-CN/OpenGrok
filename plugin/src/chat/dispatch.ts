@@ -415,6 +415,9 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
     case 'openOgPluginsDir':
       await controller.openOgPluginsDir();
       return;
+    case 'reloadOgPlugins':
+      await controller.reloadOgPlugins();
+      return;
     case 'setExtTab':
       controller.setExtTab(message.tab);
       return;

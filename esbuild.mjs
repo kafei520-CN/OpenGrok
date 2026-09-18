@@ -3,75 +3,85 @@ import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
 
 const minify = process.argv.includes('--minify');
+const watch = process.argv.includes('--watch');
 const common = {
   bundle: true,
   minify,
   sourcemap: minify ? false : true,
-  logLevel: 'info',
+  logLevel: watch ? 'warning' : 'info',
   target: 'node20',
 };
 
-await Promise.all([
-  esbuild.build({
+const jobs = [
+  {
     ...common,
     entryPoints: ['plugin/src/webview/main.ts'],
     outfile: 'plugin/dist/webview.js',
     platform: 'browser',
     format: 'iife',
     target: 'es2022',
-  }),
-  esbuild.build({
+  },
+  {
     ...common,
     entryPoints: ['plugin/src/webview/editor/diff.ts'],
     outfile: 'plugin/dist/diff.js',
     platform: 'browser',
     format: 'iife',
     target: 'es2022',
-  }),
-  esbuild.build({
+  },
+  {
     ...common,
     entryPoints: ['plugin/src/webview/editor/shiki-monaco.ts'],
     outfile: 'plugin/dist/shiki-monaco.js',
     platform: 'browser',
     format: 'iife',
     target: 'es2022',
-  }),
-  esbuild.build({
+  },
+  {
     ...common,
     entryPoints: ['plugin/src/chat/sidecar.ts'],
     outfile: 'plugin/dist/host.js',
     platform: 'node',
     format: 'cjs',
     banner: { js: '#!/usr/bin/env node' },
-  }),
-  esbuild.build({
+  },
+  {
     ...common,
     entryPoints: ['desktop/main.ts'],
     outfile: 'dist/main.js',
     platform: 'node',
     format: 'cjs',
     external: ['electron'],
-  }),
-  esbuild.build({
+  },
+  {
     ...common,
     entryPoints: ['desktop/preload.ts'],
     outfile: 'dist/preload.js',
     platform: 'node',
     format: 'cjs',
     external: ['electron'],
-  }),
-  esbuild.build({
+  },
+  {
     ...common,
     entryPoints: ['desktop/pet/overlay.ts'],
     outfile: 'desktop/pet.js',
     platform: 'browser',
     format: 'iife',
     target: 'es2022',
-  }),
-]);
+  },
+];
 
 copyKatex();
 copyMonaco();
+
+if (watch) {
+  const contexts = await Promise.all(jobs.map((job) => esbuild.context(job)));
+  await Promise.all(contexts.map((ctx) => ctx.watch()));
+  console.log('watching');
+  await new Promise(() => {});
+} else {
+  await Promise.all(jobs.map((job) => esbuild.build(job)));
+}
 
 function copyKatex() {
   const srcCss = path.join('node_modules', 'katex', 'dist', 'katex.min.css');

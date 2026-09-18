@@ -72,12 +72,14 @@ import { bindPlatform, plat, type Platform } from '../core/platform';
 import { dispatchUi } from './dispatch';
 import {
   ensureOgPluginsDir,
+  projectOpengrokPluginsDir,
   publicOgPlugins,
   readPluginState,
   scanOgPlugins,
   writePluginDisabled,
 } from '../ogPlugins/scan';
 import { bindOgPostToUi, loadOgHostPlugins } from '../ogPlugins/hostRuntime';
+import { watchOgPluginDirs } from '../ogPlugins/watch';
 import type { OgPluginInfo } from '../ogPlugins/types';
 import { pathToFileURL } from 'node:url';
 import {
@@ -209,6 +211,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   worktrees: WorktreeItem[] = [];
   plugins: PluginItem[] = [];
   ogPlugins: OgPluginInfo[] = [];
+  private ogPluginWatch?: { close(): void };
   hooks: HookItem[] = [];
   marketplace: MarketplacePlugin[] = [];
   workflows: WorkflowItem[] = [];
@@ -2357,7 +2360,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const dir = await ensureOgPluginsDir(plat().homeDir());
     await plat().openExternal(pathToFileURL(dir).href);
   }
-  private async reloadOgPlugins(): Promise<void> {
+  async reloadOgPlugins(): Promise<void> {
     try {
       this.ogPlugins = await scanOgPlugins({
         homeDir: plat().homeDir(),
@@ -2369,6 +2372,22 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.ogPlugins = [];
     }
     this.emit();
+  }
+
+  private startOgPluginWatch(): void {
+    this.ogPluginWatch?.close();
+    const home = plat().homeDir();
+    void ensureOgPluginsDir(home).then((userDir) => {
+      this.ogPluginWatch?.close();
+      this.ogPluginWatch = watchOgPluginDirs(
+        [userDir, projectOpengrokPluginsDir(plat().workspaceFolders()[0])].filter(
+          (dir): dir is string => Boolean(dir),
+        ),
+        () => {
+          void this.reloadOgPlugins();
+        },
+      );
+    });
   }
   setExtTab(tab: 'plugins' | 'marketplace' | 'hooks' | 'workflows'): void { drawers.setExtTab(this, tab); }
   async togglePlugin(id: string): Promise<void> { await drawers.togglePlugin(this, id); }
@@ -2782,6 +2801,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   private async startInner(): Promise<void> {
     await this.reloadOgPlugins();
+    this.startOgPluginWatch();
     const epoch = this.agentGen;
     this.error = undefined;
     if (this.messages.length === 0) {

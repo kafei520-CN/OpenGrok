@@ -1,7 +1,7 @@
 {
   "name": "opengrok",
   "productName": "OpenGrok",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "description": "Desktop workbench for the Grok Build CLI",
   "author": "mckafei_CN",
   "license": "Apache-2.0",
@@ -14,6 +14,7 @@
   "scripts": {
     "compile": "node esbuild.mjs",
     "dev": "node esbuild.mjs && electron .",
+    "try": "node scripts/try.mjs",
     "start": "electron .",
     "pack": "node scripts/pack.mjs"
   },

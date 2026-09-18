@@ -858,6 +858,7 @@ export type WebviewToHost =
   | { type: 'openOgPlugins' }
   | { type: 'toggleOgPlugin'; id: string }
   | { type: 'openOgPluginsDir' }
+  | { type: 'reloadOgPlugins' }
   | { type: 'setExtTab'; tab: 'plugins' | 'marketplace' | 'hooks' | 'workflows' }
   | { type: 'togglePlugin'; id: string }
   | { type: 'uninstallPlugin'; id: string }

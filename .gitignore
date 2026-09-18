@@ -2,6 +2,7 @@ node_modules/
 dist/
 plugin/dist/
 release/
+.electron-dev/
 *.log
 .DS_Store
 参考文件夹

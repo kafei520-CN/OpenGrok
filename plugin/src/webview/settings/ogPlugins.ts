@@ -36,7 +36,12 @@ export function mountOgPluginsBody(): HTMLElement {
   open.className = 'btn';
   open.textContent = tr('ogPluginsOpenDir');
   open.addEventListener('click', () => post({ type: 'openOgPluginsDir' }));
-  actions.append(open);
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.className = 'btn';
+  reload.textContent = tr('ogPluginsReload');
+  reload.addEventListener('click', () => post({ type: 'reloadOgPlugins' }));
+  actions.append(open, reload);
   body.append(actions);
   const rows = ui.state.ogPlugins ?? [];
   const card = document.createElement('div');
