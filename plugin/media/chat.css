@@ -66,6 +66,21 @@ body {
   box-sizing: border-box;
 }
 
+#og-plugin-root:empty {
+  display: none;
+}
+
+#og-plugin-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+}
+
+#og-plugin-root > * {
+  pointer-events: auto;
+}
+
 #app {
   position: absolute;
   inset: 0;
@@ -454,10 +469,10 @@ textarea:focus-visible {
 }
 
 .session-live {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   flex-shrink: 0;
-  margin-right: 2px;
+  margin: 0;
   border-radius: 50%;
   background: var(--ok, #22c55e);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok, #22c55e) 55%, transparent);
@@ -479,15 +494,16 @@ textarea:focus-visible {
 .session-main {
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   background: none;
   border: none;
   color: inherit;
   padding: 6px 8px;
   cursor: pointer;
+  overflow: visible;
 }
 
 .session-tools {
@@ -502,15 +518,15 @@ textarea:focus-visible {
 }
 
 .session-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-time {
+  flex-shrink: 0;
   color: var(--muted);
   font-size: 12px;
 }
@@ -2531,6 +2547,20 @@ textarea:focus-visible {
   flex: 0 0 auto;
   max-width: none;
   min-width: max-content;
+}
+
+.picker.project {
+  flex: 0 0 auto;
+}
+
+.picker.project .picker-btn {
+  gap: 6px;
+}
+
+.picker.project .picker-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .picker.mode .picker-label {

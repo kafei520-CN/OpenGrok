@@ -4,6 +4,7 @@ import { resolveIncomingMessages } from '../chat/messageMerge';
 import { mergeStreamTail } from '../chat/streamTail';
 import { applyThemeTo } from '../settings/theme';
 import { bindRender, isBooting, isDesktop, isRemoteWeb, normalizeState, persistUi, post, root, ui } from './app';
+import { ensureOgPluginRoot, fireOgPatch, syncOgUiPlugins } from './ogPlugins';
 import { patchRail } from './shell/rail';
 import { patchDesktopDash } from './shell/dashboard';
 import { closeDesktopReview, openDesktopReview, patchReviewStage, reviewOpen } from './shell/reviewStage';
@@ -71,6 +72,10 @@ function onHostMessage(data: HostMsg | null | undefined): void {
   }
   if (data.type === 'wake') {
     post({ type: 'alive' });
+    return;
+  }
+  if (data.type === 'ogPlugin') {
+    document.dispatchEvent(new CustomEvent('og:host', { detail: (data as { payload?: unknown }).payload }));
     return;
   }
   if (data.type === 'pet' && data.config && typeof data.config === 'object') {
@@ -301,6 +306,7 @@ function scheduleTailPaint(): void {
     tailPaint = 0;
     patchBody(root);
     patchComposer();
+    fireOgPatch();
   });
 }
 
@@ -404,6 +410,9 @@ function render(): void {
     scrollTranscript();
     syncWorkClock();
     reflowFloating();
+    ensureOgPluginRoot();
+    syncOgUiPlugins(ui.state.ogPlugins);
+    fireOgPatch();
   } catch (error) {
     root.textContent = `Grok UI error: ${error instanceof Error ? error.message : String(error)}`;
   }
@@ -411,6 +420,7 @@ function render(): void {
 
 function boot(): void {
   (window as unknown as { __grokPrime?: () => void }).__grokPrime?.();
+  ensureOgPluginRoot();
   bindQuoteMenu();
   post({ type: 'ready' });
   post({ type: 'alive' });

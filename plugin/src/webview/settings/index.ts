@@ -16,6 +16,7 @@ import { mountSkillsBody, skillsNavRow } from './skills';
 import { mcpsNavRow, mountMcpsBody } from './mcps';
 import { agentsNavRow, mountAgentsBody } from './agents';
 import { extNavRow, mountExtBody } from './ext';
+import { mountOgPluginsBody, ogPluginsNavRow } from './ogPlugins';
 import { memoryNavRow, mountMemoryBody } from './memory';
 import { mountWorktreesBody, worktreesNavRow } from './worktrees';
 import { mountThemeBody, themeNavRow } from './theme';
@@ -53,6 +54,7 @@ export function patchSettings(parent: HTMLElement): void {
     ui.state.extTab ?? '',
     (ui.state.worktrees ?? []).map((row) => row.id).join('|'),
     (ui.state.plugins ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
+    (ui.state.ogPlugins ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
     (ui.state.hooks ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
     (ui.state.marketplace ?? []).map((row) => row.id).join('|'),
     (ui.state.workflows ?? []).map((row) => row.id).join('|'),
@@ -103,6 +105,7 @@ function mountSettings(): HTMLElement {
     page === 'agents' ||
     page === 'worktrees' ||
     page === 'extensions' ||
+    page === 'og-plugins' ||
     page === 'memory' ||
     page === 'remote' ||
     page === 'cron'
@@ -145,6 +148,10 @@ function mountSettings(): HTMLElement {
   }
   if (page === 'extensions') {
     el.append(head, mountExtBody());
+    return el;
+  }
+  if (page === 'og-plugins') {
+    el.append(head, mountOgPluginsBody());
     return el;
   }
   if (page === 'memory') {
@@ -228,6 +235,7 @@ function mountSettings(): HTMLElement {
       agentsNavRow(),
       worktreesNavRow(),
       extNavRow(),
+      ogPluginsNavRow(),
       memoryNavRow(),
       mcpsNavRow(),
       apisNavRow(),
@@ -290,6 +298,8 @@ export function settingsBackMessage(page: string): WebviewToHost {
       return { type: 'closeWorktrees' };
     case 'extensions':
       return { type: 'closeExt' };
+    case 'og-plugins':
+      return { type: 'closeSettings' };
     case 'memory':
       return { type: 'closeMemory' };
     case 'rules':
@@ -329,6 +339,9 @@ function settingsTitle(page: string): string {
   }
   if (page === 'extensions') {
     return tr('settingsExt');
+  }
+  if (page === 'og-plugins') {
+    return tr('ogPlugins');
   }
   if (page === 'memory') {
     return tr('settingsMemory');

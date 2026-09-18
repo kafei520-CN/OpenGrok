@@ -190,6 +190,7 @@ bindPlatform(platform);
 controller = new GrokController(platform);
 controller.onDidChange((state) => send({ type: 'state', state, merge: Boolean(state.mergeTranscript) }));
 controller.onDidStream((tail) => send(tail));
+controller.onDidExtraUi((payload) => send({ type: 'ogPlugin', payload }));
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
 rl.on('line', handleLine);

@@ -97,6 +97,7 @@ export type SettingsPage =
   | 'worktrees'
   | 'cron'
   | 'extensions'
+  | 'og-plugins'
   | 'memory'
   | 'remote';
 
@@ -538,6 +539,8 @@ export interface ChatState {
   mergeTranscript?: boolean;
   hideSessionPreview?: boolean;
   workspacePath?: string;
+  /** Folder bound to the current chat only; used to classify history. */
+  sessionCwd?: string;
   locale?: 'en' | 'zh-CN';
   context?: ContextUsage;
   settings?: GrokSettings;
@@ -555,6 +558,8 @@ export interface ChatState {
   agentProfile?: string;
   worktrees?: WorktreeItem[];
   plugins?: PluginItem[];
+  /** Local OpenGrok UI/host scripts from ~/.opengrok/plugins — not Grok CLI marketplace plugins. */
+  ogPlugins?: import('../ogPlugins/types').OgPluginInfo[];
   hooks?: HookItem[];
   marketplace?: MarketplacePlugin[];
   workflows?: WorkflowItem[];
@@ -752,6 +757,7 @@ export type WebviewToHost =
   | { type: 'attach' }
   | { type: 'openSettings' }
   | { type: 'pickProject' }
+  | { type: 'pickSessionProject' }
   | {
       type: 'petConfig';
       enabled?: boolean;
@@ -849,6 +855,9 @@ export type WebviewToHost =
   | { type: 'removeWorktree'; id: string }
   | { type: 'openExt' }
   | { type: 'closeExt' }
+  | { type: 'openOgPlugins' }
+  | { type: 'toggleOgPlugin'; id: string }
+  | { type: 'openOgPluginsDir' }
   | { type: 'setExtTab'; tab: 'plugins' | 'marketplace' | 'hooks' | 'workflows' }
   | { type: 'togglePlugin'; id: string }
   | { type: 'uninstallPlugin'; id: string }

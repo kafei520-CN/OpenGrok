@@ -1,8 +1,18 @@
 import { plat } from '../core/platform';
+import { dispatchOgPlugins } from '../ogPlugins/hostRuntime';
 import type { GrokController } from './controller';
 import type { WebviewToHost } from '../core/types';
 
-export async function dispatchUi(controller: GrokController, message: WebviewToHost): Promise<void> {
+export async function dispatchUi(
+  controller: GrokController,
+  message: WebviewToHost | { type: string; [key: string]: unknown },
+): Promise<void> {
+  await dispatchOgPlugins(message, async (msg) => {
+    await dispatchUiCore(controller, msg as WebviewToHost);
+  });
+}
+
+async function dispatchUiCore(controller: GrokController, message: WebviewToHost): Promise<void> {
   switch (message.type) {
     case 'ready':
       void controller.start();
@@ -188,6 +198,9 @@ export async function dispatchUi(controller: GrokController, message: WebviewToH
       await controller.attachFromUi();
       return;
     case 'pickProject':
+      return;
+    case 'pickSessionProject':
+      await controller.pickSessionProject();
       return;
     case 'openSettings':
       controller.openSettings();
@@ -392,6 +405,15 @@ export async function dispatchUi(controller: GrokController, message: WebviewToH
       return;
     case 'closeExt':
       controller.closeExt();
+      return;
+    case 'openOgPlugins':
+      controller.openOgPlugins();
+      return;
+    case 'toggleOgPlugin':
+      await controller.toggleOgPlugin(message.id);
+      return;
+    case 'openOgPluginsDir':
+      await controller.openOgPluginsDir();
       return;
     case 'setExtTab':
       controller.setExtTab(message.tab);

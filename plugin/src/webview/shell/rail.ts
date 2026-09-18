@@ -5,7 +5,6 @@ import {
   iconBack,
   iconChevron,
   iconEdit,
-  iconFolder,
   iconGear,
   iconGrid,
   iconPlug,
@@ -14,7 +13,7 @@ import {
 } from '../icons';
 import { applyAvatar } from './avatar';
 import { pinFloating, releaseByClass } from '../chrome/popover';
-import { listedSessions, sessionButton } from './sessions';
+import { listedSessions, sessionButton, setSessionsMode, workspaceOverview } from './sessions';
 import { reviewBack, reviewNav, reviewOpen, reviewSearch } from './reviewStage';
 import { openDeskTab, settingsNavItems } from './settingsStage';
 import { escapeHtml } from '../transcript/markdown';
@@ -47,7 +46,7 @@ export function patchRail(parent: HTMLElement): void {
   } else if (reviewOpen()) {
     el.append(reviewBack(), reviewSearch(), reviewNav());
   } else {
-    el.append(brand(), newChat(), nav(), projects(), recents(), footer());
+    el.append(brand(), newChat(), nav(), historyModes(), recents(), footer());
     applyRailFilter();
   }
   if (keepSearch) {
@@ -74,6 +73,8 @@ function railKey(): string {
     (ui.state.subagents ?? []).map((row) => row.id).join('|'),
     ui.state.currentSessionId ?? '',
     ui.state.workspacePath ?? '',
+    ui.state.sessionCwd ?? '',
+    ui.sessionsMode,
     ui.state.account?.email ?? '',
     String(ui.state.billing?.usagePercent ?? ''),
     ui.state.billing?.periodEnd ?? '',
@@ -257,22 +258,25 @@ function nav(): HTMLElement {
   return el;
 }
 
-function projects(): HTMLElement {
+function historyModes(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'og-section';
-  const label = document.createElement('div');
-  label.className = 'og-kicker';
-  label.textContent = tr('railProject');
-  el.append(label);
-  const project = document.createElement('button');
-  project.type = 'button';
-  const folder = ui.state.workspacePath?.trim();
-  project.className = folder ? 'og-project on' : 'og-project';
-  const name = folder ? folder.replace(/\\/g, '/').split('/').filter(Boolean).pop() : '';
-  project.innerHTML = `${iconFolder()}<span>${escapeHtml(name || tr('railNoProject'))}</span>`;
-  project.title = folder || tr('railPickProject');
-  project.addEventListener('click', () => post({ type: 'pickProject' }));
-  el.append(project);
+  const seg = document.createElement('div');
+  seg.className = 'og-set-seg og-history-seg';
+  for (const [id, key] of [
+    ['list', 'sessionsModeList'],
+    ['workspace', 'sessionsModeWorkspace'],
+  ] as const) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = tr(key);
+    if (ui.sessionsMode === id) {
+      btn.className = 'on';
+    }
+    btn.addEventListener('click', () => setSessionsMode(id));
+    seg.append(btn);
+  }
+  el.append(seg);
   return el;
 }
 
@@ -281,7 +285,7 @@ function recents(): HTMLElement {
   el.className = 'og-recents';
   const label = document.createElement('div');
   label.className = 'og-kicker';
-  label.textContent = tr('recent');
+  label.textContent = tr('railHistory');
   el.append(label, searchField());
   const rows = listedSessions().slice(0, 24);
   if (!rows.length) {
@@ -293,8 +297,14 @@ function recents(): HTMLElement {
   }
   const list = document.createElement('div');
   list.className = 'og-session-list';
-  for (const row of rows) {
-    list.append(compactSession(row));
+  if (ui.sessionsMode === 'workspace') {
+    list.append(
+      workspaceOverview(rows, ui.state.sessionCwd ?? ui.state.workspacePath, compactSession),
+    );
+  } else {
+    for (const row of rows) {
+      list.append(compactSession(row));
+    }
   }
   const miss = document.createElement('p');
   miss.id = 'og-search-empty';
@@ -336,12 +346,29 @@ function searchField(): HTMLElement {
 function applyRailFilter(): void {
   const q = railQuery.trim().toLowerCase();
   let visible = 0;
-  for (const row of document.querySelectorAll<HTMLElement>('#og-rail .og-session')) {
-    const title = row.querySelector('.session-title')?.textContent?.toLowerCase() ?? '';
-    const hide = Boolean(q) && !title.includes(q);
-    row.hidden = hide;
-    if (!hide) {
-      visible += 1;
+  for (const block of document.querySelectorAll<HTMLElement>(
+    '#og-rail .og-history-block, #og-rail .session-group',
+  )) {
+    let shown = 0;
+    for (const row of block.querySelectorAll<HTMLElement>('.og-session')) {
+      const title = row.querySelector('.session-title')?.textContent?.toLowerCase() ?? '';
+      const hide = Boolean(q) && !title.includes(q);
+      row.hidden = hide;
+      if (!hide) {
+        shown += 1;
+        visible += 1;
+      }
+    }
+    block.hidden = Boolean(q) && shown === 0;
+  }
+  if (!document.querySelector('#og-rail .og-history-block')) {
+    for (const row of document.querySelectorAll<HTMLElement>('#og-rail .og-session')) {
+      const title = row.querySelector('.session-title')?.textContent?.toLowerCase() ?? '';
+      const hide = Boolean(q) && !title.includes(q);
+      row.hidden = hide;
+      if (!hide) {
+        visible += 1;
+      }
     }
   }
   const empty = document.getElementById('og-search-empty');

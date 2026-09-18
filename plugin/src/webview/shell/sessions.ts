@@ -42,7 +42,7 @@ export function mountSessionsDrawer(parent: HTMLElement): void {
     return;
   }
   if (ui.sessionsMode === 'workspace') {
-    scroll.append(workspaceOverview(sessions));
+    scroll.append(workspaceOverview(sessions, ui.state.workspacePath));
   } else {
     for (const row of sessions) {
       scroll.append(sessionButton(row));
@@ -51,7 +51,7 @@ export function mountSessionsDrawer(parent: HTMLElement): void {
   parent.append(scroll);
 }
 
-function setSessionsMode(mode: SessionListMode): void {
+export function setSessionsMode(mode: SessionListMode): void {
   if (ui.sessionsMode === mode) {
     return;
   }
@@ -60,10 +60,14 @@ function setSessionsMode(mode: SessionListMode): void {
   render();
 }
 
-function workspaceOverview(sessions: SessionRow[]): HTMLElement {
+export function workspaceOverview(
+  sessions: SessionRow[],
+  cwd?: string,
+  rowFn: (row: SessionRow) => HTMLElement = sessionButton,
+): HTMLElement {
   const el = document.createElement('div');
   el.className = 'session-groups';
-  const groups = groupSessionsByWorkspace(sessions, ui.state.workspacePath);
+  const groups = groupSessionsByWorkspace(sessions, cwd ?? ui.state.workspacePath);
   for (const group of groups) {
     const wrap = document.createElement('details');
     wrap.className = group.current ? 'session-group current' : 'session-group';
@@ -92,10 +96,7 @@ function workspaceOverview(sessions: SessionRow[]): HTMLElement {
       path.title = group.path;
       copy.append(path);
     }
-    const count = document.createElement('span');
-    count.className = 'session-group-count';
-    count.textContent = tr('sessionsGroupCount', { n: group.sessions.length });
-    head.append(mark, copy, count);
+    head.append(mark, copy);
     if (group.current) {
       const badge = document.createElement('span');
       badge.className = 'session-group-now';
@@ -105,7 +106,7 @@ function workspaceOverview(sessions: SessionRow[]): HTMLElement {
     const body = document.createElement('div');
     body.className = 'session-group-body';
     for (const row of group.sessions) {
-      body.append(sessionButton(row));
+      body.append(rowFn(row));
     }
     wrap.append(head, body);
     el.append(wrap);
@@ -125,7 +126,7 @@ export function sessionButton(row: SessionRow): HTMLElement {
   const live = row.live
     ? `<span class="session-live" title="${escapeHtml(tr('sessionsLive'))}"></span>`
     : '';
-  open.innerHTML = `<span class="session-title">${live}${escapeHtml(row.title)}</span><span class="session-time">${escapeHtml(formatRelativeTime(loc(), row.updatedAt))}</span>`;
+  open.innerHTML = `${live}<span class="session-title">${escapeHtml(row.title)}</span><span class="session-time">${escapeHtml(formatRelativeTime(loc(), row.updatedAt))}</span>`;
   open.addEventListener('click', () =>
     post({ type: 'loadSession', sessionId: row.id, cwd: row.cwd }),
   );

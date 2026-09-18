@@ -43,6 +43,7 @@ import { mountCronBody } from '../settings/cron';
 import { mountApiFormBody, mountApisBody } from '../settings/api';
 import { mountAgentsBody } from '../settings/agents';
 import { mountExtBody } from '../settings/ext';
+import { mountOgPluginsBody } from '../settings/ogPlugins';
 import { mountMcpsBody } from '../settings/mcps';
 import { mountMemoryBody } from '../settings/memory';
 import { mountRemoteBody } from '../settings/remote';
@@ -130,6 +131,7 @@ function stageKey(tab: DeskTab): string {
     ui.state.apiEditId ?? '',
     ui.state.extTab ?? '',
     (ui.state.plugins ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
+    (ui.state.ogPlugins ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
     (ui.state.mcps ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
     ui.state.theme?.background ?? '',
     ui.state.theme?.primary ?? '',
@@ -289,7 +291,10 @@ function stackedDeck(tab: DeskTab): HTMLElement {
   body.className = 'og-set-body';
   body.append(front.body());
   sheet.append(body);
-  deck.append(tabs, layers, sheet);
+  const stack = document.createElement('div');
+  stack.className = 'og-deck-stack';
+  stack.append(layers, sheet);
+  deck.append(tabs, stack);
   return deck;
 }
 
@@ -349,7 +354,8 @@ function deckPages(tab: DeskTab): DeckPage[] {
 
 function extensionPages(): DeckPage[] {
   const items: Array<{ id: string; label: string; open: () => void }> = [
-    { id: 'extensions', label: tr('railPlugins'), open: () => post({ type: 'openExt' }) },
+    { id: 'og-plugins', label: tr('ogPlugins'), open: () => post({ type: 'openOgPlugins' }) },
+    { id: 'extensions', label: tr('settingsPlugins'), open: () => post({ type: 'openExt' }) },
     { id: 'mcps', label: tr('railMcps'), open: () => post({ type: 'openMcps' }) },
     { id: 'skills', label: tr('settingsSkills'), open: () => post({ type: 'openSkills' }) },
     { id: 'rules', label: tr('settingsRules'), open: () => post({ type: 'openRules' }) },
@@ -965,6 +971,8 @@ function cliPane(): HTMLElement {
 
 function extensionBody(page?: SettingsPage): HTMLElement {
   switch (page) {
+    case 'og-plugins':
+      return mountOgPluginsBody();
     case 'mcps':
       return mountMcpsBody();
     case 'skills':

@@ -71,6 +71,16 @@ import type { HeatmapDay } from '../billing/heatmapStats';
 import { bindPlatform, plat, type Platform } from '../core/platform';
 import { dispatchUi } from './dispatch';
 import {
+  ensureOgPluginsDir,
+  publicOgPlugins,
+  readPluginState,
+  scanOgPlugins,
+  writePluginDisabled,
+} from '../ogPlugins/scan';
+import { bindOgPostToUi, loadOgHostPlugins } from '../ogPlugins/hostRuntime';
+import type { OgPluginInfo } from '../ogPlugins/types';
+import { pathToFileURL } from 'node:url';
+import {
   buildStreamTail,
   emptyStreamCursor,
   type StreamDeltaCursor,
@@ -198,6 +208,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   agentProfile?: string;
   worktrees: WorktreeItem[] = [];
   plugins: PluginItem[] = [];
+  ogPlugins: OgPluginInfo[] = [];
   hooks: HookItem[] = [];
   marketplace: MarketplacePlugin[] = [];
   workflows: WorkflowItem[] = [];
@@ -260,6 +271,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   readonly pendingPermissions = new Map<string, PendingPermission>();
   private readonly listeners = new Set<(state: ChatState) => void>();
+  private readonly extraUi = new Set<(msg: unknown) => void>();
   private readonly streamListeners = new Set<(tail: import('../core/types').StreamTail) => void>();
   private emitTimer?: ReturnType<typeof setTimeout>;
   private streamCursor: StreamDeltaCursor = emptyStreamCursor();
@@ -297,6 +309,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (host) {
       bindPlatform(host);
     }
+    bindOgPostToUi((payload) => {
+      for (const fn of this.extraUi) {
+        fn(payload);
+      }
+    });
     this.compactMode = Boolean(plat().getState('ui.compactMode', false));
     this.timestamps = plat().getState('ui.timestamps', true);
     this.multiline = Boolean(plat().getState('ui.multiline', false));
@@ -381,6 +398,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     return { dispose: () => this.streamListeners.delete(listener) };
   }
 
+  onDidExtraUi(listener: (msg: unknown) => void): { dispose(): void } {
+    this.extraUi.add(listener);
+    return { dispose: () => this.extraUi.delete(listener) };
+  }
+
   snapshot(opts?: { messages?: 'all' | 'none' | 'tail' }): ChatState {
     const settings = readGrokSettings();
     const mode = opts?.messages ?? 'all';
@@ -412,11 +434,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       attachments: this.attachments,
       agentVersion: this.agentVersion,
       commands: this.commands,
-      sessions: overlayLiveSessions(
-        this.sessions,
-        this.currentSessionId,
-        this.status,
-        this.parked,
+      sessions: this.overlaySessionCwd(
+        overlayLiveSessions(
+          this.sessions,
+          this.currentSessionId,
+          this.status,
+          this.parked,
+        ),
       ),
       history: this.history,
       drawer: this.drawer,
@@ -432,6 +456,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       restoringSession: this.restoringSession,
       hideSessionPreview: this.hideSessionPreview,
       workspacePath: this.cwd(),
+      sessionCwd: this.sessionCwd ?? this.cwd(),
       alwaysApprove: settings.alwaysApprove,
       notify: this.notify,
       locale: uiLocale(),
@@ -451,6 +476,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       agentProfile: this.agentProfile,
       worktrees: this.worktrees,
       plugins: this.plugins,
+      ogPlugins: publicOgPlugins(this.ogPlugins),
       hooks: this.hooks,
       marketplace: this.marketplace,
       workflows: this.workflows,
@@ -1541,6 +1567,28 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
   }
 
+  async pickSessionProject(): Promise<void> {
+    const picked = await plat().openFolders({ title: tr('railPickProject') });
+    const folder = picked?.[0]?.trim();
+    if (!folder) {
+      return;
+    }
+    this.sessionCwd = folder;
+    this.emit();
+  }
+
+  private overlaySessionCwd(rows?: SessionRow[]): SessionRow[] | undefined {
+    if (!rows) {
+      return rows;
+    }
+    const cwd = this.sessionCwd?.trim();
+    const id = this.currentSessionId;
+    if (!cwd || !id) {
+      return rows;
+    }
+    return rows.map((row) => (row.id === id ? { ...row, cwd } : row));
+  }
+
   async loadSession(sessionId: string, sessionCwd?: string): Promise<void> {
     const agent = this.agent;
     if (!agent) {
@@ -2288,6 +2336,40 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   async removeWorktree(id: string): Promise<void> { await drawers.removeWorktree(this, id); }
   openExt(tab?: string): void { drawers.openExt(this, tab); }
   closeExt(): void { drawers.closeExt(this); }
+  openOgPlugins(): void {
+    this.drawer = undefined;
+    this.settingsOpen = true;
+    this.settingsPage = 'og-plugins';
+    this.emit();
+  }
+  async toggleOgPlugin(id: string): Promise<void> {
+    const home = plat().homeDir();
+    const disabled = await readPluginState(home);
+    if (disabled.has(id)) {
+      disabled.delete(id);
+    } else {
+      disabled.add(id);
+    }
+    await writePluginDisabled(home, disabled);
+    await this.reloadOgPlugins();
+  }
+  async openOgPluginsDir(): Promise<void> {
+    const dir = await ensureOgPluginsDir(plat().homeDir());
+    await plat().openExternal(pathToFileURL(dir).href);
+  }
+  private async reloadOgPlugins(): Promise<void> {
+    try {
+      this.ogPlugins = await scanOgPlugins({
+        homeDir: plat().homeDir(),
+        workspaceFolder: plat().workspaceFolders()[0],
+      });
+      await loadOgHostPlugins(this, this.ogPlugins);
+    } catch (error) {
+      logWarn(`opengrok plugins: ${error instanceof Error ? error.message : error}`);
+      this.ogPlugins = [];
+    }
+    this.emit();
+  }
   setExtTab(tab: 'plugins' | 'marketplace' | 'hooks' | 'workflows'): void { drawers.setExtTab(this, tab); }
   async togglePlugin(id: string): Promise<void> { await drawers.togglePlugin(this, id); }
   async uninstallPlugin(id: string): Promise<void> { await drawers.uninstallPlugin(this, id); }
@@ -2699,6 +2781,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private async startInner(): Promise<void> {
+    await this.reloadOgPlugins();
     const epoch = this.agentGen;
     this.error = undefined;
     if (this.messages.length === 0) {
@@ -3019,9 +3102,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const extra = this.sessionMeta();
     const wantedId = this.selectedModelId();
     const wantedEffort = this.selectedEffort();
-    const result = await agent.newSession(this.cwd(), extra);
+    const cwd = this.sessionCwd ?? this.cwd();
+    const result = await agent.newSession(cwd, extra);
     this.currentSessionId = agent.sessionId ?? result.sessionId;
-    this.sessionCwd = this.cwd();
+    this.sessionCwd = cwd;
     this.models = this.overlayModels(modelsFromResult(result));
     if (wantedId) {
       try {

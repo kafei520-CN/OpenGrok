@@ -143,8 +143,8 @@ export function tr(key: StringKey, vars?: Record<string, string | number>): stri
   return t(loc(), key, vars);
 }
 
-export function post(message: WebviewToHost): void {
-  vscode.postMessage(message);
+export function post(message: WebviewToHost | { type: string; [key: string]: unknown }): void {
+  vscode.postMessage(message as WebviewToHost);
 }
 
 /** Plugin copies via the host; remote web writes the browser device clipboard. */

@@ -10,7 +10,8 @@ import { scrollTranscript } from '../transcript';
 import { iconButton } from '../dom';
 import { pickRemoteFiles, sendBrowserFiles } from './drop';
 import { bindHoverPin, findPinned, pinFloating, releaseByClass } from './popover';
-import { iconClose, iconDown, iconExpand, iconPause, iconPlay, iconPlus, iconSendNow, iconStar, iconStop, iconTarget, iconTrash } from '../icons';
+import { iconClose, iconDown, iconExpand, iconFolder, iconPause, iconPlay, iconPlus, iconSendNow, iconStar, iconStop, iconTarget, iconTrash } from '../icons';
+import { workspaceFolderLabel } from '../../session/sessionGroups';
 import { mountOptionWheel, type OptionWheelSide } from './optionWheel';
 import { formatGoalChip, goalElapsedMs, truncateGoal } from '../../chat/goal';
 
@@ -251,15 +252,16 @@ function fillComposerBar(bar: HTMLElement, input: HTMLTextAreaElement): void {
   }
   releaseByClass('picker-menu');
   pendingBarWheel = undefined;
+  const project = projectPicker();
   const mode = modePicker();
   const model = modelEffortPicker();
   const wheel = pendingBarWheel;
   pendingBarWheel = undefined;
   if (wheel) {
-    bar.replaceChildren(plus, mode, wheel, model, contextMeter(), send);
+    bar.replaceChildren(plus, project, mode, wheel, model, contextMeter(), send);
     queueMicrotask(() => wheel.focus());
   } else {
-    bar.replaceChildren(plus, mode, model, contextMeter(), send);
+    bar.replaceChildren(plus, project, mode, model, contextMeter(), send);
   }
 }
 
@@ -281,6 +283,7 @@ function composerBarKey(): string {
     pendingEffortModel ?? '',
     ui.chosenModelId ?? '',
     ui.state.locale ?? '',
+    ui.state.sessionCwd ?? ui.state.workspacePath ?? '',
     canType() ? '1' : '0',
     (model?.available.length ?? 0).toString(),
   ].join('|');
@@ -476,6 +479,25 @@ function combinedModelEffortLabel(): string {
     'Grok';
   const effort = displayEffort(currentEffortValue(model));
   return effort ? `${name} · ${effort}` : name;
+}
+
+function projectPicker(): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'picker project';
+  wrap.addEventListener('click', (event) => event.stopPropagation());
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'picker-btn';
+  const folder = (ui.state.sessionCwd ?? ui.state.workspacePath)?.trim();
+  const name = workspaceFolderLabel(folder) || tr('railNoProject');
+  btn.title = folder || tr('railPickProject');
+  btn.innerHTML = `${iconFolder()}<span class="picker-label">${escapeHtml(name)}</span>`;
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    post({ type: 'pickSessionProject' });
+  });
+  wrap.append(btn);
+  return wrap;
 }
 
 function modePicker(): HTMLElement {
