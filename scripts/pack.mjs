@@ -24,10 +24,10 @@ function run(args, optional = false) {
 run([path.join(root, 'esbuild.mjs'), '--minify']);
 
 if (process.platform === 'darwin') {
-  run([builder, '--mac', 'dmg', 'zip', '--x64', '--arm64', '--publish', 'never']);
+  run([builder, '--mac', 'dmg', 'zip', '--x64', '--arm64', '--publish', 'never', '--config.electronVersion=37.10.3']);
 } else if (process.platform === 'linux') {
-  run([builder, '--linux', 'AppImage', '--linux', 'deb', '--linux', 'tar.gz', '--x64', '--publish', 'never']);
-  run([builder, '--linux', 'rpm', '--x64', '--publish', 'never'], true);
+  run([builder, '--linux', 'AppImage', '--linux', 'deb', '--linux', 'tar.gz', '--x64', '--publish', 'never', '--config.electronVersion=37.10.3']);
+  run([builder, '--linux', 'rpm', '--x64', '--publish', 'never', '--config.electronVersion=37.10.3'], true);
 } else {
-  run([builder, '--win', 'nsis', 'zip', '--x64', '--publish', 'never']);
+  run([builder, '--win', 'nsis', 'zip', '--x64', '--publish', 'never', '--config.electronVersion=37.10.3']);
 }

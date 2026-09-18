@@ -1,7 +1,7 @@
 {
   "name": "opengrok",
   "productName": "OpenGrok",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Desktop workbench for the Grok Build CLI",
   "author": "mckafei_CN",
   "license": "Apache-2.0",
@@ -21,6 +21,7 @@
   "build": {
     "appId": "cn.mckafei.opengrok",
     "productName": "OpenGrok",
+    "electronVersion": "37.10.3",
     "asar": true,
     "compression": "maximum",
     "electronLanguages": [
@@ -183,7 +184,7 @@
   "devDependencies": {
     "@shikijs/monaco": "^4.4.3",
     "@types/node": "^22.15.3",
-    "electron": "^37.10.3",
+    "electron": "37.10.3",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.4",
     "monaco-editor": "^0.52.2",
