@@ -42,10 +42,13 @@ export function shouldPinToBottom(opts: {
   if (opts.lightbox) {
     return false;
   }
+  if (!opts.stickToBottom) {
+    return false;
+  }
   if (!opts.force && userHeldScroll(opts.now, opts.lastUserScroll)) {
     return false;
   }
-  return opts.stickToBottom;
+  return true;
 }
 
 /** Ignore programmatic pin; otherwise record the user thumb/wheel. */

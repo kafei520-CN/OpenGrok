@@ -847,7 +847,7 @@ export function scrollTranscript(force = false): void {
   if (el.classList.contains('catching-up')) {
     return;
   }
-  if (force) {
+  if (force && ui.stickToBottom) {
     scrollState.lastUserScroll = 0;
   }
   scrollState.stickToBottom = ui.stickToBottom;
@@ -894,6 +894,8 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
   node.dataset.scrollBound = '1';
   const markUser = () => {
     scrollState.lastUserScroll = Date.now();
+    scrollState.stickToBottom = false;
+    ui.stickToBottom = false;
   };
   node.addEventListener('pointerdown', markUser, { passive: true });
   node.addEventListener('wheel', markUser, { passive: true });

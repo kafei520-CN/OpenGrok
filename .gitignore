@@ -8,3 +8,8 @@ release/
 参考文件夹
 .tmp-anthropic-skills/
 .tmp-community-skills/
+.tmp-push.bat
+.tmp-read-pdf.py
+.tmp-scan-i18n.js
+.tmp-unlock.bat
+arrange/

@@ -121,16 +121,20 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     } else if (typeof data.hydrate === 'number') {
       hydrateGen = data.hydrate;
     }
+    if (incoming.restoringSession && incoming.messages.length === 0 && ui.state.messages.length > 0) {
+      incoming.messages = ui.state.messages;
+      incoming.mergeTranscript = true;
+    }
     const resolved = resolveIncomingMessages(ui.state.messages, incoming.messages, {
-      merge: data.merge,
+      merge: data.merge || incoming.mergeTranscript,
       mergeTranscript: incoming.mergeTranscript,
       hydrate: data.hydrate,
     });
     incoming.messages = resolved.messages;
     if (resolved.skipHydrate !== undefined) {
       skipHydrate = resolved.skipHydrate;
-      incoming.restoringSession = false;
-    } else if (resolved.live) {
+    }
+    if (!incoming.restoringSession && resolved.live) {
       incoming.restoringSession = false;
     }
     if (incoming.currentSessionId !== ui.state.currentSessionId) {
@@ -174,9 +178,10 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     if (typeof data.hydrate === 'number' && data.hydrate === skipHydrate && data.prepend) {
       if (data.done) {
         ui.state.restoringSession = false;
-        ui.stickToBottom = true;
         render();
-        scrollTranscript(true);
+        if (ui.stickToBottom) {
+          scrollTranscript(true);
+        }
       }
       return;
     }
@@ -195,9 +200,10 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       return;
     }
     ui.state.restoringSession = false;
-    ui.stickToBottom = true;
     render();
-    scrollTranscript(true);
+    if (ui.stickToBottom) {
+      scrollTranscript(true);
+    }
     return;
   }
   if (data.type === 'tail' && data.message) {

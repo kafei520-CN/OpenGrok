@@ -1,7 +1,7 @@
 {
   "name": "opengrok",
   "productName": "OpenGrok",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Desktop workbench for the Grok Build CLI",
   "author": "mckafei_CN",
   "license": "Apache-2.0",
