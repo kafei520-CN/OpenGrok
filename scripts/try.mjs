@@ -47,7 +47,16 @@ function linkOrCopy(src, dest) {
 
 function stitchFromUnpacked(src) {
   console.log('using local Electron from release/win-unpacked (skip download)');
-  fs.rmSync(DEV_DIR, { recursive: true, force: true });
+  try {
+    fs.rmSync(DEV_DIR, { recursive: true, force: true });
+  } catch (error) {
+    if (usableDevElectron()) {
+      console.warn(`reuse existing .electron-dev (${error instanceof Error ? error.message : error})`);
+      writeTryAppManifest();
+      return;
+    }
+    throw error;
+  }
   fs.mkdirSync(DEV_DIR, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const from = path.join(src, entry.name);
@@ -188,6 +197,7 @@ let electronBin;
 let electronChild;
 let restarting = false;
 let restartTimer;
+let allowRestart = false;
 
 function electronEnv() {
   const env = { ...process.env, OPENGROK_TRY: '1' };
@@ -199,6 +209,10 @@ function startElectron() {
   if (!electronBin) {
     return;
   }
+  if (electronChild && electronChild.exitCode == null && !restarting) {
+    return;
+  }
+  console.log(`launching ${electronBin}`);
   electronChild = spawn(electronBin, ['.'], {
     cwd: root,
     env: electronEnv(),
@@ -214,6 +228,9 @@ function startElectron() {
 }
 
 function scheduleRestart() {
+  if (!allowRestart) {
+    return;
+  }
   clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
     restarting = true;
@@ -225,35 +242,41 @@ function scheduleRestart() {
   }, 400);
 }
 
+console.log('compiling...');
+const compiled = spawnSync(process.execPath, [path.join(root, 'esbuild.mjs')], {
+  cwd: root,
+  stdio: 'inherit',
+  env: electronEnv(),
+});
+if (compiled.status !== 0) {
+  process.exit(compiled.status ?? 1);
+}
+
 const esbuild = spawn(process.execPath, [path.join(root, 'esbuild.mjs'), '--watch'], {
   cwd: root,
-  stdio: ['ignore', 'pipe', 'inherit'],
+  stdio: 'inherit',
   env: electronEnv(),
 });
 
-let started = false;
-esbuild.stdout.on('data', (buf) => {
-  const text = String(buf);
-  process.stdout.write(text);
-  if (!started && text.includes('watching')) {
-    started = true;
-    ensureDevElectron()
-      .then((bin) => {
-        electronBin = bin;
-        startElectron();
-      })
-      .catch((error) => {
-        console.error(error);
-        process.exit(1);
-      });
-  }
-});
-
 esbuild.on('exit', (code) => {
-  if (!started) {
+  if (!electronChild) {
     process.exit(code ?? 1);
   }
 });
+
+console.log('launching...');
+ensureDevElectron()
+  .then((bin) => {
+    electronBin = bin;
+    startElectron();
+    setTimeout(() => {
+      allowRestart = true;
+    }, 2000);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 
 for (const dir of ['dist', path.join('plugin', 'dist')]) {
   const target = path.join(root, dir);

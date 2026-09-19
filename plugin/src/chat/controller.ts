@@ -1726,7 +1726,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   async refreshSessionsSilent(): Promise<void> {
     try {
       this.sessions = (await this.agent?.listRecentSessions(50)) ?? [];
-      this.emit();
+      this.publishSnapshot('none');
     } catch (error) {
       logWarn(`session list: ${error instanceof Error ? error.message : error}`);
     }
@@ -1780,7 +1780,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.compactGate = emptyCompactGate();
       agent.sessionId = sessionId;
       this.hideSessionPreview = false;
-      this.restoringSession = false;
+      this.restoringSession = true;
       this.replaying = false;
       this.revealSession();
       return;
@@ -1797,7 +1797,6 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.replaying = true;
     this.currentSessionId = sessionId;
     this.sessionCwd = cwd;
-    this.emit();
     try {
       const result = await agent.loadSession(sessionId, cwd, this.sessionMeta());
       if (op !== this.sessionOp) {
@@ -1818,8 +1817,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.parked.delete(sessionId);
       void this.refreshSessionsSilent();
       void this.journal.hydrateFromGit().then(async () => {
+        if (op !== this.sessionOp) {
+          return;
+        }
         await this.syncAllEditStats();
-        this.emit();
         this.pushEditStats();
       });
       void this.meter.refresh();
@@ -3159,13 +3160,12 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private showRestoreSpinner(sessionId: string, cwd?: string): void {
     this.currentSessionId = sessionId;
     this.sessionCwd = cwd;
-    this.messages = [];
     this.restoringSession = true;
     this.hideSessionPreview = false;
     this.streamPosted = false;
     this.streamCursor = emptyStreamCursor();
     this.status = 'ready';
-    this.publishSnapshot('all');
+    this.publishSnapshot('none');
   }
 
   /** Full transcript after a session switch, even if a background turn is still streaming. */

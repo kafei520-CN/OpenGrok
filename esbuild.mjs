@@ -77,7 +77,7 @@ copyMonaco();
 if (watch) {
   const contexts = await Promise.all(jobs.map((job) => esbuild.context(job)));
   await Promise.all(contexts.map((ctx) => ctx.watch()));
-  console.log('watching');
+  process.stdout.write('watching\n');
   await new Promise(() => {});
 } else {
   await Promise.all(jobs.map((job) => esbuild.build(job)));

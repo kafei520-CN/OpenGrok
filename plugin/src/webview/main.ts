@@ -194,7 +194,7 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       ui.state.messages = ui.state.messages.concat(batch);
     }
     if (typeof data.hydrate === 'number' && !data.done) {
-      if (ui.state.messages.length === 0) {
+      if (ui.state.restoringSession || ui.state.messages.length === 0) {
         ui.state.restoringSession = true;
       }
       return;

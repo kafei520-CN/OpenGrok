@@ -343,6 +343,29 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
+.restore-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  pointer-events: none;
+}
+
+.restore-veil .boot {
+  flex: none;
+  min-height: 0;
+  gap: 12px;
+  align-content: center;
+}
+
+.boot-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .home {
   flex: 1;
   min-height: 0;
@@ -1427,15 +1450,7 @@ textarea:focus-visible {
   flex: 1;
   display: grid;
   place-items: center;
-  align-content: center;
-  gap: 14px;
   min-height: 100%;
-}
-
-.boot-copy {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .boot-logo {

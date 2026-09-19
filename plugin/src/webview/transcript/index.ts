@@ -80,6 +80,7 @@ export function patchBody(parent: HTMLElement): void {
     }
     bindTranscriptScroll();
     pinChatIfNeeded();
+    syncRestoreVeil(body);
     return;
   }
   if (body.dataset.kind !== kind) {
@@ -89,6 +90,7 @@ export function patchBody(parent: HTMLElement): void {
     body.replaceWith(next);
     bindTranscriptScroll();
     pinChatIfNeeded();
+    syncRestoreVeil(next);
     return;
   }
   if (kind === 'chat') {
@@ -96,13 +98,32 @@ export function patchBody(parent: HTMLElement): void {
     patchPermission(body);
     patchAsk(body);
     patchErrorBanner(body);
+    syncRestoreVeil(body);
     return;
   }
   if (kind.startsWith('login') || kind.startsWith('home')) {
     const next = renderBody();
     next.id = 'grok-body';
     body.replaceWith(next);
+    syncRestoreVeil(next);
+    return;
   }
+  syncRestoreVeil(body);
+}
+
+function syncRestoreVeil(body: HTMLElement): void {
+  let veil = body.querySelector(':scope > .restore-veil') as HTMLElement | null;
+  if (!ui.state.restoringSession) {
+    veil?.remove();
+    return;
+  }
+  if (veil) {
+    return;
+  }
+  veil = document.createElement('div');
+  veil.className = 'restore-veil';
+  veil.append(bootStar(true));
+  body.append(veil);
 }
 
 function bodyKind(state: ChatState): string {
@@ -120,9 +141,6 @@ function bodyKind(state: ChatState): string {
   }
   if (state.status === 'error' && state.messages.length === 0) {
     return `error:${state.error ?? ''}`;
-  }
-  if (state.restoringSession) {
-    return 'restoring';
   }
   if (state.messages.length === 0) {
     const brand = superGrokKind(state.account, state.billing) ?? 'logo';
@@ -151,10 +169,6 @@ function fillBody(el: HTMLElement): void {
   }
   if (status === 'error' && ui.state.messages.length === 0) {
     el.append(errorCard());
-    return;
-  }
-  if (ui.state.restoringSession) {
-    el.append(bootStar());
     return;
   }
   if (ui.state.messages.length === 0) {

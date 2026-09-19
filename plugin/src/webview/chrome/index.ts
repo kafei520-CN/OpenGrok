@@ -488,17 +488,19 @@ export function loginCard(): HTMLElement {
   return card;
 }
 
-export function bootStar(): HTMLElement {
+export function bootStar(restoring = false): HTMLElement {
   const el = document.createElement('div');
-  el.className = 'boot';
-  const copy = ui.state.restoringSession ? tr('restoringTitle') : tr('startingTitle');
+  el.className = restoring ? 'boot boot-restore' : 'boot';
+  const copy = restoring ? tr('restoringTitle') : tr('startingTitle');
   el.setAttribute('role', 'status');
   el.setAttribute('aria-label', copy);
   el.innerHTML = grokBootMark();
-  const label = document.createElement('p');
-  label.className = 'boot-copy';
-  label.textContent = copy;
-  el.append(label);
+  if (restoring) {
+    const label = document.createElement('p');
+    label.className = 'boot-copy';
+    label.textContent = copy;
+    el.append(label);
+  }
   return el;
 }
 
