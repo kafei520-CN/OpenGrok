@@ -7,6 +7,19 @@ export function splitClipboardPaths(text: string): string[] {
     .filter((line) => line && looksLikeFilePath(line));
 }
 
+/** Native OS drop path from Electron `webUtils` or the legacy File.path field. */
+export function dropFilePath(
+  file: { path?: string },
+  hostPath?: string,
+): string | undefined {
+  const host = hostPath?.trim();
+  if (host) {
+    return host;
+  }
+  const native = typeof file.path === 'string' ? file.path.trim() : '';
+  return native || undefined;
+}
+
 export function clipboardToPath(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) {

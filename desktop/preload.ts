@@ -1,8 +1,15 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('opengrok', {
   post(message: unknown) {
     ipcRenderer.send('grok-ui', message);
+  },
+  filePath(file: File) {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
   },
   onHost(handler: (message: unknown) => void) {
     ipcRenderer.on('grok-host', (_event, message: unknown) => {

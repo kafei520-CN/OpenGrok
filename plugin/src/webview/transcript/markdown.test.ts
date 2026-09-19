@@ -4,6 +4,7 @@ import {
   escapeHtml,
   fileName,
   renderMarkdown,
+  shortenPath,
   safeUrl,
   splitStreamingMarkdown,
   STREAM_FORCE_COMMIT,
@@ -74,6 +75,21 @@ describe('markdown', () => {
     assert.match(html, /<td style="text-align:left"><strong>1<\/strong><\/td>/);
   });
 
+  it('turns conversation file paths into clickable filename chips', () => {
+    const html = renderMarkdown('Edit `plugin/src/foo.ts` and C:\\work\\bar.css later.');
+    assert.match(html, /class="md-file"/);
+    assert.match(html, /data-path="plugin\/src\/foo.ts"/);
+    assert.match(html, />foo\.ts<\/span>/);
+    assert.match(html, /data-path="C:\\work\\bar.css"/);
+    assert.doesNotMatch(html, /<code>plugin\/src\/foo\.ts<\/code>/);
+  });
+
+  it('does not rewrite paths inside fenced code', () => {
+    const html = renderMarkdown('```\nplugin/src/foo.ts\n```');
+    assert.match(html, /<code>plugin\/src\/foo\.ts<\/code>/);
+    assert.doesNotMatch(html, /class="md-file"/);
+  });
+
   it('renders math and chemistry formulas', () => {
     const inline = renderMarkdown('Energy $E=mc^2$ and water $\\ce{H2O}$.');
     assert.match(inline, /katex/);
@@ -101,6 +117,15 @@ describe('markdown', () => {
     assert.match(html, /and x/);
     assert.equal(safeUrl('javascript:alert(1)'), undefined);
     assert.ok(safeUrl('https://x.ai'));
+  });
+
+  it('shortens long paths like Codex, keeping the filename', () => {
+    assert.equal(shortenPath('src/a.ts'), 'src/a.ts');
+    assert.match(
+      shortenPath('src/main/java/cn/kafei/snapshot/SnapshotNavigationBridge.java', 44),
+      /SnapshotNavigationBridge\.java$/,
+    );
+    assert.match(shortenPath('src/main/java/cn/kafei/snapshot/SnapshotNavigationBridge.java', 44), /…/);
   });
 
   it('takes the basename of mixed path styles', () => {

@@ -31,7 +31,26 @@ function resolveElectron(): typeof import('electron') {
 }
 
 const APP_NAME = 'OpenGrok';
-const VERSION = app.getVersion();
+const VERSION = appVersion();
+
+function appVersion(): string {
+  const raw = app.getVersion();
+  if (/^\d+\.\d+\.\d+$/.test(raw)) {
+    return raw;
+  }
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')) as {
+      version?: string;
+    };
+    if (typeof pkg.version === 'string' && /^\d+\.\d+\.\d+/.test(pkg.version)) {
+      return pkg.version;
+    }
+  } catch {
+    /* unpackaged / missing package.json */
+  }
+  const trimmed = raw.match(/^(\d+\.\d+\.\d+)/);
+  return trimmed?.[1] ?? '0.0.0';
+}
 
 type PetState = {
   enabled: boolean;

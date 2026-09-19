@@ -19,11 +19,14 @@ export function packRemotePayload(
   if (row.type !== 'state' || !row.state || typeof row.state !== 'object') {
     return [JSON.stringify(payload)];
   }
+  const messages = Array.isArray(row.state.messages) ? row.state.messages : [];
+  if (messages.length >= 16) {
+    return mode === 'update' ? packStateUpdate(row.state, messages) : packState(row.state, messages);
+  }
   const raw = JSON.stringify(payload);
   if (byteLen(raw) <= REMOTE_STATE_SOFT) {
     return [raw];
   }
-  const messages = Array.isArray(row.state.messages) ? row.state.messages : [];
   if (messages.length === 0) {
     return [raw];
   }
@@ -87,6 +90,7 @@ function packState(state: Record<string, unknown>, messages: unknown[]): string[
           prepend: true,
           hydrate: id,
           done: i === 0,
+          sessionId: state.currentSessionId,
         }),
       );
     }
@@ -106,6 +110,7 @@ function packState(state: Record<string, unknown>, messages: unknown[]): string[
         reset: i === 0,
         hydrate: id,
         done: i === chunks.length - 1,
+        sessionId: state.currentSessionId,
       }),
     );
   }

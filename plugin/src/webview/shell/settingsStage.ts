@@ -102,6 +102,7 @@ function tabFromPage(page?: SettingsPage): DeskTab | undefined {
       return 'remote';
     case 'cron':
       return 'cron';
+    case 'og-plugins':
     case 'extensions':
     case 'mcps':
     case 'skills':
@@ -223,7 +224,7 @@ export function openDeskTab(tab: DeskTab): void {
     return;
   }
   if (tab === 'extensions') {
-    post({ type: 'openExt' });
+    post({ type: 'openOgPlugins' });
     return;
   }
   if (tab === 'remote') {
@@ -303,7 +304,11 @@ function activeDeckId(tab: DeskTab, pages: DeckPage[]): string {
     return 'providers';
   }
   if (tab === 'extensions') {
-    return ui.state.settingsPage ?? 'extensions';
+    const page = ui.state.settingsPage;
+    if (!page || page === 'main') {
+      return 'og-plugins';
+    }
+    return page;
   }
   if (tab === 'pet') {
     return ui.petTab;
@@ -952,6 +957,12 @@ function generalPane(): HTMLElement {
         Boolean(settings().alwaysApprove),
         () => post({ type: 'updateSetting', key: 'alwaysApprove', value: !settings().alwaysApprove }),
       ),
+      toggle(
+        tr('settingsTerminal'),
+        tr('settingsTerminalHint'),
+        Boolean(settings().useTerminal),
+        () => post({ type: 'updateSetting', key: 'useTerminal', value: !settings().useTerminal }),
+      ),
     ]),
   );
   return el;
@@ -993,7 +1004,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'og-set-stack';
-  const version = document.documentElement.dataset.version || '0.4.8';
+  const version = document.documentElement.dataset.version || '0.4.9';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';
   const logo = document.createElement('img');

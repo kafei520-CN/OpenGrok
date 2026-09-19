@@ -4,6 +4,7 @@ import { dispatchUi } from './dispatch';
 import { NodePlatform } from '../core/platform/nodePlatform';
 import { bindPlatform } from '../core/platform';
 import type { WebviewToHost } from '../core/types';
+import { packDelivery } from '../remote/remoteState';
 
 interface Incoming {
   type?: string;
@@ -188,7 +189,12 @@ const platform = new NodePlatform({
 
 bindPlatform(platform);
 controller = new GrokController(platform);
-controller.onDidChange((state) => send({ type: 'state', state, merge: Boolean(state.mergeTranscript) }));
+controller.onDidChange((state) => {
+  const payload = { type: 'state', state, merge: Boolean(state.mergeTranscript) };
+  for (const frame of packDelivery(payload)) {
+    process.stdout.write(`${frame}\n`);
+  }
+});
 controller.onDidStream((tail) => send(tail));
 controller.onDidExtraUi((payload) => send({ type: 'ogPlugin', payload }));
 

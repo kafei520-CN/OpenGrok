@@ -130,4 +130,48 @@ describe('attachments', () => {
     assert.equal(host.attachments[0]?.path, undefined);
     assert.equal(host.attachments[0]?.text, '# hi\n');
   });
+
+  it('keeps a pdf as a path chip, not image or utf8 text', async () => {
+    const pdf = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x00, 0x01]);
+    bindPlatform(
+      fakePlat({
+        readFile: async () => pdf,
+      }),
+    );
+    const host: AttachmentHost = { attachments: [], emit() {} };
+    await pasteClipboard(host, { uris: ['file:///E:/docs/spec.pdf'] });
+    assert.equal(host.attachments.length, 1);
+    assert.equal(host.attachments[0]?.path, 'E:/docs/spec.pdf');
+    assert.equal(host.attachments[0]?.mimeType, 'application/pdf');
+    assert.equal(host.attachments[0]?.data, undefined);
+    assert.equal(host.attachments[0]?.text, undefined);
+  });
+
+  it('attaches a folder path when readFile fails', async () => {
+    bindPlatform(
+      fakePlat({
+        readFile: async () => {
+          throw new Error('EISDIR');
+        },
+      }),
+    );
+    const host: AttachmentHost = { attachments: [], emit() {} };
+    await pasteClipboard(host, { uris: ['file:///E:/work/src'] });
+    assert.equal(host.attachments.length, 1);
+    assert.equal(host.attachments[0]?.path, 'E:/work/src');
+    assert.equal(host.attachments[0]?.label, 'src');
+    assert.equal(host.attachments[0]?.text, undefined);
+  });
+
+  it('attaches nameless binary uploads without inline text', async () => {
+    bindPlatform(fakePlat());
+    const host: AttachmentHost = { attachments: [], emit() {} };
+    await pasteClipboard(host, {
+      files: [{ name: 'scan.pdf', mimeType: 'application/pdf' }],
+    });
+    assert.equal(host.attachments.length, 1);
+    assert.equal(host.attachments[0]?.label, 'scan.pdf');
+    assert.equal(host.attachments[0]?.mimeType, 'application/pdf');
+    assert.equal(host.attachments[0]?.text, undefined);
+  });
 });

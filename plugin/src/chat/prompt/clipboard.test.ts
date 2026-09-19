@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { clipboardToPath, collectDropUris, splitClipboardPaths } from './clipboard';
+import { clipboardToPath, collectDropUris, dropFilePath, splitClipboardPaths } from './clipboard';
 
 describe('clipboard paths', () => {
   it('splits file paths from pasted text', () => {
@@ -41,6 +41,12 @@ describe('clipboard paths', () => {
     };
     const paths = collectDropUris((type) => bag[type] ?? '', ['E:\\work\\d.ts', 'E:\\work\\d.ts']);
     assert.deepEqual(paths, ['C:/work/c.ts', 'E:\\work\\d.ts']);
+  });
+
+  it('prefers the host native path for dropped files', () => {
+    assert.equal(dropFilePath({ path: 'C:\\work\\a.ts' }), 'C:\\work\\a.ts');
+    assert.equal(dropFilePath({ path: 'C:\\work\\a.ts' }, 'E:\\shots\\a.pdf'), 'E:\\shots\\a.pdf');
+    assert.equal(dropFilePath({}), undefined);
   });
 
   it('reads explorer uri-list blobs passed as extra strings', () => {

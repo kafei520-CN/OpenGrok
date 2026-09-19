@@ -38,7 +38,14 @@ export function patchRail(parent: HTMLElement): void {
   if (el.dataset.key === next) {
     return;
   }
+  const list = railListKey();
+  if (el.dataset.list === list && !ui.state.settingsOpen && !reviewOpen()) {
+    el.dataset.key = next;
+    markRailSession(el);
+    return;
+  }
   el.dataset.key = next;
+  el.dataset.list = list;
   el.replaceChildren();
   el.classList.remove('og-rail-dash');
   if (ui.state.settingsOpen) {
@@ -59,9 +66,13 @@ export function patchRail(parent: HTMLElement): void {
 }
 
 function railKey(): string {
+  return `${railListKey()}~${ui.state.currentSessionId ?? ''}`;
+}
+
+function railListKey(): string {
   const sessions = listedSessions()
     .slice(0, 24)
-    .map((row) => `${row.id}:${row.title}:${row.updatedAt}:${row.live ? '1' : '0'}`)
+    .map((row) => `${row.id}:${row.title}:${row.updatedAt}:${row.runState ?? (row.live ? 'running' : '')}`)
     .join('|');
   return [
     ui.state.locale ?? 'en',
@@ -71,7 +82,6 @@ function railKey(): string {
     ui.state.drawer ?? '',
     (ui.state.roster ?? []).map((row) => `${row.id}:${row.activity}:${row.title}`).join('|'),
     (ui.state.subagents ?? []).map((row) => row.id).join('|'),
-    ui.state.currentSessionId ?? '',
     ui.state.workspacePath ?? '',
     ui.state.sessionCwd ?? '',
     ui.sessionsMode,
@@ -80,6 +90,13 @@ function railKey(): string {
     ui.state.billing?.periodEnd ?? '',
     sessions,
   ].join('~');
+}
+
+function markRailSession(el: HTMLElement): void {
+  const id = ui.state.currentSessionId;
+  for (const row of el.querySelectorAll<HTMLElement>('.session-row')) {
+    row.classList.toggle('active', row.dataset.sid === id);
+  }
 }
 
 function brand(): HTMLElement {
@@ -230,7 +247,7 @@ function nav(): HTMLElement {
       icon: iconPlug(),
       run: () => {
         ui.deskTab = 'extensions';
-        post({ type: 'openExt' });
+        post({ type: 'openOgPlugins' });
       },
     },
     {
@@ -563,7 +580,17 @@ function activePage(): RailPage {
   if (!ui.state.settingsOpen) {
     return 'chat';
   }
-  if (ui.state.settingsPage === 'extensions') {
+  if (
+    ui.deskTab === 'extensions' ||
+    ui.state.settingsPage === 'og-plugins' ||
+    ui.state.settingsPage === 'extensions' ||
+    ui.state.settingsPage === 'mcps' ||
+    ui.state.settingsPage === 'skills' ||
+    ui.state.settingsPage === 'rules' ||
+    ui.state.settingsPage === 'memory' ||
+    ui.state.settingsPage === 'worktrees' ||
+    ui.state.settingsPage === 'agents'
+  ) {
     return 'plugins';
   }
   return 'config';

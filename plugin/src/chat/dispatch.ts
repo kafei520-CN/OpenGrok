@@ -165,7 +165,7 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
       controller.closeDrawer();
       return;
     case 'loadSession':
-      await controller.loadSession(message.sessionId, message.cwd);
+      void controller.loadSession(message.sessionId, message.cwd);
       return;
     case 'renameSession':
       await controller.renameListedSession(message.sessionId);
@@ -455,7 +455,7 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
       await controller.flushMemory();
       return;
     case 'switchRosterSession':
-      await controller.loadSession(message.sessionId, message.cwd);
+      void controller.loadSession(message.sessionId, message.cwd);
       return;
     case 'stopRosterSession':
       controller.stopRosterSession(message.sessionId);

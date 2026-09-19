@@ -1,9 +1,11 @@
 import { plat } from '../../core/platform';
 import type { Attachment, ContentBlock } from '../../core/types';
+import { wrapUpPromptBlock } from './wrapUp';
 
 export async function buildPromptBlocks(
   text: string,
   attachments: Attachment[],
+  opts?: { wrapUp?: boolean },
 ): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = [];
   if (text.trim()) {
@@ -29,17 +31,25 @@ export async function buildPromptBlocks(
       });
       continue;
     }
+    const mime = attachment.mimeType ?? (attachment.path ? undefined : 'text/plain');
     blocks.push({
       type: 'resource',
+      mimeType: mime,
+      data: attachment.data,
+      name: attachment.label,
+      path: attachment.path,
       resource: {
         uri: attachment.path ? `file://${attachment.path}` : `attachment:${attachment.id}`,
-        mimeType: attachment.mimeType ?? 'text/plain',
+        mimeType: mime ?? 'application/octet-stream',
         text: attachment.text ?? attachment.label,
       },
     });
   }
   if (blocks.length === 0) {
     blocks.push({ type: 'text', text: text || '(attachment)' });
+  }
+  if (opts?.wrapUp) {
+    blocks.push(wrapUpPromptBlock());
   }
   return blocks;
 }

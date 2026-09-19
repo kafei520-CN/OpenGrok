@@ -5,13 +5,16 @@ import {
   SWITCH_TO_AGENT_ID,
   askModeBlocksMutation,
   cancelledPermission,
+  denyTerminalPermission,
   isEditToolKind,
+  isTerminalToolKind,
   permissionLabelKey,
   pickAllowOption,
   selectedPermission,
   sessionPermissionMeta,
   settlePending,
   shouldAutoApprove,
+  shouldDenyTerminal,
 } from './index';
 
 describe('permissions', () => {
@@ -33,13 +36,15 @@ describe('permissions', () => {
   it('auto-approves edits in acceptEdits and everything in auto/yolo', () => {
     const ask = { alwaysApprove: false, permissionMode: 'ask' as const };
     const edits = { alwaysApprove: false, permissionMode: 'acceptEdits' as const };
-    const auto = { alwaysApprove: false, permissionMode: 'auto' as const };
-    const yolo = { alwaysApprove: true, permissionMode: 'ask' as const };
+    const auto = { alwaysApprove: false, permissionMode: 'auto' as const, useTerminal: true };
+    const yolo = { alwaysApprove: true, permissionMode: 'ask' as const, useTerminal: true };
     assert.equal(shouldAutoApprove(ask, 'edit'), false);
     assert.equal(shouldAutoApprove(edits, 'edit'), true);
     assert.equal(shouldAutoApprove(edits, 'execute'), false);
     assert.equal(shouldAutoApprove(auto, 'execute'), true);
     assert.equal(shouldAutoApprove(yolo, 'execute'), true);
+    assert.equal(shouldAutoApprove({ ...auto, useTerminal: false }, 'execute'), false);
+    assert.equal(shouldAutoApprove({ ...auto, useTerminal: false }, 'read'), true);
     assert.equal(shouldAutoApprove(yolo, 'edit', 'ask'), false);
     assert.equal(shouldAutoApprove(auto, 'execute', 'ask'), false);
     assert.equal(shouldAutoApprove(yolo, 'read', 'ask'), true);
@@ -49,6 +54,29 @@ describe('permissions', () => {
     assert.equal(askModeBlocksMutation('ask', 'execute'), true);
     assert.equal(askModeBlocksMutation('ask', 'read'), false);
     assert.equal(askModeBlocksMutation('default', 'edit'), false);
+  });
+
+  it('denies terminal tools when the switch is off', () => {
+    assert.equal(isTerminalToolKind('execute'), true);
+    assert.equal(isTerminalToolKind('read', 'run_terminal_cmd'), true);
+    assert.equal(shouldDenyTerminal({ useTerminal: false }, 'execute'), true);
+    assert.equal(shouldDenyTerminal({ useTerminal: true }, 'execute'), false);
+    const denied = denyTerminalPermission(
+      { useTerminal: false },
+      {
+        toolKind: 'execute',
+        title: 'bash',
+        options: [
+          { optionId: 'yes', name: 'Allow', kind: 'allow_once' },
+          { optionId: 'no', name: 'Reject', kind: 'reject_once' },
+        ],
+      },
+    );
+    assert.deepEqual(denied, selectedPermission('no'));
+    assert.equal(
+      denyTerminalPermission({ useTerminal: true }, { toolKind: 'execute', options: [] }),
+      undefined,
+    );
   });
 
   it('settles every waiter with a cancelled outcome', () => {

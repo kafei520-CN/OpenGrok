@@ -1,4 +1,4 @@
-import { collectDropUris } from '../../chat/prompt/clipboard';
+import { collectDropUris, dropFilePath } from '../../chat/prompt/clipboard';
 import { post, root, tr } from '../app';
 
 const IMAGE_MAX = 4 * 1024 * 1024;
@@ -31,10 +31,13 @@ export async function sendBrowserFiles(
   extra?: { text?: string; uris?: string[] },
 ): Promise<void> {
   const images: Array<{ name: string; mimeType: string; data: string }> = [];
-  const files: Array<{ name: string; mimeType?: string; text?: string }> = [];
+  const files: Array<{ name: string; mimeType?: string; text?: string; data?: string }> = [];
   for (const file of list) {
+    const name = file.name || 'file';
+    const mime = file.type || mimeFromName(name);
     if (file.type.startsWith('image/')) {
       if (file.size > IMAGE_MAX) {
+        files.push({ name, mimeType: mime });
         continue;
       }
       const buf = new Uint8Array(await file.arrayBuffer());
@@ -45,17 +48,26 @@ export async function sendBrowserFiles(
       });
       continue;
     }
-    if (file.size > TEXT_MAX) {
+    let buf = new Uint8Array();
+    try {
+      buf = new Uint8Array(await file.arrayBuffer());
+    } catch {
+      files.push({ name, mimeType: mime });
       continue;
     }
-    const buf = new Uint8Array(await file.arrayBuffer());
-    if (buf.includes(0)) {
+    const textLike = buf.length > 0 && buf.length <= TEXT_MAX && !buf.includes(0);
+    if (textLike) {
+      files.push({
+        name,
+        mimeType: mime,
+        text: new TextDecoder('utf-8', { fatal: false }).decode(buf),
+      });
       continue;
     }
     files.push({
-      name: file.name || 'file.txt',
-      mimeType: file.type || undefined,
-      text: new TextDecoder('utf-8', { fatal: false }).decode(buf),
+      name,
+      mimeType: mime,
+      data: buf.length > 0 && buf.length <= IMAGE_MAX ? bytesToBase64(buf) : undefined,
     });
   }
   if (images.length === 0 && files.length === 0 && !extra?.uris?.length && !extra?.text) {
@@ -163,13 +175,33 @@ function isFileDrag(data: DataTransfer | null): boolean {
 async function sendDrop(data: DataTransfer): Promise<void> {
   const extra: string[] = [];
   const browser: File[] = [];
-  for (const file of [...data.files]) {
-    const nativePath = (file as File & { path?: string }).path;
-    if (nativePath) {
-      extra.push(nativePath);
-      continue;
+  const seen = new Set<string>();
+  const take = (file: File | null | undefined) => {
+    if (!file) {
+      return;
     }
+    const nativePath = dropFilePath(file as File & { path?: string }, hostFilePath(file));
+    if (nativePath) {
+      if (!seen.has(nativePath)) {
+        seen.add(nativePath);
+        extra.push(nativePath);
+      }
+      return;
+    }
+    const key = `name:${file.name}:${file.size}:${file.type}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
     browser.push(file);
+  };
+  for (const file of [...data.files]) {
+    take(file);
+  }
+  for (const item of [...data.items]) {
+    if (item.kind === 'file') {
+      take(item.getAsFile());
+    }
   }
   extra.push(...(await readItemStrings(data)));
   const uris = collectDropUris(
@@ -184,6 +216,23 @@ async function sendDrop(data: DataTransfer): Promise<void> {
     Array.from(data.types),
   );
   await sendBrowserFiles(browser, { uris });
+}
+
+function hostFilePath(file: File): string {
+  const api = (window as unknown as { opengrok?: { filePath?: (next: File) => string } }).opengrok;
+  try {
+    return api?.filePath?.(file)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function mimeFromName(name: string): string | undefined {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext === 'pdf') {
+    return 'application/pdf';
+  }
+  return undefined;
 }
 
 async function readItemStrings(data: DataTransfer): Promise<string[]> {

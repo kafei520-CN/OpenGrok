@@ -5,6 +5,7 @@ import {
   askModeBlocksMutation,
   askModeGateOptions,
   cancelledPermission,
+  denyTerminalPermission,
   pickAllowOption,
   selectedPermission,
   settlePending,
@@ -184,7 +185,11 @@ export function abortClientRpcs(host: ReverseHost, reason: 'cancel' | 'replace')
 export async function requestToolPermission(host: ReverseHost, params: unknown): Promise<unknown> {
   const parsed = parsePermissionOptions(params);
   const settings = readGrokSettings();
-  if (shouldAutoApprove(settings, parsed.toolKind, host.modeId)) {
+  const denied = denyTerminalPermission(settings, parsed);
+  if (denied !== undefined) {
+    return denied;
+  }
+  if (shouldAutoApprove(settings, parsed.toolKind, host.modeId, parsed.title)) {
     const allow = pickAllowOption(parsed.options);
     if (allow) {
       return selectedPermission(allow.optionId);

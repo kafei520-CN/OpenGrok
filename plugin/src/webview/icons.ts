@@ -1,3 +1,7 @@
+export function iconCompress(): string {
+  return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3.2h10M3 12.8h10M8 5.2 5.5 7.6h5L8 5.2zM8 10.8 5.5 8.4h5L8 10.8z"/></svg>';
+}
+
 export function iconClock(): string {
   return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>';
 }
@@ -99,6 +103,10 @@ export function iconFolder(): string {
   return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2.4 4.6h4.1l1.3 1.5h5.8v6.7H2.4z"/><path d="M2.4 6.1h11.2"/></svg>';
 }
 
+export function iconFile(size = '12'): string {
+  return `<svg class="md-file-icon" viewBox="0 0 16 16" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true"><path d="M4.2 2.4h5.2L12 5.1v8.5H4.2z"/><path d="M9.3 2.4V5h2.6"/></svg>`;
+}
+
 export function iconTrash(): string {
   return '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M3.5 4.5h9M6.2 4.5V3.4h3.6v1.1M5.2 6.2v6.2M8 6.2v6.2M10.8 6.2v6.2M4.4 4.5l.6 8.4h6l.6-8.4"/></svg>';
 }
@@ -173,6 +181,8 @@ export function toolIcon(kind?: string): string {
       return iconSearch();
     case 'delete':
       return '⌫';
+    case 'compact':
+      return iconCompress();
     default:
       return '⚙';
   }

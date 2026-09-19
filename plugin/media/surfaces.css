@@ -179,10 +179,20 @@ html.opengrok #app[data-surface='endfield'] #grok-frost {
 #app[data-surface='endfield'] .picker-btn,
 #app[data-surface='endfield'] .btn:not(.primary),
 #app[data-surface='endfield'] .seg,
-#app[data-surface='endfield'] .change-chip {
+#app[data-surface='endfield'] .change-chip,
+#app[data-surface='endfield'] .tool-term {
   border-radius: 2px;
   border: 1px solid color-mix(in srgb, var(--endfield-yellow) 22%, transparent);
   background: color-mix(in srgb, var(--endfield-ink) 70%, transparent);
+}
+
+#app[data-surface='endfield'] .tool-term > summary {
+  color: var(--endfield-white);
+  background: color-mix(in srgb, var(--endfield-yellow) 8%, transparent);
+}
+
+#app[data-surface='endfield'] .term-prompt {
+  color: var(--endfield-yellow);
 }
 
 #app[data-surface='endfield'] .btn.primary,

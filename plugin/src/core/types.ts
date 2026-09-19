@@ -335,6 +335,8 @@ export interface MemoryFile {
   scope: 'global' | 'workspace';
 }
 
+export type SessionRunState = 'running' | 'done' | 'stopped';
+
 export interface SessionRow {
   id: string;
   title: string;
@@ -346,6 +348,8 @@ export interface SessionRow {
   numMessages?: number;
   /** True when this session still has a turn running in the background. */
   live?: boolean;
+  /** History-list status: running yellow, unread-complete green, interrupted red. Idle rows omit this. */
+  runState?: SessionRunState;
 }
 
 export interface MediaItem {
@@ -415,12 +419,16 @@ export interface ChatMessage {
   endedAt?: string;
   /** `null` on a stream tail means the retry/error card was cleared. */
   error?: TurnError | null;
+  /** User or host stopped this assistant turn before it finished. */
+  stopped?: boolean;
   /** Catalog id at the time this assistant turn started. */
   modelId?: string;
   /** Picker display name for that model. */
   modelName?: string;
   /** Reasoning effort sent with this turn. */
   effort?: string;
+  /** Host compact card: auto prefire vs /compact. */
+  compact?: 'auto' | 'manual';
 }
 
 export interface PermissionOption {
@@ -472,6 +480,8 @@ export interface GrokSettings {
   permissionMode: 'ask' | 'auto' | 'acceptEdits';
   includeSelectionOnSend: boolean;
   alwaysApprove: boolean;
+  /** Allow execute / terminal / shell tools. Off by default. */
+  useTerminal: boolean;
   locale: 'auto' | 'en' | 'zh-CN';
   /** Play a chime when a turn finishes or is interrupted. */
   notifySound: boolean;
@@ -486,6 +496,7 @@ export const DEFAULT_SETTINGS: GrokSettings = {
   permissionMode: 'ask',
   includeSelectionOnSend: true,
   alwaysApprove: false,
+  useTerminal: false,
   locale: 'auto',
   notifySound: true,
   termEncoding: 'utf-8',
@@ -895,7 +906,7 @@ export type WebviewToHost =
       text?: string;
       uris?: string[];
       images?: Array<{ name: string; mimeType: string; data: string }>;
-      files?: Array<{ name: string; mimeType?: string; text?: string }>;
+      files?: Array<{ name: string; mimeType?: string; text?: string; data?: string }>;
     }
   | { type: 'undoEdits'; messageId?: string }
   | { type: 'reviewEdits'; messageId?: string; path?: string }

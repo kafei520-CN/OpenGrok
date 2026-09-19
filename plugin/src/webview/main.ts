@@ -50,6 +50,7 @@ type HostMsg = {
   prepend?: boolean;
   reset?: boolean;
   done?: boolean;
+  sessionId?: string;
   items?: EditStatsItem[];
   config?: {
     enabled?: boolean;
@@ -112,10 +113,13 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     return;
   }
   if (data.type === 'state' && data.state) {
-    if (typeof data.hydrate === 'number') {
+    const incoming = normalizeState(data.state);
+    if (incoming.currentSessionId !== ui.state.currentSessionId) {
+      hydrateGen = typeof data.hydrate === 'number' ? data.hydrate : hydrateGen + 1;
+      skipHydrate = 0;
+    } else if (typeof data.hydrate === 'number') {
       hydrateGen = data.hydrate;
     }
-    const incoming = normalizeState(data.state);
     const resolved = resolveIncomingMessages(ui.state.messages, incoming.messages, {
       merge: data.merge,
       mergeTranscript: incoming.mergeTranscript,
@@ -131,6 +135,7 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     if (incoming.currentSessionId !== ui.state.currentSessionId) {
       ui.chosenModelId = undefined;
       ui.chosenEffort = undefined;
+      ui.stickToBottom = true;
     }
     if (ui.review) {
       incoming.settingsOpen = false;
@@ -159,6 +164,9 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     return;
   }
   if (data.type === 'messages') {
+    if (data.sessionId && ui.state.currentSessionId && data.sessionId !== ui.state.currentSessionId) {
+      return;
+    }
     if (typeof data.hydrate === 'number' && data.hydrate !== hydrateGen) {
       return;
     }
@@ -498,6 +506,12 @@ function boot(): void {
     }
   });
   document.addEventListener('click', (event) => {
+    const filePath = filePathFromEvent(event);
+    if (filePath) {
+      event.preventDefault();
+      post({ type: 'openFile', path: filePath });
+      return;
+    }
     const href = hrefFromEvent(event);
     if (href) {
       event.preventDefault();
@@ -545,6 +559,19 @@ function syncDesktopChrome(): void {
   const raw = document.getElementById('app')?.dataset.surface;
   const surface = raw === 'solid' || raw === 'endfield' || raw === 'glass' ? raw : 'glass';
   host?.setChrome?.({ background, foreground, surface });
+}
+
+function filePathFromEvent(event: MouseEvent): string | undefined {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return undefined;
+  }
+  const link = target.closest('.md-file');
+  if (!(link instanceof HTMLElement)) {
+    return undefined;
+  }
+  const path = link.dataset.path?.trim();
+  return path || undefined;
 }
 
 function hrefFromEvent(event: MouseEvent): string | undefined {

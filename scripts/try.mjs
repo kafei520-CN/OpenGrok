@@ -10,29 +10,165 @@ process.env.OPENGROK_TRY = '1';
 
 const require = createRequire(import.meta.url);
 const DEV_DIR = path.join(root, '.electron-dev');
+const exeName = process.platform === 'win32' ? 'electron.exe' : 'electron';
+
+function devElectronBin() {
+  return path.join(DEV_DIR, exeName);
+}
+
+function usableDevElectron() {
+  const bin = devElectronBin();
+  if (!fs.existsSync(bin)) {
+    return false;
+  }
+  if (fs.existsSync(path.join(DEV_DIR, 'resources', 'app.asar'))) {
+    return false;
+  }
+  return true;
+}
+
+function unpackedRuntime() {
+  if (process.platform !== 'win32') {
+    return undefined;
+  }
+  const dir = path.join(root, 'release', 'win-unpacked');
+  const exe = path.join(dir, 'OpenGrok.exe');
+  return fs.existsSync(exe) ? dir : undefined;
+}
+
+function linkOrCopy(src, dest) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  try {
+    fs.linkSync(src, dest);
+  } catch {
+    fs.copyFileSync(src, dest);
+  }
+}
+
+function stitchFromUnpacked(src) {
+  console.log('using local Electron from release/win-unpacked (skip download)');
+  fs.rmSync(DEV_DIR, { recursive: true, force: true });
+  fs.mkdirSync(DEV_DIR, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, entry.name);
+    if (entry.name === 'OpenGrok.exe') {
+      linkOrCopy(from, path.join(DEV_DIR, 'electron.exe'));
+      continue;
+    }
+    if (entry.name === 'resources') {
+      continue;
+    }
+    const to = path.join(DEV_DIR, entry.name);
+    if (entry.isDirectory()) {
+      fs.cpSync(from, to, { recursive: true });
+    } else {
+      linkOrCopy(from, to);
+    }
+  }
+  writeTryAppManifest();
+}
+
+function writeTryAppManifest() {
+  const appDir = path.join(DEV_DIR, 'resources', 'app');
+  fs.mkdirSync(appDir, { recursive: true });
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  fs.writeFileSync(
+    path.join(appDir, 'package.json'),
+    `${JSON.stringify(
+      { name: 'opengrok', version: String(pkg.version || '0.0.0'), main: '../../../dist/main.js' },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+function electronZipName(version) {
+  return `electron-v${version}-${process.platform}-${process.arch}.zip`;
+}
+
+function electronZipUrls(version) {
+  const file = electronZipName(version);
+  const envMirror = String(process.env.ELECTRON_MIRROR || process.env.npm_config_electron_mirror || '')
+    .trim()
+    .replace(/\/?$/, '/');
+  const urls = [
+    `https://cdn.npmmirror.com/binaries/electron/v${version}/${file}`,
+    `https://npmmirror.com/mirrors/electron/v${version}/${file}`,
+    `https://github.com/electron/electron/releases/download/v${version}/${file}`,
+  ];
+  if (envMirror) {
+    urls.unshift(`${envMirror}v${version}/${file}`);
+  }
+  return [...new Set(urls)];
+}
+
+function downloadZip(url, dest) {
+  const curl = process.platform === 'win32' ? 'curl.exe' : 'curl';
+  console.log(`downloading ${url}`);
+  const result = spawnSync(
+    curl,
+    ['-L', '--fail', '--retry', '2', '--connect-timeout', '20', '--max-time', '300', '-o', dest, url],
+    { stdio: 'inherit' },
+  );
+  return result.status === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 1_000_000;
+}
+
+async function downloadOfficialElectron(version) {
+  const extract = require('extract-zip');
+  const cacheDir = path.join(root, '.electron-dev-cache');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const zipPath = path.join(cacheDir, electronZipName(version));
+  if (!(fs.existsSync(zipPath) && fs.statSync(zipPath).size > 1_000_000)) {
+    let got = false;
+    for (const url of electronZipUrls(version)) {
+      try {
+        if (downloadZip(url, zipPath)) {
+          got = true;
+          break;
+        }
+      } catch (error) {
+        console.warn(String(error));
+      }
+      try {
+        fs.unlinkSync(zipPath);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!got) {
+      throw new Error(
+        `Could not download Electron ${version}. Set ELECTRON_MIRROR or unpack a build under release/win-unpacked.`,
+      );
+    }
+  }
+  fs.rmSync(DEV_DIR, { recursive: true, force: true });
+  fs.mkdirSync(DEV_DIR, { recursive: true });
+  await extract(zipPath, { dir: DEV_DIR });
+}
 
 async function ensureDevElectron() {
-  const exe = process.platform === 'win32' ? 'electron.exe' : 'electron';
-  const bin = path.join(DEV_DIR, exe);
-  const packaged = path.join(DEV_DIR, 'resources', 'app.asar');
-  if (fs.existsSync(bin) && !fs.existsSync(packaged)) {
+  const bin = devElectronBin();
+  if (usableDevElectron()) {
+    writeTryAppManifest();
     return bin;
   }
-  fs.mkdirSync(DEV_DIR, { recursive: true });
+  const local = unpackedRuntime();
+  if (local) {
+    stitchFromUnpacked(local);
+    if (!fs.existsSync(bin)) {
+      throw new Error(`local Electron stitch missed ${exeName}`);
+    }
+    return bin;
+  }
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  const version = String(pkg.devDependencies?.electron || pkg.dependencies?.electron || '37.10.3').replace(/^[^\d]*/, '');
-  const { downloadArtifact } = require('@electron/get');
-  const extract = require('extract-zip');
+  const version = String(pkg.devDependencies?.electron || pkg.dependencies?.electron || '37.10.3').replace(
+    /^[^\d]*/,
+    '',
+  );
   console.log(`downloading electron ${version} for try...`);
-  const zip = await downloadArtifact({
-    version,
-    artifactName: 'electron',
-    platform: process.platform,
-    arch: process.arch,
-  });
-  await extract(zip, { dir: DEV_DIR });
+  await downloadOfficialElectron(version);
   if (!fs.existsSync(bin)) {
-    throw new Error(`electron ${version} extract missed ${exe}`);
+    throw new Error(`electron ${version} extract missed ${exeName}`);
   }
   return bin;
 }
@@ -53,13 +189,19 @@ let electronChild;
 let restarting = false;
 let restartTimer;
 
+function electronEnv() {
+  const env = { ...process.env, OPENGROK_TRY: '1' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  return env;
+}
+
 function startElectron() {
   if (!electronBin) {
     return;
   }
   electronChild = spawn(electronBin, ['.'], {
     cwd: root,
-    env: { ...process.env, OPENGROK_TRY: '1', ELECTRON_RUN_AS_NODE: '' },
+    env: electronEnv(),
     stdio: 'inherit',
     windowsHide: false,
   });
@@ -86,7 +228,7 @@ function scheduleRestart() {
 const esbuild = spawn(process.execPath, [path.join(root, 'esbuild.mjs'), '--watch'], {
   cwd: root,
   stdio: ['ignore', 'pipe', 'inherit'],
-  env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
+  env: electronEnv(),
 });
 
 let started = false;

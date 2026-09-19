@@ -68,6 +68,7 @@ describe('i18n', () => {
   it('labels collapsed tool kinds', () => {
     assert.equal(toolKindLabel('en', 'read'), 'Read');
     assert.equal(toolKindLabel('zh-CN', 'execute'), '终端');
+    assert.equal(toolKindLabel('zh-CN', 'compact'), '压缩');
   });
 
   it('formats elapsed work time', () => {

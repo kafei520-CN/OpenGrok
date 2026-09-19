@@ -94,13 +94,16 @@ export function patchComposer(): void {
     releaseByClass('ctx-tip');
     pendingEffortModel = undefined;
   }
+  if (!slashCommandsEnabled() && ui.menu === 'slash') {
+    ui.menu = undefined;
+  }
   const menuSlot = document.getElementById('composer-menu-slot');
-  const nextMenuKey = `${ui.menu ?? ''}:${ui.draft}:${(ui.state.fileHits ?? []).length}`;
+  const nextMenuKey = `${ui.menu ?? ''}:${ui.draft}:${(ui.state.fileHits ?? []).length}:${slashCommandsEnabled() ? '1' : '0'}`;
   if (menuSlot && nextMenuKey !== menuKey) {
     menuKey = nextMenuKey;
     menuSlot.replaceChildren();
     releaseByClass('menu');
-    if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'slash') {
+    if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'slash' && slashCommandsEnabled()) {
       pinComposerMenu(slashMenu(), input);
     } else if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'files') {
       pinComposerMenu(fileMenu(), input);
@@ -176,7 +179,7 @@ function bindComposerInput(input: HTMLTextAreaElement): void {
     ui.draft = input.value;
     autosize(input);
     const last = ui.draft.split(/\s+/).pop() ?? '';
-    if (last.startsWith('/')) {
+    if (last.startsWith('/') && slashCommandsEnabled()) {
       ui.menu = 'slash';
       ui.picker = undefined;
       render();
@@ -746,12 +749,15 @@ function pinComposerMenu(el: HTMLElement, input: HTMLElement): void {
   });
 }
 
+function slashCommandsEnabled(): boolean {
+  return Boolean(ui.state.settings?.useTerminal);
+}
+
 function slashMenu(): HTMLElement {
   const query = (ui.draft.split(/\s+/).pop() ?? '').replace(/^\//, '');
-  const hits = filterCommands(
-    ui.state.commands.length ? ui.state.commands : FALLBACK_COMMANDS,
-    query,
-  );
+  const hits = slashCommandsEnabled()
+    ? filterCommands(ui.state.commands.length ? ui.state.commands : FALLBACK_COMMANDS, query)
+    : [];
   const el = document.createElement('div');
   el.className = 'menu composer-suggest';
   el.addEventListener('click', (event) => event.stopPropagation());
@@ -1249,7 +1255,7 @@ export function patchJumpBottom(): void {
 }
 
 function ensureJumpBottom(): HTMLButtonElement | null {
-  const host = document.getElementById('grok-body');
+  const host = document.getElementById('composer-wrap');
   let el = document.getElementById('jump-bottom') as HTMLButtonElement | null;
   if (!host) {
     return el;
@@ -1261,9 +1267,9 @@ function ensureJumpBottom(): HTMLButtonElement | null {
     el.className = 'jump-bottom';
     el.hidden = true;
     el.addEventListener('click', jumpToLatest);
-    host.append(el);
-  } else if (el.parentElement !== host) {
-    host.append(el);
+    host.prepend(el);
+  } else if (el.parentElement !== host || host.firstElementChild !== el) {
+    host.prepend(el);
   }
   return el;
 }

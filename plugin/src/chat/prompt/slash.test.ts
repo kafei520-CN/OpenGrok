@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { classifySlash, filterCommands, parseSlash, promptModeMeta, resolveAlias } from './slash';
+import {
+  classifySlash,
+  filterCommands,
+  isSlashCommandInput,
+  parseSlash,
+  promptModeMeta,
+  resolveAlias,
+} from './slash';
 
 describe('slash routing', () => {
   it('parses command and args', () => {
@@ -26,6 +33,13 @@ describe('slash routing', () => {
     assert.equal(classifySlash('/memory').kind, 'memory');
     assert.equal(classifySlash('/view-plan').kind, 'viewPlan');
     assert.equal(classifySlash('/plugins').kind, 'extensions');
+  });
+
+  it('detects slash command input', () => {
+    assert.equal(isSlashCommandInput('/compact'), true);
+    assert.equal(isSlashCommandInput('/banner-design foo'), true);
+    assert.equal(isSlashCommandInput('hello'), false);
+    assert.equal(isSlashCommandInput('/'), false);
   });
 
   it('passes agent-owned commands through', () => {

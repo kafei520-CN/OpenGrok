@@ -2784,8 +2784,20 @@ html.opengrok #app[data-surface='glass'] .home {
   padding-bottom: 168px;
 }
 
+html.opengrok #app[data-surface='glass']:has(.jump-bottom:not([hidden])) .transcript,
+html.opengrok #app[data-surface='glass']:has(.jump-bottom:not([hidden])) .home {
+  padding-bottom: 212px;
+}
+
+html.opengrok .composer-wrap > .jump-bottom,
 html.opengrok #app[data-surface='glass'] .jump-bottom {
-  bottom: 132px;
+  position: relative;
+  left: auto;
+  bottom: auto;
+  width: 36px;
+  max-width: 36px;
+  margin: 0 0 8px;
+  overflow: visible;
 }
 
 html.opengrok #app.ws-on[data-surface='glass'] #composer-wrap,

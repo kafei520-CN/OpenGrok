@@ -24,15 +24,34 @@ export function isEditToolKind(kind?: string): boolean {
 }
 
 /** File edits and shell — the mutations Ask mode must not run. */
-export function isMutatingToolKind(kind?: string): boolean {
+export function isTerminalToolKind(kind?: string, title?: string): boolean {
   const value = (kind ?? '').toLowerCase();
+  const text = `${value} ${title ?? ''}`.toLowerCase();
   return (
-    isEditToolKind(kind) ||
     value === 'execute' ||
     value === 'terminal' ||
     value === 'shell' ||
-    value === 'bash'
+    value === 'bash' ||
+    text.includes('terminal') ||
+    text.includes('run_terminal') ||
+    /\bbash\b/.test(text)
   );
+}
+
+export function isMutatingToolKind(kind?: string, title?: string): boolean {
+  return isEditToolKind(kind) || isTerminalToolKind(kind, title);
+}
+
+export function terminalToolsEnabled(settings: { useTerminal?: boolean }): boolean {
+  return settings.useTerminal === true;
+}
+
+export function shouldDenyTerminal(
+  settings: { useTerminal?: boolean },
+  toolKind?: string,
+  title?: string,
+): boolean {
+  return !terminalToolsEnabled(settings) && isTerminalToolKind(toolKind, title);
 }
 
 export function askModeBlocksMutation(modeId: string | undefined, toolKind?: string): boolean {
@@ -55,12 +74,35 @@ export function pickAllowOption(options: PermissionOption[]): PermissionOption |
   );
 }
 
+export function pickRejectOption(options: PermissionOption[]): PermissionOption | undefined {
+  return (
+    options.find((option) => option.kind === 'reject_once') ??
+    options.find((option) => option.kind === 'reject_always') ??
+    options.find((option) => option.kind.startsWith('reject'))
+  );
+}
+
+export function denyTerminalPermission(
+  settings: { useTerminal?: boolean },
+  parsed: { toolKind?: string; title?: string; options: PermissionOption[] },
+): unknown | undefined {
+  if (!shouldDenyTerminal(settings, parsed.toolKind, parsed.title)) {
+    return undefined;
+  }
+  const reject = pickRejectOption(parsed.options);
+  return reject ? selectedPermission(reject.optionId) : cancelledPermission();
+}
+
 export function shouldAutoApprove(
-  settings: Pick<GrokSettings, 'alwaysApprove' | 'permissionMode'>,
+  settings: Pick<GrokSettings, 'alwaysApprove' | 'permissionMode'> & { useTerminal?: boolean },
   toolKind?: string,
   modeId?: string,
+  title?: string,
 ): boolean {
   if (askModeBlocksMutation(modeId, toolKind)) {
+    return false;
+  }
+  if (shouldDenyTerminal(settings, toolKind, title)) {
     return false;
   }
   if (settings.alwaysApprove || settings.permissionMode === 'auto') {

@@ -18,6 +18,15 @@ import {
 } from './prompt/attachments';
 import { installHint, resolveGrokBinary } from '../core/runtime/cli';
 import { ContextMeter } from '../context/contextMeter';
+import {
+  buildCompactNote,
+  collectCompactHints,
+  emptyCompactGate,
+  markCompacted,
+  observeCompactUsage,
+  shouldPrefireCompact,
+  type CompactGate,
+} from '../context/compact';
 import { EditJournal } from '../edits/editJournal';
 import { slimFileDiffs } from '../edits/diff';
 import { applyDiffStats, publicEdits } from '../edits/edits';
@@ -32,6 +41,7 @@ import {
 import { tr, uiLocale } from '../core/i18n/locale';
 import { logError, logInfo, logWarn, showLog } from '../core/logger';
 import { buildPromptBlocks } from './prompt';
+import { ensureWrapUpRule, wrapUpMeta } from './prompt/wrapUp';
 import { formatAgentError, formatErrorLine, isCancelError } from '../core/errors';
 import { readGrokSettings } from '../settings/settings';
 import {
@@ -62,7 +72,14 @@ import {
   persistTurnModels,
   readStoredTurnModels,
 } from '../models/turnModels';
-import { FALLBACK_COMMANDS, classifySlash, modeLabel, promptModeMeta, type HostAction } from './prompt/slash';
+import {
+  FALLBACK_COMMANDS,
+  classifySlash,
+  isSlashCommandInput,
+  modeLabel,
+  promptModeMeta,
+  type HostAction,
+} from './prompt/slash';
 import { imageMcpServersMeta } from '../core/runtime/imageTool';
 import { isOfficialGrokAccount, parseBilling, type BillingQuota } from '../billing/billing';
 import { withCachedSubscription } from '../billing/billingCache';
@@ -183,7 +200,14 @@ import {
   resumeGoalClock,
   type GoalState,
 } from './goal';
-import { emptyParked, overlayLiveSessions, type ParkedSession } from './liveSessions';
+import {
+  emptyParked,
+  lastAssistantInterrupted,
+  markAssistantStopped,
+  overlayLiveSessions,
+  trimParkedSessions,
+  type ParkedSession,
+} from './liveSessions';
 
 export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   agent?: GrokAgent;
@@ -193,6 +217,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   queue: string[] = [];
   goal?: GoalState;
   compactMode = false;
+  private compactGate: CompactGate = emptyCompactGate();
   timestamps = false;
   multiline = false;
   private notify?: NotifyCue;
@@ -263,6 +288,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   sessions?: SessionRow[];
   currentSessionId?: string;
   private readonly parked = new Map<string, ParkedSession>();
+  private parkedRecent: string[] = [];
   private sessionCwd?: string;
   private restoringSession = false;
   private replaying = false;
@@ -436,7 +462,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       ask: this.ask,
       attachments: this.attachments,
       agentVersion: this.agentVersion,
-      commands: this.commands,
+      commands: settings.useTerminal ? this.commands : [],
       sessions: this.overlaySessionCwd(
         overlayLiveSessions(
           this.sessions,
@@ -536,6 +562,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.journal.clear();
     this.workspaceImages.clear();
     this.rescuedImages.clear();
+    this.compactGate = emptyCompactGate();
     await this.beginStart();
   }
 
@@ -549,6 +576,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.journal.clear();
     this.workspaceImages.clear();
     this.rescuedImages.clear();
+    this.compactGate = emptyCompactGate();
     this.drawer = undefined;
     drawers.stopDashboardPoll(this);
     this.replaying = false;
@@ -717,6 +745,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     await this.ensureAgent();
+    if (!readGrokSettings().useTerminal && isSlashCommandInput(trimmed)) {
+      plat().warn(tr('settingsTerminalOff'));
+      return;
+    }
     const action = classifySlash(trimmed);
     if (action.kind !== 'pass') {
       await this.runHostAction(action);
@@ -747,6 +779,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.emit();
       return;
     }
+    await this.prefireCompactIfNeeded();
+    if (this.status !== 'ready') {
+      return;
+    }
     let outgoing = trimmed;
     if (this.modeId === 'goal' && !opts?.hidden && !trimmed.startsWith('/goal')) {
       outgoing = this.prepareGoalPrompt(trimmed);
@@ -755,7 +791,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     await this.applySelectedCustomModel(agent);
     this.error = undefined;
     const run = ++this.runGen;
-    const blocks = await buildPromptBlocks(outgoing, this.attachments);
+    const blocks = await buildPromptBlocks(outgoing, this.attachments, {
+      wrapUp: !opts?.hidden,
+    });
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: `user-${++this.turn}`,
@@ -787,12 +825,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.attachments = [];
     this.setStatus('streaming');
     try {
-      await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) }, sid);
+      await agent.prompt(blocks, { mode: promptModeMeta(this.modeId), ...wrapUpMeta() }, sid);
     } catch (error) {
       if (!this.runBelongs(sid, run)) {
         return;
       }
       if (isCancelError(error)) {
+        const msgs = this.currentSessionId === sid ? this.messages : this.parked.get(sid)?.messages;
+        if (msgs) {
+          markAssistantStopped(msgs);
+        }
         this.endTurnOn(sid);
         return;
       }
@@ -816,6 +858,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.agent?.cancelTurn();
     this.queue = [];
     if (this.status === 'streaming') {
+      markAssistantStopped(this.messages);
       this.endStreaming();
     }
     if (pauseGoal) {
@@ -1016,6 +1059,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     disposeAllTerminals();
     this.parked.clear();
+    this.parkedRecent = [];
   }
 
   private parkForeground(): void {
@@ -1023,6 +1067,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!id) {
       return;
     }
+    const interrupted = lastAssistantInterrupted(this.messages);
     this.parked.set(id, {
       id,
       cwd: this.sessionCwd,
@@ -1037,7 +1082,19 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       runGen: this.runGen,
       permission: this.permission,
       ask: this.ask,
+      unread: interrupted,
+      stopped: interrupted,
     });
+    this.touchParked(id);
+    trimParkedSessions(this.parked, undefined, this.parkedRecent);
+  }
+
+  private touchParked(id: string): void {
+    this.parkedRecent = this.parkedRecent.filter((item) => item !== id);
+    this.parkedRecent.push(id);
+    if (this.parkedRecent.length > 32) {
+      this.parkedRecent = this.parkedRecent.slice(-32);
+    }
   }
 
   private restoreParked(id: string): void {
@@ -1083,8 +1140,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       freezeTurnSteps(assistant);
     }
     row.status = 'ready';
+    row.unread = true;
+    row.stopped = Boolean(row.stopped || lastAssistantInterrupted(row.messages));
     void persistTurnModels(sid, row.messages);
-    this.emit();
+    this.publishSnapshot('none');
   }
 
   private failOn(sid: string, message: string, error?: unknown): void {
@@ -1101,13 +1160,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     row.error = line;
     row.status = 'ready';
+    row.unread = true;
+    row.stopped = true;
     const assistant = row.messages.filter((item) => item.role === 'assistant').at(-1);
     if (assistant) {
       assistant.error = parsed;
       assistant.streaming = false;
+      assistant.stopped = true;
       freezeTurnSteps(assistant);
     }
-    this.emit();
+    this.publishSnapshot('none');
   }
 
   private applyBackgroundUpdate(sessionId: string, update: SessionUpdate, isReplay: boolean): void {
@@ -1132,9 +1194,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       rememberFile: async () => {},
       capturePrevious: () => {},
       displayPath: (filePath: string) => this.displayPath(filePath),
-      emitUnlessReplaying: () => this.emit(),
+      emitUnlessReplaying: () => {},
       termEncoding: readGrokSettings().termEncoding,
     };
+    const wasLive = parked.status === 'streaming';
     applySessionUpdate(view, update);
     parked.modeId = view.modeId;
     if (update.sessionUpdate === 'goal_updated') {
@@ -1149,7 +1212,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (last?.streaming) {
       parked.status = 'streaming';
     }
-    this.emit();
+    if (isReplay) {
+      return;
+    }
+    if (parked.status === 'streaming') {
+      if (!wasLive) {
+        this.publishSnapshot('none');
+      }
+      return;
+    }
+    this.publishSnapshot('none');
   }
 
   private async adoptBackgroundSessions(): Promise<void> {
@@ -1275,7 +1347,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     text?: string;
     uris?: string[];
     images?: Array<{ name: string; mimeType: string; data: string }>;
-    files?: Array<{ name: string; mimeType?: string; text?: string }>;
+    files?: Array<{ name: string; mimeType?: string; text?: string; data?: string }>;
   }): Promise<void> {
     await pasteClipboard(this, payload);
   }
@@ -1379,32 +1451,79 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.emit();
   }
 
-  async compact(note?: string): Promise<void> {
+  private async prefireCompactIfNeeded(): Promise<void> {
+    const usage = this.meter.usage;
+    this.compactGate = observeCompactUsage(
+      this.compactGate,
+      usage?.percent ?? 0,
+      usage?.compactAt,
+    );
+    if (
+      !shouldPrefireCompact({
+        percent: usage?.percent,
+        compactAt: usage?.compactAt,
+        messageCount: this.messages.length,
+        busy: this.status === 'streaming',
+        gate: this.compactGate,
+      })
+    ) {
+      return;
+    }
+    await this.compact(undefined, { auto: true });
+  }
+
+  async compact(note?: string, opts?: { auto?: boolean }): Promise<void> {
     if (this.status === 'streaming') {
       plat().warn(tr('compactBusy'));
       return;
     }
     const now = new Date().toISOString();
+    const auto = Boolean(opts?.auto);
+    const tool: ChatMessage['tools'][number] = {
+      id: `compact-${++this.turn}`,
+      title: auto ? tr('compactAutoLive') : tr('compacting'),
+      kind: 'compact',
+      status: 'in_progress',
+      startedAt: now,
+    };
     const card: ChatMessage = {
-      id: `assistant-${++this.turn}`,
+      id: `assistant-${this.turn}`,
       role: 'assistant',
-      text: tr('compacting'),
-      tools: [],
+      text: '',
+      tools: [tool],
       streaming: true,
+      compact: auto ? 'auto' : 'manual',
       createdAt: now,
       ...this.turnModelFields(),
     };
     this.messages = [...this.messages, card];
     this.setStatus('streaming');
     try {
-      await this.agent?.compact(note);
-      card.text = tr('compactDone');
+      const hints = collectCompactHints(this.messages);
+      await this.agent?.compact(
+        buildCompactNote({
+          userNote: note,
+          files: hints.files,
+          errors: hints.errors,
+          auto,
+        }),
+      );
+      this.compactGate = markCompacted(this.compactGate);
+      const ended = new Date().toISOString();
+      tool.status = 'completed';
+      tool.title = auto ? tr('compactAutoDone') : tr('compactDone');
+      tool.endedAt = ended;
       card.streaming = false;
-      card.endedAt = new Date().toISOString();
+      card.endedAt = ended;
       this.notify = 'done';
       this.setStatus('ready');
       this.notify = undefined;
+      void this.meter.refresh();
     } catch (error) {
+      this.compactGate = markCompacted(this.compactGate);
+      tool.status = 'failed';
+      tool.title = tr('compactFailed');
+      tool.endedAt = new Date().toISOString();
       this.fail(tr('compactFailed'), error);
     }
   }
@@ -1597,11 +1716,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!agent) {
       return;
     }
+    if (sessionId === this.currentSessionId && !this.restoringSession && !this.replaying) {
+      return;
+    }
     const op = ++this.sessionOp;
     this.parkForeground();
     const parked = this.parked.get(sessionId);
     if (parked && parked.messages.length > 0) {
       this.restoreParked(sessionId);
+      this.compactGate = emptyCompactGate();
       agent.sessionId = sessionId;
       this.hideSessionPreview = false;
       this.restoringSession = false;
@@ -1619,6 +1742,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.journal.clear();
     this.workspaceImages.clear();
     this.rescuedImages.clear();
+    this.compactGate = emptyCompactGate();
     this.drawer = undefined;
     drawers.stopDashboardPoll(this);
     this.hideSessionPreview = false;
@@ -2470,6 +2594,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         return;
       }
       if (isCancelError(error)) {
+        markAssistantStopped(this.messages);
         this.endStreaming();
         return;
       }
@@ -3036,8 +3161,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private sessionMeta(): Record<string, unknown> {
-    const extra: Record<string, unknown> = { ...sessionPermissionMeta(readGrokSettings()) };
+    const settings = readGrokSettings();
+    const extra: Record<string, unknown> = { ...sessionPermissionMeta(settings) };
+    if (!settings.useTerminal) {
+      extra.disallowedTools = ['bash', 'execute', 'terminal', 'run_terminal_command'];
+    }
     extra['x.ai/mcp/servers'] = imageMcpServersMeta();
+    Object.assign(extra, wrapUpMeta());
     const hints = this.startupHints();
     if (hints) {
       extra.startupHints = hints;
@@ -3106,6 +3236,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.emit();
     });
     this.setStatus('ready');
+    void ensureWrapUpRule();
     this.refreshBilling();
     this.startBillingPoll();
     this.refreshHeatmap();
@@ -3354,6 +3485,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       freezeTurnSteps(assistant);
     }
     const interrupted = this.status === 'streaming';
+    if (interrupted) {
+      markAssistantStopped(this.messages);
+    }
     if (this.status === 'streaming' || this.status === 'ready') {
       this.status = 'ready';
       plat().warn(line);

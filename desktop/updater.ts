@@ -51,6 +51,10 @@ export function attachUpdater(next: Host): void {
   last.packaged = next.packaged();
   last.auto = next.getAuto();
   last.current = next.version();
+  if (!next.packaged()) {
+    emit({ kind: 'dev' });
+    return;
+  }
 
   autoUpdater.autoDownload = next.getAuto();
   autoUpdater.autoInstallOnAppQuit = true;
@@ -126,6 +130,9 @@ export async function downloadUpdate(): Promise<UpdateState> {
 }
 
 export function installUpdate(): void {
+  if (!packaged()) {
+    return;
+  }
   host?.prepareQuit();
   autoUpdater.quitAndInstall(false, true);
 }
@@ -141,7 +148,9 @@ function shortUpdateError(error: unknown): string {
 
 export function setAutoUpdate(on: boolean): UpdateState {
   host?.setAuto(on);
-  autoUpdater.autoDownload = on;
+  if (packaged()) {
+    autoUpdater.autoDownload = on;
+  }
   emit({ auto: on });
   return updateSnapshot();
 }

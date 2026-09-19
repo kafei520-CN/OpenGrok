@@ -22,6 +22,7 @@ export function readGrokSettings(): GrokSettings {
       DEFAULT_SETTINGS.includeSelectionOnSend,
     ),
     alwaysApprove: p.getConfig('alwaysApprove', DEFAULT_SETTINGS.alwaysApprove),
+    useTerminal: p.getConfig('useTerminal', DEFAULT_SETTINGS.useTerminal),
     locale: locale === 'en' || locale === 'zh-CN' ? locale : 'auto',
     notifySound: p.getConfig('notifySound', DEFAULT_SETTINGS.notifySound),
     termEncoding: normalizeTermEncoding(
@@ -48,6 +49,7 @@ export function normalizeSetting(
     case 'preferWorkspaceBinary':
     case 'includeSelectionOnSend':
     case 'alwaysApprove':
+    case 'useTerminal':
     case 'notifySound':
       return typeof value === 'boolean' ? value : undefined;
     case 'permissionMode':

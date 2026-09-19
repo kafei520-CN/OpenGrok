@@ -117,14 +117,32 @@ export function workspaceOverview(
 export function sessionButton(row: SessionRow): HTMLElement {
   const item = document.createElement('div');
   item.className = row.id === ui.state.currentSessionId ? 'session-row active' : 'session-row';
-  if (row.live) {
+  item.dataset.sid = row.id;
+  const runState = row.runState ?? (row.live ? 'running' : undefined);
+  if (runState === 'running') {
     item.classList.add('is-live');
   }
   const open = document.createElement('button');
   open.type = 'button';
   open.className = 'session-main';
-  const live = row.live
-    ? `<span class="session-live" title="${escapeHtml(tr('sessionsLive'))}"></span>`
+  const stateClass =
+    runState === 'running'
+      ? 'session-live is-running'
+      : runState === 'stopped'
+        ? 'is-stopped'
+        : runState === 'done'
+          ? 'is-done'
+          : '';
+  const stateTitle =
+    runState === 'running'
+      ? tr('sessionsLive')
+      : runState === 'stopped'
+        ? tr('sessionsStopped')
+        : runState === 'done'
+          ? tr('sessionsDone')
+          : '';
+  const live = runState
+    ? `<span class="session-dot ${stateClass}" title="${escapeHtml(stateTitle)}"></span>`
     : '';
   open.innerHTML = `${live}<span class="session-title">${escapeHtml(row.title)}</span><span class="session-time">${escapeHtml(formatRelativeTime(loc(), row.updatedAt))}</span>`;
   open.addEventListener('click', () =>

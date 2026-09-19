@@ -219,6 +219,13 @@ function mountSettings(): HTMLElement {
         () => post({ type: 'updateSetting', key: 'alwaysApprove', value: !current().alwaysApprove }),
       ),
       toggleRow(
+        'useTerminal',
+        tr('settingsTerminal'),
+        tr('settingsTerminalHint'),
+        () => Boolean(current().useTerminal),
+        () => post({ type: 'updateSetting', key: 'useTerminal', value: !current().useTerminal }),
+      ),
+      toggleRow(
         'includeSelectionOnSend',
         tr('settingsSelection'),
         tr('settingsSelectionHint'),
@@ -234,8 +241,8 @@ function mountSettings(): HTMLElement {
       skillsNavRow(),
       agentsNavRow(),
       worktreesNavRow(),
-      extNavRow(),
       ogPluginsNavRow(),
+      extNavRow(),
       memoryNavRow(),
       mcpsNavRow(),
       apisNavRow(),
@@ -678,6 +685,7 @@ function syncSettings(root: HTMLElement): void {
   syncSwitch(root, 'timestamps', Boolean(ui.state.timestamps));
   syncSwitch(root, 'notifySound', settings.notifySound !== false);
   syncSwitch(root, 'alwaysApprove', settings.alwaysApprove);
+  syncSwitch(root, 'useTerminal', settings.useTerminal);
   syncSwitch(root, 'includeSelectionOnSend', settings.includeSelectionOnSend);
   syncSwitch(root, 'preferWorkspaceBinary', settings.preferWorkspaceBinary);
   syncChoice(root, 'locale', settings.locale);

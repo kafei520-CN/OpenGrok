@@ -38,6 +38,15 @@ import {
   STREAM_LIVE_KEEP,
   streamingMarkdownPatch,
 } from './markdown';
+import {
+  HISTORY_FLUSH_TURNS,
+  HISTORY_SLICE_MS,
+  HISTORY_SLICE_TURNS,
+  HISTORY_TAIL,
+  paintAlign,
+  tailStart,
+} from './historyPaint';
+import { fireOgPatch } from '../ogPlugins';
 
 type Turn = { user?: ChatMessage; assistant?: ChatMessage };
 
@@ -57,6 +66,7 @@ export function patchBody(parent: HTMLElement): void {
   const kind = bodyKind(ui.state);
   let body = document.getElementById('grok-body') as HTMLElement | null;
   if (!body) {
+    cancelHistoryPaint();
     body = renderBody();
     body.id = 'grok-body';
     const header = document.getElementById('grok-header');
@@ -73,6 +83,7 @@ export function patchBody(parent: HTMLElement): void {
     return;
   }
   if (body.dataset.kind !== kind) {
+    cancelHistoryPaint();
     const next = renderBody();
     next.id = 'grok-body';
     body.replaceWith(next);
@@ -158,10 +169,7 @@ function fillBody(el: HTMLElement): void {
     const transcript = document.createElement('div');
     transcript.className = 'transcript';
     transcript.id = 'transcript';
-    const grouped = groupTurns(ui.state.messages);
-    grouped.forEach((turn, index) => {
-      transcript.append(turnEl(turn, index < grouped.length - 1));
-    });
+    syncTranscript(transcript);
     if (ui.state.permission) {
       transcript.append(permissionBar());
     }
@@ -183,54 +191,247 @@ function patchTranscript(): void {
   if (
     ui.state.status === 'streaming' &&
     !ui.editingUserId &&
+    transcript.dataset.sid === (ui.state.currentSessionId ?? '') &&
     patchLastStreamingTurn(transcript)
   ) {
     scrollTranscript();
     syncWorkClock();
     return;
   }
-  const grouped = groupTurns(ui.state.messages);
-  const nodes = turnNodes(transcript);
-  for (let i = 0; i < grouped.length; i++) {
-    const turn = grouped[i];
-    const id = turnId(turn);
-    const split = i < grouped.length - 1;
-    const node = nodes[i];
-    if (!node || node.dataset.turnId !== id) {
-      const fresh = turnEl(turn, split);
-      if (node) {
-        node.replaceWith(fresh);
-      } else {
-        insertTurn(transcript, fresh);
-      }
-      continue;
-    }
-    if (turn.assistant?.streaming) {
-      syncUserBubble(node, turn.user);
-      patchStreamingTurn(node, turn);
-      continue;
-    }
-    if (turn.assistant && thinkingWork(node)?.classList.contains('live')) {
-      ui.workOpen.set(turn.assistant.id, false);
-    }
-    const sig = turnSig(turn, split);
-    if (node.dataset.sig !== sig) {
-      node.replaceWith(turnEl(turn, split));
-    } else if (turn.assistant && visibleSteps(turn.assistant).length && !node.querySelector('.steps-card')) {
-      node.replaceWith(turnEl(turn, split));
-    } else if (turn.assistant && ui.workOpen.get(turn.assistant.id) === false) {
-      const work = thinkingWork(node);
-      if (work?.open) {
-        work.open = false;
-      }
-    }
-  }
-  while (turnNodes(transcript).length > grouped.length) {
-    turnNodes(transcript).at(-1)?.remove();
-  }
+  syncTranscript(transcript);
   dockPrompts(transcript);
   scrollTranscript();
   syncWorkClock();
+}
+
+let historyPaintGen = 0;
+let historyPaintRaf = 0;
+
+function cancelHistoryPaint(): void {
+  historyPaintGen += 1;
+  if (historyPaintRaf) {
+    cancelAnimationFrame(historyPaintRaf);
+    historyPaintRaf = 0;
+  }
+  document.getElementById('transcript')?.classList.remove('catching-up');
+}
+
+function syncTranscript(transcript: HTMLElement): void {
+  const session = ui.state.currentSessionId ?? '';
+  if (transcript.dataset.sid !== session) {
+    cancelHistoryPaint();
+    clearTurns(transcript);
+    transcript.dataset.sid = session;
+  }
+  const grouped = groupTurns(ui.state.messages);
+  const wanted = grouped.map(turnId);
+  const nodes = turnNodes(transcript);
+  const align = paintAlign(
+    wanted,
+    nodes.map((node) => node.dataset.turnId ?? ''),
+  );
+  if (align.kind === 'equal') {
+    patchTurnRange(grouped, nodes, 0);
+    return;
+  }
+  if (align.kind === 'prefix') {
+    patchTurnRange(grouped, nodes, 0);
+    if (align.extra <= HISTORY_TAIL) {
+      paintTurnRange(transcript, grouped, nodes.length, grouped.length);
+    } else {
+      scheduleHistoryPaint(transcript);
+    }
+    return;
+  }
+  if (align.kind === 'trim') {
+    patchTurnRange(grouped, nodes.slice(0, grouped.length), 0);
+    while (turnNodes(transcript).length > grouped.length) {
+      turnNodes(transcript).at(-1)?.remove();
+    }
+    return;
+  }
+  if (align.kind === 'suffix') {
+    scheduleHistoryPaint(transcript);
+    return;
+  }
+  cancelHistoryPaint();
+  clearTurns(transcript);
+  const start = tailStart(grouped.length);
+  paintTurnRange(transcript, grouped, start, grouped.length);
+  if (start > 0) {
+    scheduleHistoryPaint(transcript);
+  }
+}
+
+function clearTurns(transcript: HTMLElement): void {
+  for (const node of turnNodes(transcript)) {
+    node.remove();
+  }
+}
+
+function paintTurnRange(
+  transcript: HTMLElement,
+  grouped: Turn[],
+  start: number,
+  end: number,
+): void {
+  if (start >= end) {
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (let i = start; i < end; i++) {
+    frag.append(turnEl(grouped[i], i < grouped.length - 1));
+  }
+  const anchor = promptAnchor(transcript);
+  if (anchor) {
+    transcript.insertBefore(frag, anchor);
+  } else {
+    transcript.append(frag);
+  }
+}
+
+function patchTurnRange(grouped: Turn[], nodes: HTMLElement[], offset: number): void {
+  for (let i = 0; i < nodes.length; i++) {
+    const at = offset + i;
+    const turn = grouped[at];
+    if (!turn) {
+      break;
+    }
+    syncTurnNode(nodes[i], turn, at < grouped.length - 1);
+  }
+}
+
+function syncTurnNode(node: HTMLElement, turn: Turn, split: boolean): void {
+  const id = turnId(turn);
+  if (node.dataset.turnId !== id) {
+    node.replaceWith(turnEl(turn, split));
+    return;
+  }
+  if (turn.assistant?.streaming) {
+    syncUserBubble(node, turn.user);
+    patchStreamingTurn(node, turn);
+    return;
+  }
+  if (turn.assistant && thinkingWork(node)?.classList.contains('live')) {
+    ui.workOpen.set(turn.assistant.id, false);
+  }
+  const sig = turnSig(turn, split);
+  if (node.dataset.sig !== sig) {
+    node.replaceWith(turnEl(turn, split));
+  } else if (turn.assistant && visibleSteps(turn.assistant).length && !node.querySelector('.steps-card')) {
+    node.replaceWith(turnEl(turn, split));
+  } else if (turn.assistant && ui.workOpen.get(turn.assistant.id) === false) {
+    const work = thinkingWork(node);
+    if (work?.open) {
+      work.open = false;
+    }
+  }
+}
+
+function scheduleHistoryPaint(transcript: HTMLElement): void {
+  if (historyPaintRaf) {
+    return;
+  }
+  const token = historyPaintGen;
+  const pending: HTMLElement[] = [];
+  const finish = (flushed: boolean) => {
+    transcript.classList.remove('catching-up');
+    if (flushed) {
+      fireOgPatch();
+      if (ui.stickToBottom) {
+        pinTranscript(transcript);
+      }
+    }
+  };
+  const flushPending = (before: HTMLElement | null) => {
+    if (!pending.length) {
+      return false;
+    }
+    const fromBottom = transcript.scrollHeight - transcript.scrollTop;
+    const frag = document.createDocumentFragment();
+    for (const node of pending) {
+      frag.append(node);
+    }
+    pending.length = 0;
+    const anchor = before ?? promptAnchor(transcript);
+    if (anchor) {
+      transcript.insertBefore(frag, anchor);
+    } else {
+      transcript.append(frag);
+    }
+    transcript.scrollTop = Math.max(0, transcript.scrollHeight - fromBottom);
+    return true;
+  };
+  const run = () => {
+    historyPaintRaf = 0;
+    if (token !== historyPaintGen) {
+      return;
+    }
+    if (document.getElementById('transcript') !== transcript) {
+      return;
+    }
+    transcript.classList.add('catching-up');
+    const grouped = groupTurns(ui.state.messages);
+    const wanted = grouped.map(turnId);
+    const nodes = turnNodes(transcript);
+    const next = paintAlign(
+      wanted,
+      nodes.map((node) => node.dataset.turnId ?? ''),
+    );
+    if (next.kind !== 'suffix' && next.kind !== 'prefix') {
+      const flushed = flushPending(nodes[0] ?? null);
+      finish(flushed || next.kind === 'equal');
+      return;
+    }
+    const started = performance.now();
+    let built = 0;
+    if (next.kind === 'suffix') {
+      let idx = next.extra - 1 - pending.length;
+      while (idx >= 0 && built < HISTORY_SLICE_TURNS) {
+        if (built > 0 && performance.now() - started >= HISTORY_SLICE_MS) {
+          break;
+        }
+        const turn = grouped[idx];
+        if (!turn) {
+          break;
+        }
+        pending.unshift(turnEl(turn, idx < grouped.length - 1));
+        built += 1;
+        idx -= 1;
+      }
+      const remain = next.extra - pending.length;
+      if (remain <= 0 || pending.length >= HISTORY_FLUSH_TURNS) {
+        flushPending(nodes[0] ?? null);
+      }
+    } else {
+      let idx = nodes.length + pending.length;
+      while (idx < grouped.length && built < HISTORY_SLICE_TURNS) {
+        if (built > 0 && performance.now() - started >= HISTORY_SLICE_MS) {
+          break;
+        }
+        const turn = grouped[idx];
+        if (!turn) {
+          break;
+        }
+        pending.push(turnEl(turn, idx < grouped.length - 1));
+        built += 1;
+        idx += 1;
+      }
+      if (idx >= grouped.length || pending.length >= HISTORY_FLUSH_TURNS) {
+        flushPending(promptAnchor(transcript));
+      }
+    }
+    const left = paintAlign(
+      wanted,
+      turnNodes(transcript).map((node) => node.dataset.turnId ?? ''),
+    );
+    if (left.kind === 'suffix' || left.kind === 'prefix' || pending.length) {
+      historyPaintRaf = requestAnimationFrame(run);
+      return;
+    }
+    finish(true);
+  };
+  historyPaintRaf = requestAnimationFrame(run);
 }
 
 function lastTurn(messages: ChatMessage[]): Turn | undefined {
@@ -643,6 +844,9 @@ export function scrollTranscript(force = false): void {
     return;
   }
   bindTranscriptScroll(el);
+  if (el.classList.contains('catching-up')) {
+    return;
+  }
   if (force) {
     scrollState.lastUserScroll = 0;
   }
@@ -740,6 +944,7 @@ function turnSig(turn: Turn, split: boolean): string {
     a?.error?.message ?? '',
     a?.error?.retrying ? 'r' : '',
     a?.error?.attempt ?? 0,
+    a?.compact ?? '',
     ui.copiedId === a?.id ? 'c' : '',
     stepsKey(a ? visibleSteps(a) : undefined),
     turn.user?.text.length ?? 0,
@@ -839,7 +1044,7 @@ function userBubble(message: ChatMessage): HTMLElement {
   } else if (message.text) {
     const body = document.createElement('div');
     body.className = 'md';
-    body.innerHTML = renderMarkdown(message.text);
+    setMarkdown(body, message.text, false);
     bubble.append(body);
   }
   if (!editing && message.images?.length) {
@@ -928,13 +1133,7 @@ function assistantColumn(message: ChatMessage): HTMLElement {
   if (message.text) {
     const body = document.createElement('div');
     body.className = 'md answer';
-    if (message.streaming) {
-      setMarkdown(body, message.text, true);
-    } else {
-      body.dataset.len = String(message.text.length);
-      body.dataset.md = 'd';
-      body.innerHTML = renderMarkdown(message.text);
-    }
+    setMarkdown(body, message.text, Boolean(message.streaming));
     el.append(body);
   } else if (message.error?.retrying) {
     el.append(turnErrorCard(message));
@@ -1510,7 +1709,13 @@ function termElapsedText(tool: ChatMessage['tools'][number]): string {
 
 function fillToolTitle(title: HTMLElement, tool: ChatMessage['tools'][number]): void {
   const kind = toolKindLabel(loc(), tool.kind);
-  const hint = isTermTool(tool) ? '' : tool.detail ? fileName(tool.detail) : tool.title;
+  const hint = isTermTool(tool)
+    ? ''
+    : tool.kind === 'compact'
+      ? tool.title
+      : tool.detail
+        ? fileName(tool.detail)
+        : tool.title;
   const icon = document.createElement('span');
   icon.className = 'tool-icon';
   if (tool.kind) {

@@ -468,20 +468,33 @@ textarea:focus-visible {
   box-shadow: inset 2px 0 0 var(--ice);
 }
 
-.session-live {
+.session-dot {
   width: 8px;
   height: 8px;
   flex-shrink: 0;
   margin: 0;
   border-radius: 50%;
   background: var(--ok, #22c55e);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok, #22c55e) 55%, transparent);
+}
+
+.session-dot.is-done {
+  background: var(--ok, #22c55e);
+}
+
+.session-dot.is-stopped {
+  background: var(--error, #ef4444);
+}
+
+.session-live,
+.session-dot.is-running {
+  background: var(--warn, #f59e0b);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn, #f59e0b) 55%, transparent);
   animation: session-live-pulse 1.4s ease-out infinite;
 }
 
 @keyframes session-live-pulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok, #22c55e) 45%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn, #f59e0b) 45%, transparent);
   }
   70% {
     box-shadow: 0 0 0 6px transparent;
@@ -543,6 +556,10 @@ textarea:focus-visible {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
+}
+
+.transcript.catching-up {
+  scroll-behavior: auto;
 }
 
 .transcript::-webkit-scrollbar {
@@ -769,6 +786,10 @@ textarea:focus-visible {
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ok) 70%, transparent);
 }
 
+.tool-row[data-kind='compact'] {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ice) 70%, transparent);
+}
+
 .tool-row.completed:not(.failed) {
   opacity: 0.88;
   box-shadow: inset 2px 0 0 var(--ok);
@@ -839,14 +860,11 @@ textarea:focus-visible {
 .tool-term {
   margin-top: 8px;
   border: 1px solid color-mix(in srgb, var(--ice) 20%, var(--line));
-  border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #0b1520 82%, var(--bg)),
-    color-mix(in srgb, #070b10 88%, var(--bg))
-  );
-  box-shadow: var(--glass-shadow-sm);
+  border-radius: var(--r, 10px);
+  background: color-mix(in srgb, var(--elev) 82%, var(--bg));
+  box-shadow: none;
   overflow: hidden;
+  color: var(--fg);
 }
 
 .tool-term > summary {
@@ -857,8 +875,8 @@ textarea:focus-visible {
   gap: 8px;
   padding: 7px 10px;
   font: 11px/1.35 var(--mono);
-  color: #ffffff;
-  background: color-mix(in srgb, #101a24 55%, transparent);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
 }
 
 .tool-term > summary::-webkit-details-marker {
@@ -880,7 +898,7 @@ textarea:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #ffffff;
+  color: var(--fg);
 }
 
 .term-meta {
@@ -925,11 +943,11 @@ textarea:focus-visible {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 4;
-  color: #d6e4ee;
+  color: var(--fg);
 }
 
 .term-body.idle {
-  color: color-mix(in srgb, var(--muted) 80%, #d6e4ee);
+  color: var(--muted);
   font-style: italic;
 }
 
@@ -974,7 +992,7 @@ textarea:focus-visible {
 
 .term-elapsed {
   font-size: 10px;
-  color: rgb(255 255 255 / 72%);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -990,30 +1008,30 @@ textarea:focus-visible {
   text-decoration: underline;
 }
 
-.term-body .t-fg-30 { color: #4a5560; }
-.term-body .t-fg-31 { color: #ff6b6b; }
-.term-body .t-fg-32 { color: #3dd68c; }
-.term-body .t-fg-33 { color: #e6c07b; }
-.term-body .t-fg-34 { color: #6cb2ff; }
-.term-body .t-fg-35 { color: #d2a8ff; }
-.term-body .t-fg-36 { color: #56d4dd; }
-.term-body .t-fg-37 { color: #e8eef4; }
-.term-body .t-fg-90 { color: #7d8a96; }
-.term-body .t-fg-91 { color: #ff8a8a; }
-.term-body .t-fg-92 { color: #6be7a8; }
-.term-body .t-fg-93 { color: #f0d48a; }
-.term-body .t-fg-94 { color: #8ec5ff; }
-.term-body .t-fg-95 { color: #e0c0ff; }
-.term-body .t-fg-96 { color: #7ee6ee; }
-.term-body .t-fg-97 { color: #ffffff; }
-.term-body .t-bg-40 { background: #1b2228; }
-.term-body .t-bg-41 { background: #5a2424; }
-.term-body .t-bg-42 { background: #1e4a32; }
-.term-body .t-bg-43 { background: #4a3f1e; }
-.term-body .t-bg-44 { background: #1e3654; }
-.term-body .t-bg-45 { background: #3b2654; }
-.term-body .t-bg-46 { background: #1c4548; }
-.term-body .t-bg-47 { background: #4a5560; }
+.term-body .t-fg-30 { color: color-mix(in srgb, var(--fg) 42%, var(--bg)); }
+.term-body .t-fg-31 { color: color-mix(in srgb, var(--error) 82%, var(--fg)); }
+.term-body .t-fg-32 { color: var(--ok); }
+.term-body .t-fg-33 { color: var(--warn); }
+.term-body .t-fg-34 { color: var(--ice); }
+.term-body .t-fg-35 { color: color-mix(in srgb, #c026d3 58%, var(--fg)); }
+.term-body .t-fg-36 { color: color-mix(in srgb, #0891b2 50%, var(--ice)); }
+.term-body .t-fg-37 { color: var(--fg); }
+.term-body .t-fg-90 { color: var(--muted); }
+.term-body .t-fg-91 { color: var(--error); }
+.term-body .t-fg-92 { color: color-mix(in srgb, var(--ok) 86%, var(--fg)); }
+.term-body .t-fg-93 { color: color-mix(in srgb, var(--warn) 86%, var(--fg)); }
+.term-body .t-fg-94 { color: color-mix(in srgb, var(--ice) 80%, var(--fg)); }
+.term-body .t-fg-95 { color: color-mix(in srgb, #d946ef 62%, var(--fg)); }
+.term-body .t-fg-96 { color: color-mix(in srgb, #22d3ee 55%, var(--ice)); }
+.term-body .t-fg-97 { color: var(--fg); }
+.term-body .t-bg-40 { background: color-mix(in srgb, var(--fg) 8%, var(--bg)); }
+.term-body .t-bg-41 { background: color-mix(in srgb, var(--error) 18%, var(--bg)); }
+.term-body .t-bg-42 { background: color-mix(in srgb, var(--ok) 16%, var(--bg)); }
+.term-body .t-bg-43 { background: color-mix(in srgb, var(--warn) 16%, var(--bg)); }
+.term-body .t-bg-44 { background: color-mix(in srgb, var(--ice) 16%, var(--bg)); }
+.term-body .t-bg-45 { background: color-mix(in srgb, #a855f7 16%, var(--bg)); }
+.term-body .t-bg-46 { background: color-mix(in srgb, #06b6d4 14%, var(--bg)); }
+.term-body .t-bg-47 { background: color-mix(in srgb, var(--fg) 12%, var(--bg)); }
 
 .md .katex {
   font-size: 1.05em;
@@ -1184,6 +1202,53 @@ textarea:focus-visible {
 
 .md a:hover {
   text-decoration: underline;
+}
+
+.md-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28em;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 700;
+  line-height: inherit;
+  cursor: pointer;
+  vertical-align: baseline;
+  box-shadow: none;
+}
+
+.md-file:hover,
+.md-file:focus-visible {
+  background: none;
+  color: #1d4ed8;
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+.md-file .md-file-icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+.md-file-name {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+#app[data-surface='glass'] .md-file,
+#app[data-surface='solid'] .md-file {
+  background: none;
+  border: none;
+  box-shadow: none;
+  filter: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: #2563eb;
+  font-weight: 700;
 }
 
 .md img {
@@ -1792,16 +1857,18 @@ textarea:focus-visible {
 }
 
 .jump-bottom {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
+  position: relative;
+  left: auto;
+  bottom: auto;
   z-index: 6;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  margin: 0 0 0 -17px;
+  margin: 0 0 8px;
   padding: 0;
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--ice) 50%, var(--line));
@@ -3987,6 +4054,7 @@ kbd {
 #app[data-surface='glass'] .attach-tile,
 #app[data-surface='glass'] .live-edits,
 #app[data-surface='glass'] .md pre.code,
+#app[data-surface='glass'] .tool-term,
 #app[data-surface='glass'] .gallery .thumb,
 #app[data-surface='glass'] .turn-error,
 #app[data-surface='glass'] .turn-meta,
@@ -4016,7 +4084,6 @@ kbd {
 #app[data-surface='glass'] .card .btn:not(.primary),
 #app[data-surface='glass'] .composer-card .btn:not(.primary),
 #app[data-surface='glass'] .composer-card .icon-btn,
-#app[data-surface='glass'] .jump-bottom,
 #app[data-surface='glass'] .composer-card .seg,
 #app[data-surface='glass'] .composer-card .picker-btn,
 #app[data-surface='glass'] .permission .btn:not(.primary),
@@ -4227,6 +4294,7 @@ kbd {
 #app[data-surface='glass'][data-wp-kind='image'] .change-chip::before,
 #app[data-surface='glass'][data-wp-kind='image'] .live-edits-review::before,
 #app[data-surface='glass'][data-wp-kind='image'] .md pre.code::before,
+#app[data-surface='glass'][data-wp-kind='image'] .tool-term::before,
 #app[data-surface='glass'][data-wp-kind='image'] .turn-error::before,
 #app[data-surface='glass'][data-wp-kind='image'] .topbar .icon-btn::before,
 #app[data-surface='glass'][data-wp-kind='image'] .jump-bottom::before,
@@ -4282,6 +4350,7 @@ kbd {
 #app[data-surface='glass'][data-wp-kind='image'] .change-chip,
 #app[data-surface='glass'][data-wp-kind='image'] .live-edits-review,
 #app[data-surface='glass'][data-wp-kind='image'] .md pre.code,
+#app[data-surface='glass'][data-wp-kind='image'] .tool-term,
 #app[data-surface='glass'][data-wp-kind='image'] .turn-error,
 #app[data-surface='glass'][data-wp-kind='image'] .topbar .icon-btn,
 #app[data-surface='glass'][data-wp-kind='image'] .jump-bottom,
@@ -4358,11 +4427,14 @@ kbd {
 }
 
 #app[data-surface='glass'] .jump-bottom {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  overflow: hidden;
+  position: relative;
+  left: auto;
+  bottom: auto;
+  overflow: visible;
   --glass-pane-blur: var(--glass-3-blur, 46px);
+  background: var(--glass-film);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
   -webkit-backdrop-filter: blur(var(--glass-3-blur, 46px)) saturate(1.8) brightness(1.08);
   backdrop-filter: blur(var(--glass-3-blur, 46px)) saturate(1.8) brightness(1.08);
 }
@@ -4419,6 +4491,21 @@ kbd {
 #app[data-surface='glass'] .work-body .tool-row.in_progress,
 #app[data-surface='glass'] .work-body .tool-row.pending {
   border-color: color-mix(in srgb, var(--ice) 36%, var(--glass-edge));
+}
+
+#app[data-surface='glass'] .tool-term {
+  background: var(--glass-film);
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-sm);
+}
+
+#app[data-surface='glass'] .tool-term > summary {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg);
+}
+
+#app[data-surface='glass'] .tool-term[open] > summary {
+  border-bottom-color: color-mix(in srgb, var(--glass-edge) 70%, var(--line));
 }
 
 #app[data-surface='glass'] .steps-card .step-row[data-status='failed'] {

@@ -12,6 +12,35 @@ describe('remote state packing', () => {
     assert.equal(row.state.status, 'ready');
   });
 
+  it('tags hydrate message frames with the session id', () => {
+    const messages = Array.from({ length: 80 }, (_, i) => ({
+      id: `m${i}`,
+      text: 'x'.repeat(2000),
+      tools: [],
+    }));
+    const frames = packRemotePayload({
+      type: 'state',
+      state: { status: 'ready', messages, currentSessionId: 'sess-1' },
+    });
+    const part = frames
+      .map((frame) => JSON.parse(frame) as { type: string; sessionId?: string })
+      .find((row) => row.type === 'messages');
+    assert.equal(part?.type, 'messages');
+    assert.equal(part?.sessionId, 'sess-1');
+  });
+
+  it('splits a 16-message restore without a full-payload size check', () => {
+    const messages = Array.from({ length: 16 }, (_, i) => ({
+      id: `m${i}`,
+      text: 'hi',
+      tools: [],
+    }));
+    const frames = packRemotePayload({ type: 'state', state: { status: 'ready', messages } });
+    const boot = JSON.parse(frames[0] ?? '') as { type: string; hydrate?: number };
+    assert.equal(boot.type, 'state');
+    assert.equal(typeof boot.hydrate, 'number');
+  });
+
   it('does not pack non-state payloads', () => {
     const frames = packRemotePayload({ type: 'tail', message: { id: '1' } });
     assert.equal(frames.length, 1);

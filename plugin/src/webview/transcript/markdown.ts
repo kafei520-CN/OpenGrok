@@ -1,4 +1,5 @@
 import { extractMath, renderKatex } from './markdownMath';
+import { fileLinkHtml, linkInlineFilePaths, looksLikeInlinePath } from './fileLinks';
 
 export function escapeHtml(value: string): string {
   return String(value ?? '')
@@ -12,6 +13,20 @@ export function fileName(path: string): string {
   const norm = path.replace(/\\/g, '/');
   const i = norm.lastIndexOf('/');
   return i >= 0 ? norm.slice(i + 1) : path;
+}
+
+/** Codex-style path: keep the start and the filename, ellipsis in the middle. */
+export function shortenPath(path: string, max = 44): string {
+  const norm = path.replace(/\\/g, '/');
+  if (norm.length <= max) {
+    return norm;
+  }
+  const name = fileName(norm);
+  if (name.length >= max - 1) {
+    return `…${name.slice(-(max - 1))}`;
+  }
+  const head = max - name.length - 1;
+  return `${norm.slice(0, Math.max(1, head))}…${name}`;
 }
 
 export function renderMarkdown(src: string): string {
@@ -396,7 +411,9 @@ export function inlineMarkdown(src: string): string {
     return `\u0000${slots.length - 1}\u0000`;
   };
   let text = src.replace(/`([^`]+)`/g, (_all, code: string) =>
-    stash(`<code>${escapeHtml(code)}</code>`),
+    looksLikeInlinePath(code)
+      ? stash(fileLinkHtml(code))
+      : stash(`<code>${escapeHtml(code)}</code>`),
   );
   text = extractMath(text, stash);
   text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_all, alt: string, url: string) => {
@@ -406,6 +423,9 @@ export function inlineMarkdown(src: string): string {
       : alt;
   });
   text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_all, label: string, url: string) => {
+    if (looksLikeInlinePath(url)) {
+      return stash(fileLinkHtml(url, label));
+    }
     const href = safeUrl(url);
     if (!href) {
       return label;
@@ -423,6 +443,7 @@ export function inlineMarkdown(src: string): string {
     const suffix = raw.slice(trimmed.length);
     return `${stash(`<a href="${escapeHtml(href)}" rel="noreferrer noopener">${escapeHtml(href)}</a>`)}${suffix}`;
   });
+  text = linkInlineFilePaths(text, stash);
   text = formatMarks(escapeHtml(text));
   return text.replace(/\u0000(\d+)\u0000/g, (_all, index: string) => slots[Number(index)] ?? '');
 }
