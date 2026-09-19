@@ -476,6 +476,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
           this.status,
           this.parked,
           this.messages,
+          this.sessionCwd,
         ),
       ),
       history: this.history,
@@ -1784,7 +1785,6 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.revealSession();
       return;
     }
-    this.parked.delete(sessionId);
     this.messages = [];
     this.journal.clear();
     this.workspaceImages.clear();
@@ -1815,6 +1815,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       applyRestoredTurnModels(this.messages, this.models);
       this.status = 'ready';
       this.error = undefined;
+      this.parked.delete(sessionId);
+      void this.refreshSessionsSilent();
       void this.journal.hydrateFromGit().then(async () => {
         await this.syncAllEditStats();
         this.emit();

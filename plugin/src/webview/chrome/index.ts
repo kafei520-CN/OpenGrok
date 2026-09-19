@@ -219,7 +219,8 @@ function desktopHeaderTitle(): string {
     return tr('settingsTitle');
   }
   const current = (ui.state.sessions ?? []).find((row) => row.id === ui.state.currentSessionId);
-  return current?.title?.trim() || tr('newSession');
+  const fromUser = ui.state.messages?.find((item) => item.role === 'user')?.text?.trim().split('\n')[0];
+  return current?.title?.trim() || fromUser?.slice(0, 42) || tr('newSession');
 }
 
 function persistAndSwitch(): void {

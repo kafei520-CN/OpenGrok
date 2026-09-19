@@ -116,6 +116,19 @@ describe('live sessions', () => {
     assert.equal(original.length, 1);
   });
 
+  it('keeps the current session in the list even after it leaves parked', () => {
+    const rows = overlayLiveSessions(
+      [{ id: 'old', title: 'Older chat' }],
+      'fresh',
+      'ready',
+      new Map(),
+      [{ id: 'u', role: 'user', text: '【编曲】风格: 交响乐', tools: [] }],
+    );
+    const current = rows.find((row) => row.id === 'fresh');
+    assert.ok(current);
+    assert.equal(current?.title, '【编曲】风格: 交响乐');
+  });
+
   it('keeps untitled parked chats in the list', () => {
     const parked = new Map<string, ParkedSession>([
       [

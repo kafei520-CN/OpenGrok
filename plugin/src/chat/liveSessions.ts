@@ -193,6 +193,7 @@ export function overlayLiveSessions(
   currentStatus: ChatStatus,
   parked: Map<string, ParkedSession>,
   currentMessages?: ChatMessage[],
+  currentCwd?: string,
 ): SessionRow[] {
   const list = [...(rows ?? [])];
   const seen = new Set(list.map((row) => row.id));
@@ -206,6 +207,15 @@ export function overlayLiveSessions(
       cwd: parkedRow.cwd,
     });
     seen.add(parkedRow.id);
+  }
+  if (currentId && !seen.has(currentId)) {
+    const fromUser = currentMessages?.find((item) => item.role === 'user')?.text?.trim().slice(0, 42);
+    list.unshift({
+      id: currentId,
+      title: fromUser || parkedSessionTitle(parked.get(currentId), currentId),
+      cwd: currentCwd,
+    });
+    seen.add(currentId);
   }
   return list.map((row) => {
     const runState = sessionRunState(row.id, currentId, currentStatus, parked);
