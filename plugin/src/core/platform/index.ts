@@ -72,6 +72,7 @@ export interface Platform {
   readDir(dir: string): Promise<string[]>;
   openExternal(url: string): Promise<void>;
   openFile(path: string, preview?: boolean): Promise<void>;
+  revealFile?(path: string): Promise<void>;
   clipboardWrite(text: string): Promise<void>;
   findFiles(query: string): Promise<Array<{ path: string; label: string }>>;
   relativePath(filePath: string): string;

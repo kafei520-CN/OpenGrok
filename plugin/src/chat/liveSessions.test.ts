@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  cloneMessages,
   emptyParked,
   lastAssistantInterrupted,
   overlayLiveSessions,
+  resolveIncomingSessionId,
   sessionIsLive,
   sessionRunState,
   slimParkedRow,
@@ -103,5 +105,62 @@ describe('live sessions', () => {
     assert.equal(parked.get('new')?.messages.length, 1);
     slimParkedRow(recent);
     assert.equal(recent.messages.length, 0);
+  });
+
+  it('clones parked transcripts so sessions cannot share the same array', () => {
+    const original = [{ id: 'a', role: 'assistant' as const, text: 'one', tools: [] }];
+    const copy = cloneMessages(original);
+    copy[0].text = 'two';
+    copy.push({ id: 'b', role: 'user', text: 'x', tools: [] });
+    assert.equal(original[0]?.text, 'one');
+    assert.equal(original.length, 1);
+  });
+
+  it('keeps untitled parked chats in the list', () => {
+    const parked = new Map<string, ParkedSession>([
+      [
+        'new',
+        {
+          ...emptyParked('new'),
+          title: 'hello there',
+          messages: [{ id: 'u', role: 'user', text: 'hello there', tools: [] }],
+        },
+      ],
+    ]);
+    const rows = overlayLiveSessions([{ id: 'new', title: '', cwd: '/tmp' }], 'old', 'ready', parked);
+    assert.equal(rows.find((row) => row.id === 'new')?.title, 'hello there');
+  });
+
+  it('routes live updates without sessionId to the parked running session', () => {
+    const parked = new Map<string, ParkedSession>([
+      ['a', { ...emptyParked('a'), status: 'streaming' }],
+    ]);
+    assert.equal(
+      resolveIncomingSessionId({
+        currentId: 'b',
+        currentStreaming: false,
+        parked,
+      }),
+      'a',
+    );
+    assert.equal(
+      resolveIncomingSessionId({
+        sessionId: 'b',
+        currentId: 'b',
+        currentStreaming: false,
+        parked,
+      }),
+      'b',
+    );
+    assert.equal(
+      resolveIncomingSessionId({
+        currentId: 'b',
+        currentStreaming: false,
+        replaying: true,
+        isReplay: true,
+        parked,
+      }),
+      'b',
+    );
   });
 });

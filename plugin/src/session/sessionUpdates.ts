@@ -14,6 +14,7 @@ import type {
   SlashCommandInfo,
 } from '../core/types';
 import { asObject, asString } from '../core/wire';
+import { stripWrapUpText } from '../chat/prompt/wrapUp';
 
 export interface SessionView {
   replaying: boolean;
@@ -231,13 +232,13 @@ export function applySessionUpdate(session: SessionView, update: SessionUpdate):
       stampTimes(last, update, true);
     }
     if (last?.role === 'user') {
-      last.text += text;
+      last.text = stripWrapUpText(last.text + text);
       stampTimes(last, update, true);
     } else {
       session.messages.push({
         id: `user-replay-${session.nextTurn()}`,
         role: 'user',
-        text,
+        text: stripWrapUpText(text),
         tools: [],
         createdAt: isoFromMs(update.turnStartMs ?? update.agentTimestampMs) ?? new Date().toISOString(),
       });

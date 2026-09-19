@@ -169,6 +169,10 @@ export class NodePlatform implements Platform {
     await this.opts.request('openFile', { path: filePath, preview });
   }
 
+  async revealFile(filePath: string): Promise<void> {
+    await this.opts.request('revealFile', { path: filePath });
+  }
+
   async clipboardWrite(text: string): Promise<void> {
     await this.opts.request('clipboardWrite', { text });
   }

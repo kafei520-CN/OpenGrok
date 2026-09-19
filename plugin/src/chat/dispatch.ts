@@ -119,14 +119,23 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
     case 'removeAttachment':
       controller.removeAttachment(message.id);
       return;
-    case 'openFile':
-      await controller.previewFileOnRemote(message.path);
+    case 'openFile': {
+      const filePath = await controller.resolveUserPath(message.path);
+      await controller.previewFileOnRemote(filePath);
       try {
-        await plat().openFile(message.path, true);
+        await plat().openFile(filePath, true);
       } catch {
         /* Browser overlay already has the file; the IDE may not. */
       }
       return;
+    }
+    case 'revealFile': {
+      const filePath = await controller.resolveUserPath(message.path);
+      if (plat().revealFile) {
+        await plat().revealFile(filePath);
+      }
+      return;
+    }
     case 'openUrl': {
       if (!/^https?:/i.test(message.url) && !message.url.toLowerCase().startsWith('mailto:')) {
         return;

@@ -147,6 +147,9 @@ export function createVscodePlatform(context: vscode.ExtensionContext): Platform
     async openFile(filePath, preview = true) {
       await vscode.window.showTextDocument(vscode.Uri.file(filePath), { preview });
     },
+    async revealFile(filePath) {
+      await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
+    },
     async clipboardWrite(text) {
       await vscode.env.clipboard.writeText(text);
     },

@@ -28,6 +28,17 @@ export function wrapUpPromptBlock(): ContentBlock {
   return { type: 'text', text: WRAP_UP_NOTE };
 }
 
+const WRAP_UP_MARK = '# OpenGrok wrap-up';
+
+/** CLI persists extra prompt blocks onto the user turn; strip them for display. */
+export function stripWrapUpText(text: string): string {
+  const idx = text.indexOf(WRAP_UP_MARK);
+  if (idx < 0) {
+    return text;
+  }
+  return text.slice(0, idx).replace(/[#\s]+$/u, '').trimEnd();
+}
+
 export function wrapUpRulePath(homeDir: string): string {
   return path.join(homeDir, '.grok', 'rules', WRAP_UP_RULE_FILE);
 }

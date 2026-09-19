@@ -702,7 +702,13 @@ export function parseSessionUpdate(params: unknown): {
   const noticeTimes = timesFromMeta(meta);
   const updateTimes = timesFromMeta(updateMeta);
   return {
-    sessionId: asString(obj['sessionId']),
+    sessionId:
+      asString(obj['sessionId']) ??
+      asString(obj['session_id']) ??
+      asString(update['sessionId']) ??
+      asString(update['session_id']) ??
+      asString(meta['sessionId']) ??
+      asString(meta['session_id']),
     isReplay:
       meta['isReplay'] === true ||
       updateMeta['isReplay'] === true ||

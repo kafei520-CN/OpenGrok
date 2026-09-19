@@ -950,6 +950,11 @@ async function runHost(method: string, params: Record<string, unknown>): Promise
         await shell.openPath(params['path']);
       }
       return true;
+    case 'revealFile':
+      if (typeof params['path'] === 'string') {
+        shell.showItemInFolder(params['path']);
+      }
+      return true;
     case 'clipboardWrite':
       clipboard.writeText(String(params['text'] ?? ''));
       return true;

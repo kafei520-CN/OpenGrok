@@ -490,9 +490,14 @@ export function loginCard(): HTMLElement {
 export function bootStar(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'boot';
+  const copy = ui.state.restoringSession ? tr('restoringTitle') : tr('startingTitle');
   el.setAttribute('role', 'status');
-  el.setAttribute('aria-label', tr('startingTitle'));
+  el.setAttribute('aria-label', copy);
   el.innerHTML = grokBootMark();
+  const label = document.createElement('p');
+  label.className = 'boot-copy';
+  label.textContent = copy;
+  el.append(label);
   return el;
 }
 

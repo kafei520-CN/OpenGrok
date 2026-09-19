@@ -11,6 +11,7 @@ import type { GoalState } from './goal';
 
 export type ParkedSession = {
   id: string;
+  title?: string;
   cwd?: string;
   messages: ChatMessage[];
   turn: number;
@@ -31,6 +32,16 @@ export type ParkedSession = {
 
 /** Full transcripts kept besides the current session and live background runs. */
 export const PARKED_FULL_MAX = 2;
+
+export function cloneMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    tools: message.tools.map((tool) => ({ ...tool })),
+    steps: message.steps?.map((step) => ({ ...step })),
+    edits: message.edits?.map((edit) => ({ ...edit })),
+    images: message.images?.map((image) => ({ ...image })),
+  }));
+}
 
 export function emptyParked(id: string, cwd?: string): ParkedSession {
   return {
@@ -133,11 +144,55 @@ export function trimParkedSessions(
   }
 }
 
+export function parkedSessionTitle(row?: ParkedSession, fallbackId?: string): string {
+  const titled = row?.title?.trim();
+  if (titled) {
+    return titled;
+  }
+  const fromUser = row?.messages.find((item) => item.role === 'user')?.text?.trim();
+  if (fromUser) {
+    return fromUser.slice(0, 42);
+  }
+  return fallbackId?.slice(0, 8) ?? '';
+}
+
+export function resolveIncomingSessionId(opts: {
+  sessionId?: string;
+  currentId?: string;
+  currentStreaming: boolean;
+  replaying?: boolean;
+  isReplay?: boolean;
+  parked: Map<string, ParkedSession>;
+  promptSessionId?: string;
+}): string | undefined {
+  if (opts.sessionId) {
+    return opts.sessionId;
+  }
+  if (opts.replaying && opts.isReplay && opts.currentId) {
+    return opts.currentId;
+  }
+  if (opts.currentStreaming && opts.currentId) {
+    return opts.currentId;
+  }
+  const live = [...opts.parked.values()].filter((row) => row.status === 'streaming');
+  if (live.length === 1 && !opts.isReplay) {
+    return live[0]?.id;
+  }
+  if (opts.replaying && opts.currentId) {
+    return opts.currentId;
+  }
+  if (opts.promptSessionId) {
+    return opts.promptSessionId;
+  }
+  return opts.currentId;
+}
+
 export function overlayLiveSessions(
   rows: SessionRow[] | undefined,
   currentId: string | undefined,
   currentStatus: ChatStatus,
   parked: Map<string, ParkedSession>,
+  currentMessages?: ChatMessage[],
 ): SessionRow[] {
   const list = [...(rows ?? [])];
   const seen = new Set(list.map((row) => row.id));
@@ -147,15 +202,22 @@ export function overlayLiveSessions(
     }
     list.unshift({
       id: parkedRow.id,
-      title: parkedRow.messages.find((item) => item.role === 'user')?.text?.slice(0, 42) || parkedRow.id.slice(0, 8),
+      title: parkedSessionTitle(parkedRow, parkedRow.id),
       cwd: parkedRow.cwd,
     });
     seen.add(parkedRow.id);
   }
   return list.map((row) => {
     const runState = sessionRunState(row.id, currentId, currentStatus, parked);
+    const parkedRow = parked.get(row.id);
+    const currentTitle =
+      row.id === currentId
+        ? currentMessages?.find((item) => item.role === 'user')?.text?.trim().slice(0, 42)
+        : undefined;
+    const title = row.title?.trim() || currentTitle || parkedSessionTitle(parkedRow, row.id);
     return {
       ...row,
+      title,
       live: runState === 'running',
       runState,
     };

@@ -6,7 +6,10 @@ import { iconEdit, iconFolder, iconTrash } from '../icons';
 import { escapeHtml } from '../transcript/markdown';
 
 export function listedSessions(): SessionRow[] {
-  return (ui.state.sessions ?? []).filter((row) => Boolean(row.title?.trim()));
+  const current = ui.state.currentSessionId;
+  return (ui.state.sessions ?? []).filter(
+    (row) => Boolean(row.title?.trim()) || row.live || row.id === current,
+  );
 }
 
 export function mountSessionsDrawer(parent: HTMLElement): void {

@@ -560,6 +560,27 @@ textarea:focus-visible {
 
 .transcript.catching-up {
   scroll-behavior: auto;
+  pointer-events: none;
+}
+
+.transcript.catching-up::after {
+  content: '';
+  position: sticky;
+  bottom: 24px;
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 12px auto 0;
+  border: 2px solid color-mix(in srgb, var(--fg) 16%, transparent);
+  border-top-color: var(--ice, #3b82f6);
+  border-radius: 50%;
+  animation: og-spin 0.7s linear infinite;
+}
+
+@keyframes og-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .transcript::-webkit-scrollbar {
@@ -1212,7 +1233,7 @@ textarea:focus-visible {
   padding: 0;
   border: none;
   background: none;
-  color: #2563eb;
+  color: #7eb6f5;
   font: inherit;
   font-weight: 700;
   line-height: inherit;
@@ -1224,7 +1245,7 @@ textarea:focus-visible {
 .md-file:hover,
 .md-file:focus-visible {
   background: none;
-  color: #1d4ed8;
+  color: #5aa0ee;
   text-decoration: underline;
   box-shadow: none;
 }
@@ -1247,7 +1268,7 @@ textarea:focus-visible {
   filter: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  color: #2563eb;
+  color: #7eb6f5;
   font-weight: 700;
 }
 
@@ -1406,7 +1427,15 @@ textarea:focus-visible {
   flex: 1;
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 14px;
   min-height: 100%;
+}
+
+.boot-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .boot-logo {

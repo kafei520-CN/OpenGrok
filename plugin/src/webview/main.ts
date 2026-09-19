@@ -15,6 +15,7 @@ import { removeSlot, replaceSlot } from './dom';
 import { closeSettingsPicker, patchSettings, settingsBackMessage } from './settings';
 import { bindFileDrop, syncDropHint } from './chrome/drop';
 import { bindQuoteMenu } from './chrome/quoteMenu';
+import { bindFileLinkMenu } from './chrome/fileLinkMenu';
 import { patchBody, scrollTranscript, syncWorkClock } from './transcript';
 import { chromeKeepers, overlayKind, syncSurface, syncThemeFontFace, syncWallpaper } from './chrome/wallpaper';
 import { syncBorderGlow } from './chrome/borderGlow';
@@ -430,6 +431,7 @@ function boot(): void {
   (window as unknown as { __grokPrime?: () => void }).__grokPrime?.();
   ensureOgPluginRoot();
   bindQuoteMenu();
+  bindFileLinkMenu();
   post({ type: 'ready' });
   post({ type: 'alive' });
   if (!isRemoteWeb()) {

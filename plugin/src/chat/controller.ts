@@ -41,7 +41,8 @@ import {
 import { tr, uiLocale } from '../core/i18n/locale';
 import { logError, logInfo, logWarn, showLog } from '../core/logger';
 import { buildPromptBlocks } from './prompt';
-import { ensureWrapUpRule, wrapUpMeta } from './prompt/wrapUp';
+import { resolveExistingChatPath } from './prompt/resolvePath';
+import { ensureWrapUpRule, stripWrapUpText } from './prompt/wrapUp';
 import { formatAgentError, formatErrorLine, isCancelError } from '../core/errors';
 import { readGrokSettings } from '../settings/settings';
 import {
@@ -201,10 +202,12 @@ import {
   type GoalState,
 } from './goal';
 import {
+  cloneMessages,
   emptyParked,
   lastAssistantInterrupted,
   markAssistantStopped,
   overlayLiveSessions,
+  resolveIncomingSessionId,
   trimParkedSessions,
   type ParkedSession,
 } from './liveSessions';
@@ -289,6 +292,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   currentSessionId?: string;
   private readonly parked = new Map<string, ParkedSession>();
   private parkedRecent: string[] = [];
+  private promptSessions = new Set<string>();
+  private promptSessionId?: string;
   private sessionCwd?: string;
   private restoringSession = false;
   private replaying = false;
@@ -453,6 +458,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       modeId: this.modeId,
       messages: source.map((message) => ({
         ...message,
+        text: message.role === 'user' ? stripWrapUpText(message.text) : message.text,
         tools: message.tools.map((tool) => ({ ...tool })),
         steps: message.steps?.map((step) => ({ ...step })),
         edits: message.edits?.length ? publicEdits(message.edits) : message.edits,
@@ -469,6 +475,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
           this.currentSessionId,
           this.status,
           this.parked,
+          this.messages,
         ),
       ),
       history: this.history,
@@ -776,6 +783,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         return;
       }
       this.queue = [...this.queue, trimmed];
+      this.messages = [
+        ...this.messages,
+        {
+          id: `user-queue-${++this.turn}`,
+          role: 'user',
+          text: trimmed,
+          tools: [],
+          createdAt: new Date().toISOString(),
+        },
+      ];
       this.emit();
       return;
     }
@@ -791,9 +808,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     await this.applySelectedCustomModel(agent);
     this.error = undefined;
     const run = ++this.runGen;
-    const blocks = await buildPromptBlocks(outgoing, this.attachments, {
-      wrapUp: !opts?.hidden,
-    });
+    const blocks = await buildPromptBlocks(outgoing, this.attachments);
     const now = new Date().toISOString();
     const userMessage: ChatMessage = {
       id: `user-${++this.turn}`,
@@ -818,14 +833,22 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       createdAt: now,
       ...this.turnModelFields(),
     };
+    const last = this.messages.at(-1);
+    const queuedAlready = Boolean(
+      !opts?.hidden && last?.role === 'user' && last.text === userMessage.text,
+    );
     this.messages = opts?.hidden
       ? [...this.messages, assistant]
-      : [...this.messages, userMessage, assistant];
+      : queuedAlready
+        ? [...this.messages, assistant]
+        : [...this.messages, userMessage, assistant];
     void persistTurnModels(this.currentSessionId ?? sid, this.messages);
     this.attachments = [];
     this.setStatus('streaming');
+    this.promptSessions.add(sid);
+    this.promptSessionId = sid;
     try {
-      await agent.prompt(blocks, { mode: promptModeMeta(this.modeId), ...wrapUpMeta() }, sid);
+      await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) }, sid);
     } catch (error) {
       if (!this.runBelongs(sid, run)) {
         return;
@@ -840,6 +863,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       }
       this.failOn(sid, tr('turnError'), error);
       return;
+    } finally {
+      this.promptSessions.delete(sid);
+      if (this.promptSessionId === sid) {
+        this.promptSessionId = [...this.promptSessions][0];
+      }
     }
     if (!this.runBelongs(sid, run)) {
       return;
@@ -1060,6 +1088,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     disposeAllTerminals();
     this.parked.clear();
     this.parkedRecent = [];
+    this.promptSessions.clear();
+    this.promptSessionId = undefined;
   }
 
   private parkForeground(): void {
@@ -1068,17 +1098,24 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     const interrupted = lastAssistantInterrupted(this.messages);
+    const title =
+      this.sessions?.find((row) => row.id === id)?.title?.trim() ||
+      this.messages.find((item) => item.role === 'user')?.text?.trim().slice(0, 42) ||
+      id.slice(0, 8);
     this.parked.set(id, {
       id,
+      title,
       cwd: this.sessionCwd,
-      messages: this.messages,
+      messages: cloneMessages(this.messages).map((message) =>
+        message.role === 'user' ? { ...message, text: stripWrapUpText(message.text) } : message,
+      ),
       turn: this.turn,
       status: this.status,
       error: this.error,
       goal: this.goal,
       modeId: this.modeId,
-      attachments: this.attachments,
-      queue: this.queue,
+      attachments: [...this.attachments],
+      queue: [...this.queue],
       runGen: this.runGen,
       permission: this.permission,
       ask: this.ask,
@@ -1105,7 +1142,12 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.parked.delete(id);
     this.currentSessionId = id;
     this.sessionCwd = row.cwd;
-    this.messages = row.messages;
+    this.messages = cloneMessages(row.messages);
+    for (const message of this.messages) {
+      if (message.role === 'user') {
+        message.text = stripWrapUpText(message.text);
+      }
+    }
     this.turn = row.turn;
     this.error = row.error;
     this.goal = row.goal;
@@ -1722,6 +1764,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const op = ++this.sessionOp;
     this.parkForeground();
     const parked = this.parked.get(sessionId);
+    const cwd =
+      sessionCwd ??
+      this.sessions?.find((row) => row.id === sessionId)?.cwd ??
+      parked?.cwd ??
+      this.cwd();
+    this.showRestoreSpinner(sessionId, cwd);
+    await new Promise<void>((resolve) => setTimeout(resolve, 16));
+    if (op !== this.sessionOp) {
+      return;
+    }
     if (parked && parked.messages.length > 0) {
       this.restoreParked(sessionId);
       this.compactGate = emptyCompactGate();
@@ -1729,15 +1781,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.hideSessionPreview = false;
       this.restoringSession = false;
       this.replaying = false;
-      this.emit();
+      this.revealSession();
       return;
     }
     this.parked.delete(sessionId);
-    const cwd =
-      sessionCwd ??
-      this.sessions?.find((row) => row.id === sessionId)?.cwd ??
-      parked?.cwd ??
-      this.cwd();
     this.messages = [];
     this.journal.clear();
     this.workspaceImages.clear();
@@ -1759,6 +1806,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.models = this.overlayModels(modelsFromResult(result));
       this.currentSessionId = agent.sessionId ?? sessionId;
       finalizeReplayTimes(this.messages);
+      for (const message of this.messages) {
+        if (message.role === 'user') {
+          message.text = stripWrapUpText(message.text);
+        }
+      }
       applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
       applyRestoredTurnModels(this.messages, this.models);
       this.status = 'ready';
@@ -1779,6 +1831,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         this.replaying = false;
         this.restoringSession = false;
         finalizeReplayTimes(this.messages);
+        for (const message of this.messages) {
+          if (message.role === 'user') {
+            message.text = stripWrapUpText(message.text);
+          }
+        }
         applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
         applyRestoredTurnModels(this.messages, this.models);
         void persistTurnModels(this.currentSessionId, this.messages);
@@ -2632,6 +2689,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     return plat().cwd();
   }
 
+  pathRoots(): string[] {
+    const roots = [this.sessionCwd, this.cwd(), ...plat().workspaceFolders()];
+    return [...new Set(roots.filter((item): item is string => Boolean(item?.trim())))];
+  }
+
+  async resolveUserPath(filePath: string): Promise<string> {
+    return resolveExistingChatPath(filePath, this.pathRoots(), (next) => plat().fileExists(next));
+  }
+
   private busyTurn(): boolean {
     return this.status === 'streaming';
   }
@@ -2665,8 +2731,17 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (this.hideSessionPreview && !this.agent?.sessionId) {
       return;
     }
-    if (sessionId && this.currentSessionId && sessionId !== this.currentSessionId) {
-      this.applyBackgroundUpdate(sessionId, update, isReplay);
+    const target = resolveIncomingSessionId({
+      sessionId,
+      currentId: this.currentSessionId,
+      currentStreaming: this.status === 'streaming',
+      replaying: this.replaying,
+      isReplay,
+      parked: this.parked,
+      promptSessionId: this.promptSessionId,
+    });
+    if (target && this.currentSessionId && target !== this.currentSessionId) {
+      this.applyBackgroundUpdate(target, update, isReplay);
       return;
     }
     const view = {
@@ -3079,6 +3154,28 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
   }
 
+  private showRestoreSpinner(sessionId: string, cwd?: string): void {
+    this.currentSessionId = sessionId;
+    this.sessionCwd = cwd;
+    this.messages = [];
+    this.restoringSession = true;
+    this.hideSessionPreview = false;
+    this.streamPosted = false;
+    this.streamCursor = emptyStreamCursor();
+    this.status = 'ready';
+    this.publishSnapshot('all');
+  }
+
+  /** Full transcript after a session switch, even if a background turn is still streaming. */
+  private revealSession(): void {
+    this.streamPosted = false;
+    this.streamCursor = emptyStreamCursor();
+    this.publishSnapshot('all');
+    if (this.status === 'streaming') {
+      this.streamPosted = true;
+    }
+  }
+
   private publishSnapshot(messages: 'all' | 'none' | 'tail'): void {
     const state = this.snapshot({ messages });
     for (const listener of this.listeners) {
@@ -3167,7 +3264,6 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       extra.disallowedTools = ['bash', 'execute', 'terminal', 'run_terminal_command'];
     }
     extra['x.ai/mcp/servers'] = imageMcpServersMeta();
-    Object.assign(extra, wrapUpMeta());
     const hints = this.startupHints();
     if (hints) {
       extra.startupHints = hints;

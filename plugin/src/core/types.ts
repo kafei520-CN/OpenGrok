@@ -742,6 +742,7 @@ export type WebviewToHost =
   | { type: 'cancelAsk' }
   | { type: 'removeAttachment'; id: string }
   | { type: 'openFile'; path: string }
+  | { type: 'revealFile'; path: string }
   | { type: 'openUrl'; url: string }
   | { type: 'setModel'; modelId: string }
   | { type: 'setMode'; modeId: string }

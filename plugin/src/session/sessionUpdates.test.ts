@@ -402,7 +402,7 @@ describe('plan steps', () => {
 
   it('reads live todo_write rawInput as plan entries', () => {
     const parsed = parseSessionUpdate({
-      sessionId: 's',
+      session_id: 's',
       update: {
         sessionUpdate: 'tool_call',
         title: 'todo_write',
@@ -411,6 +411,7 @@ describe('plan steps', () => {
         },
       },
     });
+    assert.equal(parsed.sessionId, 's');
     assert.equal(parsed.update.sessionUpdate, 'tool_call');
     const session = view({ replaying: false, messages: [] });
     applySessionUpdate(session, parsed.update);
