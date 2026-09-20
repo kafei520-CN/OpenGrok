@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { mergeLiveMessages, mergeTranscript, resolveIncomingMessages } from '../chat/messageMerge';
+import {
+  mergeLiveMessages,
+  mergeTranscript,
+  resolveIncomingMessages,
+  stabilizeIncomingChat,
+} from '../chat/messageMerge';
 import { packDelivery, packRemotePayload, REMOTE_STATE_SOFT, chunkMessages } from './remoteState';
 
 describe('remote state packing', () => {
@@ -186,6 +191,48 @@ describe('remote state packing', () => {
   it('does not merge when the last live message vanished (rewind / new session)', () => {
     const had = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
     assert.equal(mergeLiveMessages(had, [{ id: 'a' }, { id: 'b' }]), undefined);
+  });
+
+  it('does not treat a same-session empty restore as a real restore', () => {
+    const had = [{ id: 'u' }, { id: 'a' }];
+    const next = stabilizeIncomingChat({
+      incomingSessionId: 's1',
+      incomingRestoring: true,
+      incomingMessages: [],
+      hadSessionId: 's1',
+      hadMessages: had,
+    });
+    assert.equal(next.restoring, false);
+    assert.equal(next.merge, true);
+    assert.deepEqual(
+      next.messages.map((row) => row.id),
+      ['u', 'a'],
+    );
+  });
+
+  it('still restores when the session id actually changes', () => {
+    const next = stabilizeIncomingChat({
+      incomingSessionId: 's2',
+      incomingRestoring: true,
+      incomingMessages: [],
+      hadSessionId: 's1',
+      hadMessages: [{ id: 'old' }],
+    });
+    assert.equal(next.restoring, true);
+    assert.equal(next.messages.length, 0);
+  });
+
+  it('merges a same-session hydrate replay instead of replacing the open chat', () => {
+    const next = stabilizeIncomingChat({
+      incomingSessionId: 's1',
+      incomingRestoring: false,
+      incomingMessages: [{ id: 'a' }],
+      hadSessionId: 's1',
+      hadMessages: [{ id: 'u' }, { id: 'a' }],
+      hydrate: 9,
+    });
+    assert.equal(next.merge, true);
+    assert.equal(next.restoring, false);
   });
 
   it('keeps the open transcript when a live snapshot omits messages', () => {

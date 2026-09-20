@@ -7,8 +7,13 @@ void api.config().then((config) => {
   const items = document.getElementById('items');
   const ok = document.getElementById('ok');
   const cancel = document.getElementById('cancel');
+  const zh = String(config.locale || navigator.language || '')
+    .toLowerCase()
+    .startsWith('zh');
   title.textContent = config.title || 'OpenGrok';
-  if (config.prompt) {
+  cancel.textContent = zh ? '取消' : 'Cancel';
+  ok.textContent = zh ? '确定' : 'OK';
+  if (config.prompt && config.prompt !== config.title) {
     copy.hidden = false;
     copy.textContent = config.prompt;
   }
@@ -27,7 +32,13 @@ void api.config().then((config) => {
   } else {
     field.hidden = false;
     field.type = config.mode === 'password' ? 'password' : 'text';
+    if (config.value) {
+      field.value = config.value;
+    }
     field.focus();
+    if (config.value) {
+      field.select();
+    }
     field.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         api.result(field.value);

@@ -1,4 +1,4 @@
-import { iconFile } from '../icons';
+import { fileIconSvg } from './fileIcons';
 
 function escapeHtml(value: string): string {
   return String(value ?? '')
@@ -23,6 +23,7 @@ const FILE_EXTS = new Set([
   'cjs',
   'json',
   'md',
+  'markdown',
   'css',
   'html',
   'htm',
@@ -30,7 +31,9 @@ const FILE_EXTS = new Set([
   'py',
   'go',
   'java',
+  'jar',
   'kt',
+  'kts',
   'toml',
   'yml',
   'yaml',
@@ -44,6 +47,7 @@ const FILE_EXTS = new Set([
   'pdf',
   'txt',
   'sh',
+  'bash',
   'ps1',
   'bat',
   'cmd',
@@ -62,17 +66,129 @@ const FILE_EXTS = new Set([
   'ini',
   'cfg',
   'wasm',
+  'gradle',
 ]);
+
+const METHOD_ICON =
+  '<svg class="md-file-icon md-sym-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.15 9.55 6.05 14.85 7.5 9.55 8.95 8 13.85 6.45 8.95 1.15 7.5 6.45 6.05z"/></svg>';
+
+export type CodeRef = {
+  kind: 'file' | 'folder' | 'symbol';
+  name: string;
+  path?: string;
+  line?: number;
+};
+
+const LINE_TAIL = /(?:\s*\(\s*line\s+(\d+)\s*\))$/i;
 
 /** Paths that should become clickable chips in conversation markdown, not tool rows. */
 export function looksLikeInlinePath(raw: string): boolean {
-  const text = stripPathWrap(raw);
-  if (!text || text.length > 320 || /\s/.test(text)) {
-    return false;
+  const parsed = parseCodeRef(raw);
+  return parsed?.kind === 'file' || parsed?.kind === 'folder';
+}
+
+export function parseCodeRef(raw: string): CodeRef | undefined {
+  let text = stripPathWrap(raw);
+  if (!text || text.length > 320) {
+    return undefined;
   }
   if (/^(https?:|mailto:|data:)/i.test(text)) {
+    return undefined;
+  }
+  let line: number | undefined;
+  const lined = text.match(LINE_TAIL);
+  if (lined) {
+    line = Number(lined[1]);
+    text = text.slice(0, lined.index).trim();
+  }
+  if (!text || /\s/.test(text)) {
+    return undefined;
+  }
+  if (looksLikeFileToken(text)) {
+    return { kind: 'file', name: fileName(text), path: text, line };
+  }
+  if (looksLikeFolderToken(text)) {
+    const path = text.replace(/[/\\]+$/, '').replace(/\\/g, '/');
+    return { kind: 'folder', name: fileName(path), path: `${path}/` };
+  }
+  if (line && /^[A-Za-z_][\w]*$/.test(text)) {
+    return { kind: 'symbol', name: text, line };
+  }
+  return undefined;
+}
+
+export function fileLinkHtml(pathOrRef: string | CodeRef, label?: string): string {
+  const ref = typeof pathOrRef === 'string' ? parseCodeRef(pathOrRef) : pathOrRef;
+  if (!ref) {
+    return escapeHtml(String(pathOrRef));
+  }
+  const name = label?.trim() || ref.name;
+  const icon =
+    ref.kind === 'symbol'
+      ? METHOD_ICON
+      : ref.kind === 'folder'
+        ? fileIconSvg('folder')
+        : fileIconSvg(extOf(ref.path ?? ref.name));
+  const cls =
+    ref.kind === 'symbol' ? 'md-file md-sym' : ref.kind === 'folder' ? 'md-file md-dir' : 'md-file';
+  const pathAttr = ref.path ? ` data-path="${escapeHtml(ref.path)}"` : '';
+  const lineAttr = ref.line ? ` data-line="${ref.line}"` : '';
+  const kindAttr = ` data-kind="${ref.kind}"`;
+  const title = [ref.path ?? ref.name, ref.line ? `line ${ref.line}` : ''].filter(Boolean).join(' · ');
+  const lineHtml = ref.line
+    ? `<span class="md-file-line">(line ${ref.line})</span>`
+    : '';
+  return `<button type="button" class="${cls}"${pathAttr}${lineAttr}${kindAttr} title="${escapeHtml(title)}">${icon}<span class="md-file-name">${escapeHtml(name)}</span>${lineHtml}</button>`;
+}
+
+export function linkInlineFilePaths(text: string, stash: (html: string) => string): string {
+  return text.replace(MARKED_RE, (full, prefix: string, token: string) => {
+    const ref = parseCodeRef(token);
+    if (!ref) {
+      return full;
+    }
+    return `${prefix}${stash(fileLinkHtml(ref))}`;
+  });
+}
+
+/** True when the token was explicitly marked with a leading @. */
+export function isMarkedFileRef(raw: string): boolean {
+  return raw.trim().startsWith('@');
+}
+
+function looksLikeFolderToken(text: string): boolean {
+  const trimmed = text.replace(/[/\\]+$/, '');
+  if (!trimmed || trimmed.length > 320) {
     return false;
   }
+  if (!/[\\/]/.test(text)) {
+    return false;
+  }
+  if (looksLikeFileToken(trimmed)) {
+    return false;
+  }
+  const norm = trimmed.replace(/\\/g, '/');
+  if (/^https?:/i.test(norm)) {
+    return false;
+  }
+  if (isNumericPath(norm)) {
+    return false;
+  }
+  return (
+    /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+$/.test(norm) ||
+    /^[A-Za-z]:\//.test(norm) ||
+    (norm.startsWith('/') && /[A-Za-z]/.test(norm)) ||
+    /^\.\.?\//.test(norm)
+  );
+}
+
+/** Fractions and dates like 1/5 or 2026/09/20 are not folders. */
+function isNumericPath(path: string): boolean {
+  const segments = path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  return segments.length > 0 && segments.every((part) => /^\d+$/.test(part));
+}
+
+function looksLikeFileToken(text: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(text) || text.startsWith('file:')) {
     return true;
   }
@@ -88,25 +204,11 @@ export function looksLikeInlinePath(raw: string): boolean {
   return !/[\\/]/.test(text) && hasFileExt(text) && FILE_EXTS.has(extOf(text));
 }
 
-export function fileLinkHtml(path: string, label?: string): string {
-  const clean = stripPathWrap(path);
-  const name = label?.trim() || fileName(clean);
-  return `<button type="button" class="md-file" data-path="${escapeHtml(clean)}" title="${escapeHtml(clean)}">${iconFile()}<span class="md-file-name">${escapeHtml(name)}</span></button>`;
-}
-
-export function linkInlineFilePaths(text: string, stash: (html: string) => string): string {
-  return text.replace(PATH_RE, (full, prefix: string, path: string) => {
-    const trimmed = trimPathPunct(path);
-    if (!looksLikeInlinePath(trimmed)) {
-      return full;
-    }
-    const extra = path.slice(trimmed.length);
-    return `${prefix}${stash(fileLinkHtml(trimmed))}${extra}`;
-  });
-}
-
 function stripPathWrap(raw: string): string {
   let text = raw.trim();
+  if (text.startsWith('@')) {
+    text = text.slice(1).trim();
+  }
   if (
     (text.startsWith('"') && text.endsWith('"')) ||
     (text.startsWith("'") && text.endsWith("'"))
@@ -116,6 +218,7 @@ function stripPathWrap(raw: string): string {
   if (text.startsWith('file:')) {
     text = decodeURIComponent(text.replace(/^file:\/\//, '').replace(/^\/([A-Za-z]:)/, '$1'));
   }
+  text = text.replace(/[。，、；：！？.,;:]+$/u, '');
   return text;
 }
 
@@ -132,9 +235,6 @@ function extOf(path: string): string {
   return base.slice(dot + 1).toLowerCase();
 }
 
-function trimPathPunct(path: string): string {
-  return path.replace(/[),.;:!?]+$/g, '');
-}
-
-const PATH_RE =
-  /(^|[\s([{])((?:[A-Za-z]:[\\/]|file:\/\/\/?|\.\.?[\\/]|\/)[^\s<>"'`]+|[A-Za-z0-9._-]+(?:[\\/][A-Za-z0-9._-]+)+\.[A-Za-z0-9]{1,10})/g;
+/** Only `@path`, `@name.ext`, and `@name (line N)` become chips in prose. */
+const MARKED_RE =
+  /(^|[\s([{（【])@([^\s<>"'`()]+(?:\s*\(\s*line\s+\d+\s*\))?)/g;

@@ -1,27 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <title>OpenGrok</title>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #12171f;
+        --bg: #161b22;
+        --elev: #1c232c;
         --fg: #e8eef6;
         --muted: #8b97a8;
-        --line: rgb(255 255 255 / 10%);
-        --accent: #5eead4;
-        --ink: #04120f;
+        --line: rgb(255 255 255 / 12%);
+        --ice: #59a0f2;
       }
       html,
       body {
         margin: 0;
         background: var(--bg);
         color: var(--fg);
-        font: 13px/1.45 "Segoe UI Variable", "Segoe UI", sans-serif;
+        font: 13px/1.45 "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif;
       }
       main {
-        padding: 18px 18px 14px;
+        padding: 16px;
         display: flex;
         flex-direction: column;
         gap: 12px;
@@ -31,27 +31,28 @@
       h1 {
         margin: 0;
         font-size: 14px;
-        font-weight: 620;
+        font-weight: 650;
       }
       p {
         margin: 0;
         color: var(--muted);
+        font-size: 12px;
       }
       input,
       select {
         width: 100%;
         box-sizing: border-box;
         border: 1px solid var(--line);
-        background: #0c1016;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
         color: var(--fg);
-        border-radius: 10px;
-        padding: 9px 11px;
+        border-radius: 9px;
+        padding: 8px 10px;
         font: inherit;
       }
       input:focus,
       select:focus {
-        outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
-        outline-offset: 1px;
+        outline: none;
+        border-color: color-mix(in srgb, var(--ice) 50%, var(--line));
       }
       .items {
         display: flex;
@@ -72,8 +73,8 @@
       }
       .items button:hover,
       .items button:focus-visible {
-        border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        border-color: color-mix(in srgb, var(--ice) 45%, transparent);
+        background: color-mix(in srgb, var(--ice) 12%, transparent);
       }
       .items em {
         display: block;
@@ -88,19 +89,20 @@
         margin-top: auto;
       }
       .row button {
-        border: 0;
-        border-radius: 8px;
-        padding: 7px 12px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 6px 12px;
         font: inherit;
         cursor: pointer;
       }
       .ghost {
-        background: rgb(255 255 255 / 8%);
+        background: var(--elev);
         color: var(--fg);
       }
       .ok {
-        background: var(--accent);
-        color: var(--ink);
+        background: var(--fg);
+        color: var(--bg);
+        border-color: transparent;
         font-weight: 620;
       }
     </style>
@@ -112,8 +114,8 @@
       <input id="field" hidden />
       <div id="items" class="items" hidden></div>
       <div class="row">
-        <button class="ghost" id="cancel" type="button">Cancel</button>
-        <button class="ok" id="ok" type="button">OK</button>
+        <button class="ghost" id="cancel" type="button">取消</button>
+        <button class="ok" id="ok" type="button">确定</button>
       </div>
     </main>
     <script src="./prompt.js"></script>

@@ -1,3 +1,34 @@
+/**
+ * A later full snapshot of the *same* open chat must not look like a session
+ * restore. Billing / meter ticks pack huge transcripts as hydrate frames and
+ * would otherwise wipe the body, then pin the viewport to the bottom.
+ */
+export function stabilizeIncomingChat<T extends { id?: string }>(opts: {
+  incomingSessionId?: string;
+  incomingRestoring?: boolean;
+  incomingMessages: T[];
+  hadSessionId?: string;
+  hadMessages: T[];
+  hydrate?: number;
+  merge?: boolean;
+}): { messages: T[]; restoring: boolean; merge: boolean } {
+  const same =
+    Boolean(opts.incomingSessionId) && opts.incomingSessionId === opts.hadSessionId;
+  let restoring = Boolean(opts.incomingRestoring);
+  let merge = Boolean(opts.merge);
+  let messages = opts.incomingMessages;
+  if (same && opts.hadMessages.length > 0) {
+    if (restoring && messages.length === 0) {
+      messages = opts.hadMessages;
+      merge = true;
+      restoring = false;
+    } else if (typeof opts.hydrate === 'number' && !restoring) {
+      merge = true;
+    }
+  }
+  return { messages, restoring, merge };
+}
+
 /** Keep the open transcript when a live update omits history or only appends new turns. */
 export function mergeTranscript<T extends { id?: string }>(had: T[], incoming: T[]): T[] {
   if (!incoming.length) {

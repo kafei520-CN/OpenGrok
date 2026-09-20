@@ -3,8 +3,13 @@ import { describe, it } from 'node:test';
 import {
   ATTACH_TEXT_MAX,
   addActiveFile,
+  applyStoredUserMedia,
+  cloneQueuedPrompt,
+  makeQueuedPrompt,
+  packUserMedia,
   pasteClipboard,
   quoteText,
+  userMediaStamps,
   type AttachmentHost,
 } from './attachments';
 import { bindPlatform, type Platform } from '../../core/platform';
@@ -161,6 +166,81 @@ describe('attachments', () => {
     assert.equal(host.attachments[0]?.path, 'E:/work/src');
     assert.equal(host.attachments[0]?.label, 'src');
     assert.equal(host.attachments[0]?.text, undefined);
+    assert.equal(host.attachments[0]?.folder, true);
+  });
+
+  it('keeps queued images on their own prompt instead of mixing the next one', () => {
+    const first = makeQueuedPrompt(
+      'one',
+      [{ id: 'a', label: 'a.png', mimeType: 'image/png', data: 'aaa' }],
+      'q1',
+    );
+    const second = makeQueuedPrompt(
+      'two',
+      [{ id: 'b', label: 'b.png', mimeType: 'image/png', data: 'bbb' }],
+      'q2',
+    );
+    assert.equal(first.attachments[0]?.data, 'aaa');
+    assert.equal(second.attachments[0]?.data, 'bbb');
+    const copy = cloneQueuedPrompt(first);
+    copy.attachments[0] = { ...copy.attachments[0]!, data: 'zzz' };
+    assert.equal(first.attachments[0]?.data, 'aaa');
+    assert.deepEqual(
+      packUserMedia(first.attachments).images?.map((item) => item.data),
+      ['aaa'],
+    );
+    assert.deepEqual(
+      packUserMedia(second.attachments).images?.map((item) => item.data),
+      ['bbb'],
+    );
+  });
+
+  it('copies referenced files and images onto the user message', () => {
+    const packed = packUserMedia([
+      {
+        id: 'img',
+        label: 'shot.png',
+        mimeType: 'image/png',
+        data: 'aaaa',
+      },
+      {
+        id: 'pdf',
+        label: 'spec.pdf',
+        path: 'E:/docs/spec.pdf',
+        mimeType: 'application/pdf',
+      },
+      {
+        id: 'dir',
+        label: 'src',
+        path: 'E:/work/src',
+        folder: true,
+      },
+    ]);
+    assert.equal(packed.images?.length, 1);
+    assert.equal(packed.images?.[0]?.data, 'aaaa');
+    assert.equal(packed.files?.length, 2);
+    assert.equal(packed.files?.[0]?.label, 'spec.pdf');
+    assert.equal(packed.files?.[0]?.path, 'E:/docs/spec.pdf');
+    assert.equal(packed.files?.[1]?.folder, true);
+  });
+
+  it('restores stored user files onto replayed text-only turns', () => {
+    const stamps = userMediaStamps([
+      {
+        id: 'u',
+        role: 'user',
+        text: 'look at this',
+        tools: [],
+        files: [{ label: 'spec.pdf', path: 'E:/docs/spec.pdf', mimeType: 'application/pdf' }],
+        images: [{ mimeType: 'image/png', data: 'aaaa' }],
+      },
+    ]);
+    const messages = [
+      { id: 'u', role: 'user' as const, text: 'look at this', tools: [] },
+    ];
+    applyStoredUserMedia(messages, stamps);
+    assert.equal(messages[0]?.files?.[0]?.label, 'spec.pdf');
+    assert.equal(messages[0]?.images?.[0]?.data, 'aaaa');
   });
 
   it('attaches nameless binary uploads without inline text', async () => {

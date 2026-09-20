@@ -343,29 +343,6 @@ textarea:focus-visible {
   overflow: hidden;
 }
 
-.restore-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  display: grid;
-  place-items: center;
-  background: transparent;
-  pointer-events: none;
-}
-
-.restore-veil .boot {
-  flex: none;
-  min-height: 0;
-  gap: 12px;
-  align-content: center;
-}
-
-.boot-copy {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .home {
   flex: 1;
   min-height: 0;
@@ -1248,6 +1225,18 @@ textarea:focus-visible {
   text-decoration: underline;
 }
 
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+}
+
+.msg.user .gallery {
+  margin-top: 8px;
+}
+
 .md-file {
   display: inline-flex;
   align-items: center;
@@ -1256,7 +1245,7 @@ textarea:focus-visible {
   padding: 0;
   border: none;
   background: none;
-  color: #7eb6f5;
+  color: #59A0F2;
   font: inherit;
   font-weight: 700;
   line-height: inherit;
@@ -1268,7 +1257,7 @@ textarea:focus-visible {
 .md-file:hover,
 .md-file:focus-visible {
   background: none;
-  color: #5aa0ee;
+  color: #3d8ae0;
   text-decoration: underline;
   box-shadow: none;
 }
@@ -1283,6 +1272,24 @@ textarea:focus-visible {
   font-weight: 700;
 }
 
+.md-file-line {
+  margin-left: 0.2em;
+  font-weight: 500;
+  opacity: 0.78;
+}
+
+.md-file .md-file-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: -0.2em;
+}
+
+.md-sym .md-file-name {
+  font-weight: 650;
+}
+
 #app[data-surface='glass'] .md-file,
 #app[data-surface='solid'] .md-file {
   background: none;
@@ -1291,7 +1298,7 @@ textarea:focus-visible {
   filter: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  color: #7eb6f5;
+  color: #59A0F2;
   font-weight: 700;
 }
 
@@ -1425,6 +1432,40 @@ textarea:focus-visible {
   cursor: zoom-out;
 }
 
+.og-dialog {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 42%, transparent);
+}
+
+.og-dialog-card {
+  width: min(380px, 100%);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--elev);
+  box-shadow: 0 16px 40px color-mix(in srgb, #000 24%, transparent);
+}
+
+.og-dialog-card h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.og-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .lightbox img {
   max-width: min(92%, 720px);
   max-height: 82%;
@@ -1451,6 +1492,18 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   min-height: 100%;
+  background: transparent;
+}
+
+.boot-restore {
+  align-content: center;
+  gap: 12px;
+}
+
+.boot-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .boot-logo {
@@ -2148,6 +2201,18 @@ textarea:focus-visible {
   margin: 0 2px 8px;
 }
 
+.chip-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.chip-icon .md-file-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -2158,6 +2223,26 @@ textarea:focus-visible {
   border-radius: 999px;
   background: var(--elev);
   color: var(--muted);
+}
+
+.chip.chip-file {
+  color: #59A0F2;
+  font-weight: 700;
+}
+
+.chip.chip-file .md-file {
+  font-size: 12px;
+}
+
+.chip.chip-quote {
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.chip.chip-quote,
+.msg-files .chip-quote {
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .chip-x,
@@ -2980,6 +3065,15 @@ textarea:focus-visible {
 
 .composer-suggest .menu-item {
   align-items: flex-start;
+}
+
+.composer-suggest .menu-item.file-hit {
+  align-items: center;
+}
+
+.composer-suggest .menu-item.file-hit span {
+  color: #59A0F2;
+  font-weight: 700;
 }
 
 .composer-suggest .menu-item code {
@@ -4088,6 +4182,7 @@ kbd {
 #app[data-surface='glass'] .recent-card,
 #app[data-surface='glass'] .permission,
 #app[data-surface='glass'] .ask-card,
+#app[data-surface='glass'] .og-dialog-card,
 #app[data-surface='glass'] .msg.user .bubble,
 #app[data-surface='glass'] .msg.assistant > .md.answer,
 #app[data-surface='glass'] .tool-row,
@@ -4113,7 +4208,8 @@ kbd {
   backdrop-filter: blur(var(--glass-2-blur, 40px)) saturate(1.7) brightness(1.06);
 }
 
-#app[data-surface='glass'] .composer-card {
+#app[data-surface='glass'] .composer-card,
+#app[data-surface='glass'] .og-dialog-card {
   overflow: visible;
 }
 
@@ -4321,6 +4417,7 @@ kbd {
 #app[data-surface='glass'][data-wp-kind='image'] .recent-card::before,
 #app[data-surface='glass'][data-wp-kind='image'] .permission::before,
 #app[data-surface='glass'][data-wp-kind='image'] .ask-card::before,
+#app[data-surface='glass'][data-wp-kind='image'] .og-dialog-card::before,
 #app[data-surface='glass'][data-wp-kind='image'] .msg.user .bubble::before,
 #app[data-surface='glass'][data-wp-kind='image'] .msg.assistant > .md.answer::before,
 #app[data-surface='glass'][data-wp-kind='image'] .tool-row::before,
@@ -4377,6 +4474,7 @@ kbd {
 #app[data-surface='glass'][data-wp-kind='image'] .recent-card,
 #app[data-surface='glass'][data-wp-kind='image'] .permission,
 #app[data-surface='glass'][data-wp-kind='image'] .ask-card,
+#app[data-surface='glass'][data-wp-kind='image'] .og-dialog-card,
 #app[data-surface='glass'][data-wp-kind='image'] .msg.user .bubble,
 #app[data-surface='glass'][data-wp-kind='image'] .msg.assistant > .md.answer,
 #app[data-surface='glass'][data-wp-kind='image'] .tool-row,

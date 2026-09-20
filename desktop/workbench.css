@@ -2857,6 +2857,7 @@ html.opengrok #app[data-surface='glass'] .starter,
 html.opengrok #app[data-surface='glass'] .recent-card,
 html.opengrok #app[data-surface='glass'] .permission,
 html.opengrok #app[data-surface='glass'] .ask-card,
+html.opengrok #app[data-surface='glass'] .og-dialog-card,
 html.opengrok #app[data-surface='glass'] .steps-card {
   border: var(--glass-border);
   background: var(--glass-film);

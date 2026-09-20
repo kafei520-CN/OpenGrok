@@ -365,6 +365,7 @@ export interface Attachment {
   text?: string;
   mimeType?: string;
   data?: string;
+  folder?: boolean;
 }
 
 export interface FileEdit {
@@ -404,6 +405,20 @@ export interface PlanStep {
   id?: string;
 }
 
+export interface MessageFile {
+  label: string;
+  path?: string;
+  mimeType?: string;
+  folder?: boolean;
+}
+
+/** One composer send waiting behind a live turn. Attachments stay on this item. */
+export interface QueuedPrompt {
+  id: string;
+  text: string;
+  attachments: Attachment[];
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -411,6 +426,7 @@ export interface ChatMessage {
   thinking?: string;
   tools: ToolCard[];
   images?: MediaItem[];
+  files?: MessageFile[];
   edits?: FileEdit[];
   plan?: string;
   steps?: PlanStep[];
@@ -741,7 +757,7 @@ export type WebviewToHost =
   | { type: 'answerAsk'; choiceId?: string; choiceIds?: string[]; notes?: string }
   | { type: 'cancelAsk' }
   | { type: 'removeAttachment'; id: string }
-  | { type: 'openFile'; path: string }
+  | { type: 'openFile'; path: string; line?: number }
   | { type: 'revealFile'; path: string }
   | { type: 'openUrl'; url: string }
   | { type: 'setModel'; modelId: string }
@@ -755,7 +771,7 @@ export type WebviewToHost =
     }
   | { type: 'closeDrawer' }
   | { type: 'loadSession'; sessionId: string; cwd?: string }
-  | { type: 'renameSession'; sessionId: string }
+  | { type: 'renameSession'; sessionId: string; title?: string }
   | { type: 'deleteSession'; sessionId: string }
   | { type: 'rewindTo'; index: number }
   | { type: 'rewindTurn'; messageId: string }

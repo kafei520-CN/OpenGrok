@@ -1,6 +1,6 @@
 import type { ChatState, StreamTail } from '../core/types';
 import { applyEditStatsToMessages, type EditStatsItem } from '../edits/editStats';
-import { resolveIncomingMessages } from '../chat/messageMerge';
+import { resolveIncomingMessages, stabilizeIncomingChat } from '../chat/messageMerge';
 import { mergeStreamTail } from '../chat/streamTail';
 import { applyThemeTo } from '../settings/theme';
 import { bindRender, isBooting, isDesktop, isRemoteWeb, normalizeState, persistUi, post, root, ui } from './app';
@@ -9,7 +9,7 @@ import { patchRail } from './shell/rail';
 import { patchDesktopDash } from './shell/dashboard';
 import { closeDesktopReview, openDesktopReview, patchReviewStage, reviewOpen } from './shell/reviewStage';
 import { patchSettingsStage } from './shell/settingsStage';
-import { patchHeader, renderDrawer, renderLightbox } from './chrome';
+import { patchHeader, renderDrawer, renderLightbox, renderRenameDialog } from './chrome';
 import { mountComposer, patchComposer } from './chrome/composer';
 import { removeSlot, replaceSlot } from './dom';
 import { closeSettingsPicker, patchSettings, settingsBackMessage } from './settings';
@@ -121,10 +121,18 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     } else if (typeof data.hydrate === 'number') {
       hydrateGen = data.hydrate;
     }
-    if (incoming.restoringSession && incoming.messages.length === 0 && ui.state.messages.length > 0) {
-      incoming.messages = ui.state.messages;
-      incoming.mergeTranscript = true;
-    }
+    const stable = stabilizeIncomingChat({
+      incomingSessionId: incoming.currentSessionId,
+      incomingRestoring: incoming.restoringSession,
+      incomingMessages: incoming.messages,
+      hadSessionId: ui.state.currentSessionId,
+      hadMessages: ui.state.messages,
+      hydrate: data.hydrate,
+      merge: Boolean(data.merge || incoming.mergeTranscript),
+    });
+    incoming.messages = stable.messages;
+    incoming.mergeTranscript = stable.merge;
+    incoming.restoringSession = stable.restoring;
     const resolved = resolveIncomingMessages(ui.state.messages, incoming.messages, {
       merge: data.merge || incoming.mergeTranscript,
       mergeTranscript: incoming.mergeTranscript,
@@ -420,6 +428,15 @@ function render(): void {
     } else {
       removeSlot('grok-lightbox');
     }
+    if (ui.renameSession) {
+      if (!document.getElementById('og-rename')) {
+        const dialog = renderRenameDialog();
+        dialog.id = 'og-rename';
+        root.append(dialog);
+      }
+    } else {
+      removeSlot('og-rename');
+    }
     syncWallpaper(root, ui.state.theme);
     syncBorderGlow(root);
     scrollTranscript();
@@ -495,6 +512,12 @@ function boot(): void {
       render();
       return;
     }
+    if (ui.renameSession) {
+      event.preventDefault();
+      ui.renameSession = undefined;
+      render();
+      return;
+    }
     if (ui.moreOpen || ui.picker || ui.menu) {
       event.preventDefault();
       ui.moreOpen = false;
@@ -514,10 +537,14 @@ function boot(): void {
     }
   });
   document.addEventListener('click', (event) => {
-    const filePath = filePathFromEvent(event);
-    if (filePath) {
+    const fileRef = fileRefFromEvent(event);
+    if (fileRef?.path) {
       event.preventDefault();
-      post({ type: 'openFile', path: filePath });
+      if (fileRef.kind === 'folder') {
+        post({ type: 'revealFile', path: fileRef.path });
+      } else {
+        post({ type: 'openFile', path: fileRef.path, line: fileRef.line });
+      }
       return;
     }
     const href = hrefFromEvent(event);
@@ -569,7 +596,9 @@ function syncDesktopChrome(): void {
   host?.setChrome?.({ background, foreground, surface });
 }
 
-function filePathFromEvent(event: MouseEvent): string | undefined {
+function fileRefFromEvent(
+  event: MouseEvent,
+): { path?: string; line?: number; kind?: string } | undefined {
   const target = event.target;
   if (!(target instanceof Element)) {
     return undefined;
@@ -579,7 +608,13 @@ function filePathFromEvent(event: MouseEvent): string | undefined {
     return undefined;
   }
   const path = link.dataset.path?.trim();
-  return path || undefined;
+  const lineRaw = link.dataset.line?.trim();
+  const line = lineRaw ? Number(lineRaw) : undefined;
+  return {
+    path: path || undefined,
+    line: Number.isFinite(line) ? line : undefined,
+    kind: link.dataset.kind || (link.classList.contains('md-dir') ? 'folder' : undefined),
+  };
 }
 
 function hrefFromEvent(event: MouseEvent): string | undefined {

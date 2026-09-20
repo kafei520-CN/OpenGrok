@@ -19,6 +19,8 @@ function iconSend(): string {
   return '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5V3.6M4.2 7.4 8 3.6l3.8 3.8"/></svg>';
 }
 import { escapeHtml } from '../transcript/markdown';
+import { fileIconSvg } from '../transcript/fileIcons';
+import { fileLinkHtml } from '../transcript/fileLinks';
 
 const FALLBACK_EFFORTS = ['low', 'medium', 'high', 'xhigh'];
 
@@ -784,8 +786,13 @@ function fileMenu(): HTMLElement {
   for (const hit of ui.state.fileHits ?? []) {
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = 'menu-item';
-    item.textContent = hit.label;
+    item.className = 'menu-item file-hit';
+    const icon = document.createElement('span');
+    icon.className = 'chip-icon';
+    icon.innerHTML = attachIcon({ label: hit.label, path: hit.path });
+    const label = document.createElement('span');
+    label.textContent = hit.label;
+    item.append(icon, label);
     item.addEventListener('click', () => {
       post({ type: 'pickFile', path: hit.path });
       ui.draft = ui.draft.replace(/@[^\s]*$/, '').trimEnd();
@@ -1078,17 +1085,55 @@ function attachmentChip(attachment: Attachment): HTMLElement {
     return tile;
   }
   const chip = document.createElement('span');
-  chip.className = 'chip';
-  const label = document.createElement('span');
-  label.textContent = attachment.label;
+  chip.className = isQuoteAttachment(attachment) ? 'chip chip-quote' : 'chip chip-file';
   const x = document.createElement('button');
   x.type = 'button';
   x.className = 'chip-x';
   x.title = tr('removeAttach');
   x.textContent = '×';
-  x.addEventListener('click', () => post({ type: 'removeAttachment', id: attachment.id }));
-  chip.append(label, x);
+  x.addEventListener('click', (event) => {
+    event.stopPropagation();
+    post({ type: 'removeAttachment', id: attachment.id });
+  });
+  if (isQuoteAttachment(attachment)) {
+    const label = document.createElement('span');
+    label.textContent = attachment.label;
+    chip.append(label, x);
+    return chip;
+  }
+  const wrap = document.createElement('span');
+  wrap.innerHTML = fileLinkHtml(
+    attachment.folder
+      ? { kind: 'folder', name: attachment.label, path: attachment.path }
+      : { kind: 'file', name: attachment.label, path: attachment.path },
+  );
+  const link = wrap.firstElementChild;
+  if (link) {
+    chip.append(link);
+  } else {
+    const icon = document.createElement('span');
+    icon.className = 'chip-icon';
+    icon.innerHTML = attachIcon(attachment);
+    const label = document.createElement('span');
+    label.className = 'md-file-name';
+    label.textContent = attachment.label;
+    chip.append(icon, label);
+  }
+  chip.append(x);
   return chip;
+}
+
+function isQuoteAttachment(attachment: Attachment): boolean {
+  return Boolean(attachment.text) && !attachment.path && !attachment.data && !attachment.folder;
+}
+
+function attachIcon(attachment: { label: string; path?: string; mimeType?: string; folder?: boolean }): string {
+  if (attachment.folder || attachment.path?.endsWith('/') || attachment.path?.endsWith('\\')) {
+    return fileIconSvg('folder');
+  }
+  const name = attachment.path || attachment.label;
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return fileIconSvg(ext);
 }
 
 const TICK_MS = 280;

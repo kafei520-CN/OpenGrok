@@ -160,7 +160,8 @@ export function sessionButton(row: SessionRow): HTMLElement {
   rename.innerHTML = iconEdit();
   rename.addEventListener('click', (event) => {
     event.stopPropagation();
-    post({ type: 'renameSession', sessionId: row.id });
+    ui.renameSession = { id: row.id, draft: row.title ?? '' };
+    render();
   });
   const remove = document.createElement('button');
   remove.type = 'button';

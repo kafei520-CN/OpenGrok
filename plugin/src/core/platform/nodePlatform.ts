@@ -124,7 +124,10 @@ export class NodePlatform implements Platform {
     void this.opts.request('warn', { message });
   }
 
-  async input(title: string, opts?: { prompt?: string; password?: boolean }): Promise<string | undefined> {
+  async input(
+    title: string,
+    opts?: { prompt?: string; password?: boolean; value?: string },
+  ): Promise<string | undefined> {
     const value = await this.opts.request('input', { title, ...opts });
     return typeof value === 'string' ? value : undefined;
   }
@@ -165,8 +168,8 @@ export class NodePlatform implements Platform {
     await this.opts.request('openExternal', { url });
   }
 
-  async openFile(filePath: string, preview = true): Promise<void> {
-    await this.opts.request('openFile', { path: filePath, preview });
+  async openFile(filePath: string, preview = true, line?: number): Promise<void> {
+    await this.opts.request('openFile', { path: filePath, preview, line });
   }
 
   async revealFile(filePath: string): Promise<void> {

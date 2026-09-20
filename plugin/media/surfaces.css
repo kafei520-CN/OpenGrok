@@ -125,6 +125,7 @@ html.opengrok #app[data-surface='endfield'] #grok-frost {
 #app[data-surface='endfield'] .recent-card,
 #app[data-surface='endfield'] .permission,
 #app[data-surface='endfield'] .ask-card,
+#app[data-surface='endfield'] .og-dialog-card,
 #app[data-surface='endfield'] .msg.user .bubble,
 #app[data-surface='endfield'] .msg.assistant > .md.answer,
 #app[data-surface='endfield'] .tool-row,

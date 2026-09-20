@@ -3,12 +3,12 @@ import { pathInsideAny } from '../../core/grokDirs';
 import { tr } from '../../core/i18n/locale';
 import { plat } from '../../core/platform';
 import type { HostAction } from './slash';
-import type { ChatMessage, ChatStatus, DrawerId } from '../../core/types';
+import type { ChatMessage, ChatStatus, DrawerId, QueuedPrompt } from '../../core/types';
 
 export interface SlashRuntime {
   status: ChatStatus;
   messages: ChatMessage[];
-  queue: string[];
+  queue: QueuedPrompt[];
   compactMode: boolean;
   timestamps: boolean;
   multiline: boolean;
@@ -195,7 +195,10 @@ export async function runSlashAction(host: SlashRuntime, action: HostAction): Pr
             await host.agent?.interject(action.text);
             host.note('Side question sent.');
           } catch {
-            host.queue = [...host.queue, action.text];
+            host.queue = [
+              ...host.queue,
+              { id: `user-queue-btw-${Date.now()}`, text: action.text, attachments: [] },
+            ];
             host.emit();
           }
         } else {

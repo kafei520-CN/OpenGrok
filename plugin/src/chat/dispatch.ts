@@ -123,7 +123,7 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
       const filePath = await controller.resolveUserPath(message.path);
       await controller.previewFileOnRemote(filePath);
       try {
-        await plat().openFile(filePath, true);
+        await plat().openFile(filePath, true, message.line);
       } catch {
         /* Browser overlay already has the file; the IDE may not. */
       }
@@ -177,7 +177,7 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
       void controller.loadSession(message.sessionId, message.cwd);
       return;
     case 'renameSession':
-      await controller.renameListedSession(message.sessionId);
+      await controller.renameListedSession(message.sessionId, message.title);
       return;
     case 'deleteSession':
       await controller.deleteListedSession(message.sessionId);

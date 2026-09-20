@@ -2,7 +2,8 @@ import * as path from 'node:path';
 import { clipboardToPath, splitClipboardPaths } from './clipboard';
 import { isImagePath, looksLikeImage, mimeFromImagePath } from '../../agent/clientHandlers';
 import { plat } from '../../core/platform';
-import type { Attachment } from '../../core/types';
+import type { Attachment, ChatMessage, MediaItem, MessageFile, QueuedPrompt } from '../../core/types';
+import { stripWrapUpText } from './wrapUp';
 
 /** Inline file text above this size is dropped; the chip stays path-only. */
 export const ATTACH_TEXT_MAX = 256_000;
@@ -11,6 +12,196 @@ export interface AttachmentHost {
   attachments: Attachment[];
   fileHits?: Array<{ path: string; label: string }>;
   emit(): void;
+}
+
+const USER_MEDIA_KEY = 'session.userMedia';
+const USER_MEDIA_IMAGE_MAX = 1_500_000;
+
+export type UserMediaStamp = {
+  text: string;
+  files?: MessageFile[];
+  images?: MediaItem[];
+};
+
+export function packUserMedia(attachments: Attachment[]): {
+  images?: MediaItem[];
+  files?: MessageFile[];
+} {
+  const images = attachments
+    .filter((item) => item.data && item.mimeType?.startsWith('image/'))
+    .map((item) => ({
+      mimeType: item.mimeType ?? 'image/png',
+      data: item.data,
+    }));
+  const files = attachments
+    .filter((item) => !(item.data && item.mimeType?.startsWith('image/')))
+    .map((item) => ({
+      label: item.label,
+      path: item.path,
+      mimeType: item.mimeType,
+      folder: item.folder,
+    }));
+  return {
+    images: images.length ? images : undefined,
+    files: files.length ? files : undefined,
+  };
+}
+
+export function cloneAttachment(item: Attachment): Attachment {
+  return { ...item };
+}
+
+export function cloneQueuedPrompt(item: QueuedPrompt): QueuedPrompt {
+  return {
+    id: item.id,
+    text: item.text,
+    attachments: item.attachments.map(cloneAttachment),
+  };
+}
+
+export function makeQueuedPrompt(text: string, attachments: Attachment[], id: string): QueuedPrompt {
+  return {
+    id,
+    text,
+    attachments: attachments.map(cloneAttachment),
+  };
+}
+
+export function queueTexts(queue: QueuedPrompt[]): string[] {
+  return queue.map((item) => item.text);
+}
+
+export function attachmentsFromMessage(message: ChatMessage): Attachment[] {
+  const out: Attachment[] = [];
+  for (const image of message.images ?? []) {
+    out.push({
+      id: `img-${out.length}`,
+      label: 'image',
+      mimeType: image.mimeType,
+      data: image.data,
+    });
+  }
+  for (const file of message.files ?? []) {
+    out.push({
+      id: file.path ?? file.label,
+      label: file.label,
+      path: file.path,
+      mimeType: file.mimeType,
+      folder: file.folder,
+    });
+  }
+  return out;
+}
+
+export function userMediaStamps(messages: ChatMessage[]): UserMediaStamp[] {
+  const budget = { left: USER_MEDIA_IMAGE_MAX };
+  return messages
+    .filter((message) => message.role === 'user')
+    .map((message) => slimUserMedia(message, budget))
+    .filter((stamp) => Boolean(stamp.files?.length || stamp.images?.length));
+}
+
+export function applyStoredUserMedia(
+  messages: ChatMessage[],
+  stamps: UserMediaStamp[] | undefined,
+): void {
+  if (!stamps?.length) {
+    return;
+  }
+  const unused = [...stamps];
+  for (const message of messages) {
+    if (message.role !== 'user') {
+      continue;
+    }
+    if (message.files?.length || message.images?.length) {
+      continue;
+    }
+    const matched = unused.findIndex(
+      (stamp) => stamp.text === stripWrapUpText(message.text),
+    );
+    if (matched < 0) {
+      continue;
+    }
+    const stamp = unused.splice(matched, 1)[0];
+    if (!stamp) {
+      continue;
+    }
+    if (stamp.files?.length) {
+      message.files = stamp.files.map((file) => ({ ...file }));
+    }
+    if (stamp.images?.length) {
+      message.images = stamp.images.map((image) => ({ ...image }));
+    }
+  }
+}
+
+export function readStoredUserMedia(sessionId: string | undefined): UserMediaStamp[] {
+  if (!sessionId) {
+    return [];
+  }
+  return readUserMediaStore()[sessionId] ?? [];
+}
+
+export async function persistUserMedia(
+  sessionId: string | undefined,
+  messages: ChatMessage[],
+): Promise<void> {
+  if (!sessionId) {
+    return;
+  }
+  const stamps = userMediaStamps(messages);
+  const store = { ...readUserMediaStore() };
+  if (!stamps.length) {
+    if (!store[sessionId]) {
+      return;
+    }
+    delete store[sessionId];
+  } else {
+    store[sessionId] = stamps;
+  }
+  await plat().setState(USER_MEDIA_KEY, trimUserMediaStore(store));
+}
+
+function slimUserMedia(message: ChatMessage, budget: { left: number }): UserMediaStamp {
+  const stamp: UserMediaStamp = { text: stripWrapUpText(message.text) };
+  if (message.files?.length) {
+    stamp.files = message.files.map((file) => ({ ...file }));
+  }
+  if (message.images?.length) {
+    const images: MediaItem[] = [];
+    for (const image of message.images) {
+      const size = image.data?.length ?? 0;
+      if (size > budget.left) {
+        break;
+      }
+      budget.left -= size;
+      images.push({ ...image });
+    }
+    if (images.length) {
+      stamp.images = images;
+    }
+  }
+  return stamp;
+}
+
+function readUserMediaStore(): Record<string, UserMediaStamp[]> {
+  const raw = plat().getState<Record<string, UserMediaStamp[]>>(USER_MEDIA_KEY, {});
+  return raw && typeof raw === 'object' ? raw : {};
+}
+
+function trimUserMediaStore(store: Record<string, UserMediaStamp[]>): Record<string, UserMediaStamp[]> {
+  const ids = Object.keys(store);
+  if (ids.length <= 80) {
+    return store;
+  }
+  const keep = new Set(ids.slice(-80));
+  const next: Record<string, UserMediaStamp[]> = {};
+  for (const id of ids) {
+    if (keep.has(id)) {
+      next[id] = store[id];
+    }
+  }
+  return next;
 }
 
 export function quoteText(host: AttachmentHost, text: string): void {
@@ -103,6 +294,7 @@ export async function attachPath(host: AttachmentHost, filePath: string): Promis
     /* folder or unreadable path — keep a path-only chip */
     mimeType = mimeFromFileName(filePath);
   }
+  const folder = !data && !text && !mimeType;
   host.attachments = [
     ...host.attachments.filter((item) => item.id !== filePath),
     {
@@ -112,6 +304,7 @@ export async function attachPath(host: AttachmentHost, filePath: string): Promis
       text,
       mimeType,
       data,
+      folder,
     },
   ];
   host.fileHits = undefined;

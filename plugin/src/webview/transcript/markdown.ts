@@ -1,5 +1,5 @@
 import { extractMath, renderKatex } from './markdownMath';
-import { fileLinkHtml, linkInlineFilePaths, looksLikeInlinePath } from './fileLinks';
+import { fileLinkHtml, isMarkedFileRef, linkInlineFilePaths, parseCodeRef } from './fileLinks';
 
 export function escapeHtml(value: string): string {
   return String(value ?? '')
@@ -410,11 +410,12 @@ export function inlineMarkdown(src: string): string {
     slots.push(html);
     return `\u0000${slots.length - 1}\u0000`;
   };
-  let text = src.replace(/`([^`]+)`/g, (_all, code: string) =>
-    looksLikeInlinePath(code)
-      ? stash(fileLinkHtml(code))
-      : stash(`<code>${escapeHtml(code)}</code>`),
-  );
+  let text = src.replace(/`([^`]+)`/g, (_all, code: string) => {
+    const ref = isMarkedFileRef(code) ? parseCodeRef(code) : undefined;
+    return ref
+      ? stash(fileLinkHtml(ref))
+      : stash(`<code>${escapeHtml(code)}</code>`);
+  });
   text = extractMath(text, stash);
   text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_all, alt: string, url: string) => {
     const href = safeUrl(url);
@@ -423,8 +424,9 @@ export function inlineMarkdown(src: string): string {
       : alt;
   });
   text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_all, label: string, url: string) => {
-    if (looksLikeInlinePath(url)) {
-      return stash(fileLinkHtml(url, label));
+    const ref = parseCodeRef(url);
+    if (ref) {
+      return stash(fileLinkHtml(ref, label));
     }
     const href = safeUrl(url);
     if (!href) {

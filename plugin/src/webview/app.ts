@@ -59,6 +59,7 @@ export const ui = {
   askPickStamp: '',
   askDismissedId: '',
   lightboxSrc: undefined as string | undefined,
+  renameSession: undefined as { id: string; draft: string } | undefined,
   stickToBottom: true,
   transcriptScroll: 0,
   composer: undefined as HTMLTextAreaElement | undefined,

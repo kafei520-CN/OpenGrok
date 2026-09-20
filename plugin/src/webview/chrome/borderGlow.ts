@@ -10,6 +10,7 @@ const CARD_SEL = [
   '.og-login',
   '.permission',
   '.ask-card',
+  '.og-dialog-card',
 ].join(',');
 
 const GRADIENT_POSITIONS = ['80% 55%', '69% 34%', '8% 6%', '41% 38%', '86% 85%', '82% 18%', '51% 4%'];

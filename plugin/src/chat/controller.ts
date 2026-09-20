@@ -10,10 +10,18 @@ import { GrokAgent } from '../agent/agent';
 import {
   addActiveFile,
   addSelection,
+  applyStoredUserMedia,
   attachFromUi,
+  attachmentsFromMessage,
   attachPath,
+  cloneQueuedPrompt,
+  makeQueuedPrompt,
+  packUserMedia,
   pasteClipboard,
+  persistUserMedia,
+  queueTexts,
   quoteText,
+  readStoredUserMedia,
   removeAttachment,
 } from './prompt/attachments';
 import { installHint, resolveGrokBinary } from '../core/runtime/cli';
@@ -42,7 +50,7 @@ import { tr, uiLocale } from '../core/i18n/locale';
 import { logError, logInfo, logWarn, showLog } from '../core/logger';
 import { buildPromptBlocks } from './prompt';
 import { resolveExistingChatPath } from './prompt/resolvePath';
-import { ensureWrapUpRule, stripWrapUpText } from './prompt/wrapUp';
+import { ensureWrapUpRule, scrubUserMessages, stripWrapUpText } from './prompt/wrapUp';
 import { formatAgentError, formatErrorLine, isCancelError } from '../core/errors';
 import { readGrokSettings } from '../settings/settings';
 import {
@@ -134,6 +142,7 @@ import type {
   AskCard,
   GrokSettings,
   PermissionPrompt,
+  QueuedPrompt,
   PersonaItem,
   RosterEntry,
   RuleItem,
@@ -217,7 +226,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   status: ChatStatus = 'connecting';
   messages: ChatMessage[] = [];
   attachments: Attachment[] = [];
-  queue: string[] = [];
+  queue: QueuedPrompt[] = [];
   goal?: GoalState;
   compactMode = false;
   private compactGate: CompactGate = emptyCompactGate();
@@ -310,6 +319,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private emitTimer?: ReturnType<typeof setTimeout>;
   private streamCursor: StreamDeltaCursor = emptyStreamCursor();
   private streamPosted = false;
+  private viewStamp = '';
   private searchTimer?: ReturnType<typeof setTimeout>;
   private searchSeq = 0;
   modelsReloadSeq = 0;
@@ -462,6 +472,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         tools: message.tools.map((tool) => ({ ...tool })),
         steps: message.steps?.map((step) => ({ ...step })),
         edits: message.edits?.length ? publicEdits(message.edits) : message.edits,
+        images: message.images?.map((image) => ({ ...image })),
+        files: message.files?.map((file) => ({ ...file })),
       })),
       mergeTranscript: mode !== 'all',
       permission: this.permission,
@@ -488,7 +500,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       timestamps: this.timestamps,
       goal: this.goal,
       multiline: this.multiline,
-      queue: this.queue,
+      queue: queueTexts(this.queue),
       currentSessionId: this.currentSessionId,
       restoringSession: this.restoringSession,
       hideSessionPreview: this.hideSessionPreview,
@@ -577,6 +589,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   async newSession(): Promise<void> {
     this.sessionOp += 1;
     this.parkForeground();
+    trimParkedSessions(this.parked, undefined, this.parkedRecent);
     this.clearGoalFinishTimer();
     this.goal = undefined;
     this.agent?.clearSession();
@@ -590,6 +603,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.replaying = false;
     this.restoringSession = false;
     this.hideSessionPreview = true;
+    this.viewStamp = '';
     this.currentSessionId = undefined;
     this.sessionCwd = undefined;
     this.permission = undefined;
@@ -747,9 +761,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
   }
 
-  async send(text: string, opts?: { hidden?: boolean }): Promise<void> {
+  async send(text: string, opts?: { hidden?: boolean; queued?: QueuedPrompt }): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed && this.attachments.length === 0) {
+    if (!trimmed && this.attachments.length === 0 && !opts?.queued?.attachments.length) {
       return;
     }
     await this.ensureAgent();
@@ -783,17 +797,20 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       if (this.modeId === 'goal') {
         return;
       }
-      this.queue = [...this.queue, trimmed];
+      const queued = makeQueuedPrompt(trimmed, this.attachments, `user-queue-${++this.turn}`);
+      this.queue = [...this.queue, queued];
       this.messages = [
         ...this.messages,
         {
-          id: `user-queue-${++this.turn}`,
+          id: queued.id,
           role: 'user',
           text: trimmed,
           tools: [],
           createdAt: new Date().toISOString(),
+          ...packUserMedia(queued.attachments),
         },
       ];
+      this.attachments = [];
       this.emit();
       return;
     }
@@ -809,21 +826,27 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     await this.applySelectedCustomModel(agent);
     this.error = undefined;
     const run = ++this.runGen;
-    const blocks = await buildPromptBlocks(outgoing, this.attachments);
+    const queued = opts?.queued;
+    const media = queued ? queued.attachments : this.attachments;
+    const existing = queued
+      ? this.messages.find((item) => item.id === queued.id && item.role === 'user')
+      : undefined;
+    const blocks = await buildPromptBlocks(outgoing, media);
     const now = new Date().toISOString();
-    const userMessage: ChatMessage = {
-      id: `user-${++this.turn}`,
-      role: 'user',
-      text: trimmed || this.attachments.map((item) => item.label).join(', '),
-      tools: [],
-      createdAt: now,
-      images: this.attachments
-        .filter((item) => item.data && item.mimeType?.startsWith('image/'))
-        .map((item) => ({
-          mimeType: item.mimeType ?? 'image/png',
-          data: item.data,
-        })),
-    };
+    const packed = packUserMedia(media);
+    const userMessage: ChatMessage = existing
+      ? { ...existing, text: trimmed, createdAt: existing.createdAt ?? now, ...packed }
+      : {
+          id: `user-${++this.turn}`,
+          role: 'user',
+          text: trimmed,
+          tools: [],
+          createdAt: now,
+          ...packed,
+        };
+    if (existing) {
+      this.turn += 1;
+    }
     const assistant: ChatMessage = {
       id: `assistant-${this.turn}`,
       role: 'assistant',
@@ -834,17 +857,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       createdAt: now,
       ...this.turnModelFields(),
     };
-    const last = this.messages.at(-1);
-    const queuedAlready = Boolean(
-      !opts?.hidden && last?.role === 'user' && last.text === userMessage.text,
-    );
     this.messages = opts?.hidden
       ? [...this.messages, assistant]
-      : queuedAlready
-        ? [...this.messages, assistant]
+      : existing
+        ? this.messages.map((item) => (item.id === existing.id ? userMessage : item)).concat(assistant)
         : [...this.messages, userMessage, assistant];
     void persistTurnModels(this.currentSessionId ?? sid, this.messages);
-    this.attachments = [];
+    void persistUserMedia(this.currentSessionId ?? sid, this.messages);
+    if (!queued) {
+      this.attachments = [];
+    }
     this.setStatus('streaming');
     this.promptSessions.add(sid);
     this.promptSessionId = sid;
@@ -1116,7 +1138,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       goal: this.goal,
       modeId: this.modeId,
       attachments: [...this.attachments],
-      queue: [...this.queue],
+      queue: this.queue.map(cloneQueuedPrompt),
       runGen: this.runGen,
       permission: this.permission,
       ask: this.ask,
@@ -1124,7 +1146,6 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       stopped: interrupted,
     });
     this.touchParked(id);
-    trimParkedSessions(this.parked, undefined, this.parkedRecent);
   }
 
   private touchParked(id: string): void {
@@ -1140,25 +1161,25 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!row) {
       return;
     }
-    this.parked.delete(id);
     this.currentSessionId = id;
     this.sessionCwd = row.cwd;
     this.messages = cloneMessages(row.messages);
-    for (const message of this.messages) {
-      if (message.role === 'user') {
-        message.text = stripWrapUpText(message.text);
-      }
-    }
+    scrubUserMessages(this.messages);
     this.turn = row.turn;
     this.error = row.error;
     this.goal = row.goal;
     this.modeId = row.modeId;
-    this.attachments = row.attachments;
-    this.queue = row.queue;
+    this.attachments = [...row.attachments];
+    this.queue = row.queue.map(cloneQueuedPrompt);
     this.runGen = row.runGen;
     this.permission = row.permission;
     this.ask = row.ask;
     this.status = row.status === 'streaming' ? 'streaming' : 'ready';
+  }
+
+  private cacheCurrent(): void {
+    this.parkForeground();
+    trimParkedSessions(this.parked, this.currentSessionId, this.parkedRecent);
   }
 
   private runBelongs(sid: string, run: number): boolean {
@@ -1186,6 +1207,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     row.unread = true;
     row.stopped = Boolean(row.stopped || lastAssistantInterrupted(row.messages));
     void persistTurnModels(sid, row.messages);
+    void persistUserMedia(sid, row.messages);
     this.publishSnapshot('none');
   }
 
@@ -1644,7 +1666,14 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!sessionId) {
       return;
     }
-    const name = auto ? '' : title ?? (await plat().input(tr('sessionsRename')));
+    const current = this.sessions?.find((row) => row.id === sessionId)?.title ?? '';
+    const name = auto
+      ? ''
+      : title ??
+        (await plat().input(tr('sessionsRename'), {
+          prompt: tr('sessionsRenameHint'),
+          value: current,
+        }));
     if (!auto && !name) {
       return;
     }
@@ -1764,6 +1793,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     const op = ++this.sessionOp;
     this.parkForeground();
+    trimParkedSessions(this.parked, sessionId, this.parkedRecent);
     const parked = this.parked.get(sessionId);
     const cwd =
       sessionCwd ??
@@ -1783,6 +1813,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.restoringSession = true;
       this.replaying = false;
       this.revealSession();
+      this.restoringSession = false;
       return;
     }
     this.messages = [];
@@ -1805,16 +1836,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.models = this.overlayModels(modelsFromResult(result));
       this.currentSessionId = agent.sessionId ?? sessionId;
       finalizeReplayTimes(this.messages);
-      for (const message of this.messages) {
-        if (message.role === 'user') {
-          message.text = stripWrapUpText(message.text);
-        }
-      }
+      scrubUserMessages(this.messages);
       applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
+      applyStoredUserMedia(this.messages, readStoredUserMedia(this.currentSessionId));
       applyRestoredTurnModels(this.messages, this.models);
       this.status = 'ready';
       this.error = undefined;
-      this.parked.delete(sessionId);
+      this.cacheCurrent();
       void this.refreshSessionsSilent();
       void this.journal.hydrateFromGit().then(async () => {
         if (op !== this.sessionOp) {
@@ -1834,15 +1862,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         this.replaying = false;
         this.restoringSession = false;
         finalizeReplayTimes(this.messages);
-        for (const message of this.messages) {
-          if (message.role === 'user') {
-            message.text = stripWrapUpText(message.text);
-          }
-        }
+        scrubUserMessages(this.messages);
         applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
+        applyStoredUserMedia(this.messages, readStoredUserMedia(this.currentSessionId));
         applyRestoredTurnModels(this.messages, this.models);
         void persistTurnModels(this.currentSessionId, this.messages);
-        this.emit();
+        void persistUserMedia(this.currentSessionId, this.messages);
+        this.revealSession();
       }
     }
   }
@@ -1919,7 +1945,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     } catch (error) {
       logWarn(`rewind before edit: ${error instanceof Error ? error.message : error}`);
     }
+    const prior = this.messages[userIdx];
     this.messages = this.messages.slice(0, userIdx);
+    this.attachments = prior ? attachmentsFromMessage(prior) : [];
     this.emit();
     await this.send(trimmed);
   }
@@ -2718,7 +2746,22 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     this.streamPosted = false;
     this.streamCursor = emptyStreamCursor();
-    this.publishSnapshot('all');
+    const stamp = this.transcriptStamp();
+    const replay = stamp !== this.viewStamp;
+    this.viewStamp = stamp;
+    this.publishSnapshot(replay ? 'all' : 'none');
+  }
+
+  private transcriptStamp(): string {
+    const last = this.messages.at(-1);
+    return [
+      this.currentSessionId ?? '',
+      this.messages.length,
+      last?.id ?? '',
+      last?.text.length ?? 0,
+      last?.streaming ? 1 : 0,
+      last?.tools.length ?? 0,
+    ].join(':');
   }
 
   applyModelsUpdate(params: unknown): void {
@@ -2866,7 +2909,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (index < 0 || index >= this.queue.length) {
       return;
     }
+    const item = this.queue[index];
     this.queue = this.queue.filter((_, i) => i !== index);
+    if (item?.id) {
+      this.messages = this.messages.filter((message) => message.id !== item.id);
+    }
     this.emit();
   }
 
@@ -2989,7 +3036,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         this.endStreaming();
       }
     }
-    await this.send(next);
+    await this.send(next.text, { queued: next });
   }
 
   private async flushQueue(): Promise<void> {
@@ -2999,7 +3046,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     this.queue = this.queue.slice(1);
     this.emit();
-    await this.send(next);
+    await this.send(next.text, { queued: next });
   }
 
   private async startInner(): Promise<void> {
@@ -3149,7 +3196,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const { tail, cursor } = buildStreamTail(this.streamCursor, last, {
       status: this.status,
       context: this.meter.usage,
-      queue: this.queue,
+      queue: queueTexts(this.queue),
     });
     this.streamCursor = cursor;
     for (const listener of this.streamListeners) {
@@ -3163,6 +3210,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.restoringSession = true;
     this.hideSessionPreview = false;
     this.streamPosted = false;
+    this.viewStamp = '';
     this.streamCursor = emptyStreamCursor();
     this.status = 'ready';
     this.publishSnapshot('none');
@@ -3171,8 +3219,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   /** Full transcript after a session switch, even if a background turn is still streaming. */
   private revealSession(): void {
     this.streamPosted = false;
+    this.viewStamp = '';
     this.streamCursor = emptyStreamCursor();
     this.publishSnapshot('all');
+    this.viewStamp = this.transcriptStamp();
     if (this.status === 'streaming') {
       this.streamPosted = true;
     }
@@ -3552,6 +3602,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private endStreaming(cue?: NotifyCue): void {
     this.finishAssistant();
     void persistTurnModels(this.currentSessionId, this.messages);
+    void persistUserMedia(this.currentSessionId, this.messages);
     this.notify = cue;
     this.setStatus('ready');
     this.notify = undefined;

@@ -95,6 +95,7 @@ export function createVscodePlatform(context: vscode.ExtensionContext): Platform
         title,
         prompt: opts?.prompt,
         password: opts?.password,
+        value: opts?.value,
         ignoreFocusOut: true,
       });
     },
@@ -144,8 +145,14 @@ export function createVscodePlatform(context: vscode.ExtensionContext): Platform
     async openExternal(url) {
       await vscode.env.openExternal(vscode.Uri.parse(url));
     },
-    async openFile(filePath, preview = true) {
-      await vscode.window.showTextDocument(vscode.Uri.file(filePath), { preview });
+    async openFile(filePath, preview = true, line) {
+      const uri = vscode.Uri.file(filePath);
+      const at = Math.max(0, (line ?? 1) - 1);
+      const pos = new vscode.Position(Number.isFinite(line) ? at : 0, 0);
+      await vscode.window.showTextDocument(uri, {
+        preview,
+        selection: Number.isFinite(line) ? new vscode.Range(pos, pos) : undefined,
+      });
     },
     async revealFile(filePath) {
       await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));

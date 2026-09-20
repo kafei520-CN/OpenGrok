@@ -902,7 +902,9 @@ async function runHost(method: string, params: Record<string, unknown>): Promise
       return await openPrompt({
         mode: params['password'] ? 'password' : 'input',
         title: String(params['title'] ?? APP_NAME),
-        prompt: String(params['prompt'] ?? params['title'] ?? ''),
+        prompt: typeof params['prompt'] === 'string' ? params['prompt'] : undefined,
+        value: typeof params['value'] === 'string' ? params['value'] : '',
+        locale: typeof params['locale'] === 'string' ? params['locale'] : undefined,
       });
     case 'confirm': {
       const result = await dialog.showMessageBox(mainWindow!, {
@@ -1036,8 +1038,8 @@ function openPrompt(config: unknown): Promise<unknown> {
     const win = new BrowserWindow({
       parent: mainWindow,
       modal: true,
-      width: 420,
-      height: 260,
+      width: 380,
+      height: 210,
       resizable: false,
       frame: false,
       backgroundColor: '#12171f',

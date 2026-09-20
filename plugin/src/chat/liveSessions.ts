@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   ChatStatus,
   PermissionPrompt,
+  QueuedPrompt,
   SessionRow,
   SessionRunState,
 } from '../core/types';
@@ -20,7 +21,7 @@ export type ParkedSession = {
   goal?: GoalState;
   modeId: string;
   attachments: Attachment[];
-  queue: string[];
+  queue: QueuedPrompt[];
   runGen: number;
   permission?: PermissionPrompt;
   ask?: AskCard;
@@ -40,6 +41,7 @@ export function cloneMessages(messages: ChatMessage[]): ChatMessage[] {
     steps: message.steps?.map((step) => ({ ...step })),
     edits: message.edits?.map((edit) => ({ ...edit })),
     images: message.images?.map((image) => ({ ...image })),
+    files: message.files?.map((file) => ({ ...file })),
   }));
 }
 
@@ -103,6 +105,9 @@ export function sessionRunState(
 }
 
 export function slimParkedRow(row: ParkedSession): void {
+  if (!row.title?.trim()) {
+    row.title = parkedSessionTitle(row, row.id);
+  }
   row.stopped = Boolean(row.stopped || lastAssistantInterrupted(row.messages));
   row.messages = [];
   row.attachments = [];

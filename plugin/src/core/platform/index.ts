@@ -63,7 +63,10 @@ export interface Platform {
   showLog(): void;
   info(message: string): void;
   warn(message: string): void;
-  input(title: string, opts?: { prompt?: string; password?: boolean }): Promise<string | undefined>;
+  input(
+    title: string,
+    opts?: { prompt?: string; password?: boolean; value?: string },
+  ): Promise<string | undefined>;
   confirm(message: string, action: string): Promise<boolean>;
   pick<T>(title: string, items: Array<QuickItem<T>>): Promise<T | undefined>;
   saveFile(defaultPath: string): Promise<string | undefined>;
@@ -71,7 +74,7 @@ export interface Platform {
   openFolders(opts?: { title?: string }): Promise<string[] | undefined>;
   readDir(dir: string): Promise<string[]>;
   openExternal(url: string): Promise<void>;
-  openFile(path: string, preview?: boolean): Promise<void>;
+  openFile(path: string, preview?: boolean, line?: number): Promise<void>;
   revealFile?(path: string): Promise<void>;
   clipboardWrite(text: string): Promise<void>;
   findFiles(query: string): Promise<Array<{ path: string; label: string }>>;

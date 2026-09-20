@@ -342,6 +342,60 @@ export function renderDrawer(): HTMLElement {
   return layer;
 }
 
+export function renderRenameDialog(): HTMLElement {
+  const draft = ui.renameSession;
+  const layer = document.createElement('div');
+  layer.className = 'og-dialog';
+  layer.addEventListener('click', () => {
+    ui.renameSession = undefined;
+    render();
+  });
+  const card = document.createElement('div');
+  card.className = 'og-dialog-card';
+  card.addEventListener('click', (event) => event.stopPropagation());
+  const title = document.createElement('h2');
+  title.textContent = tr('sessionsRename');
+  const field = document.createElement('input');
+  field.type = 'text';
+  field.className = 'settings-field';
+  field.value = draft?.draft ?? '';
+  field.placeholder = tr('sessionsRenameHint');
+  field.spellcheck = false;
+  const actions = document.createElement('div');
+  actions.className = 'og-dialog-actions';
+  const close = () => {
+    ui.renameSession = undefined;
+    render();
+  };
+  const submit = () => {
+    const name = field.value.trim();
+    const id = ui.renameSession?.id;
+    ui.renameSession = undefined;
+    render();
+    if (id && name) {
+      post({ type: 'renameSession', sessionId: id, title: name });
+    }
+  };
+  field.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submit();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  });
+  actions.append(button(tr('cancel'), close), button(tr('ok'), submit, true));
+  card.append(title, field, actions);
+  layer.append(card);
+  queueMicrotask(() => {
+    field.focus();
+    field.select();
+  });
+  return layer;
+}
+
 export function renderLightbox(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'lightbox';

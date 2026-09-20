@@ -101,5 +101,7 @@ export interface PromptConfig {
   mode: 'input' | 'password' | 'pick';
   title: string;
   prompt?: string;
+  value?: string;
+  locale?: string;
   items?: Array<{ label: string; description?: string; value: unknown }>;
 }

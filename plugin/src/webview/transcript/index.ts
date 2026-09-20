@@ -38,6 +38,7 @@ import {
   STREAM_LIVE_KEEP,
   streamingMarkdownPatch,
 } from './markdown';
+import { fileLinkHtml } from './fileLinks';
 import {
   HISTORY_FLUSH_TURNS,
   HISTORY_SLICE_MS,
@@ -80,7 +81,6 @@ export function patchBody(parent: HTMLElement): void {
     }
     bindTranscriptScroll();
     pinChatIfNeeded();
-    syncRestoreVeil(body);
     return;
   }
   if (body.dataset.kind !== kind) {
@@ -90,7 +90,6 @@ export function patchBody(parent: HTMLElement): void {
     body.replaceWith(next);
     bindTranscriptScroll();
     pinChatIfNeeded();
-    syncRestoreVeil(next);
     return;
   }
   if (kind === 'chat') {
@@ -98,32 +97,13 @@ export function patchBody(parent: HTMLElement): void {
     patchPermission(body);
     patchAsk(body);
     patchErrorBanner(body);
-    syncRestoreVeil(body);
     return;
   }
-  if (kind.startsWith('login') || kind.startsWith('home')) {
+  if (kind.startsWith('login') || kind.startsWith('home') || kind === 'restoring') {
     const next = renderBody();
     next.id = 'grok-body';
     body.replaceWith(next);
-    syncRestoreVeil(next);
-    return;
   }
-  syncRestoreVeil(body);
-}
-
-function syncRestoreVeil(body: HTMLElement): void {
-  let veil = body.querySelector(':scope > .restore-veil') as HTMLElement | null;
-  if (!ui.state.restoringSession) {
-    veil?.remove();
-    return;
-  }
-  if (veil) {
-    return;
-  }
-  veil = document.createElement('div');
-  veil.className = 'restore-veil';
-  veil.append(bootStar(true));
-  body.append(veil);
 }
 
 function bodyKind(state: ChatState): string {
@@ -141,6 +121,9 @@ function bodyKind(state: ChatState): string {
   }
   if (state.status === 'error' && state.messages.length === 0) {
     return `error:${state.error ?? ''}`;
+  }
+  if (state.restoringSession) {
+    return 'restoring';
   }
   if (state.messages.length === 0) {
     const brand = superGrokKind(state.account, state.billing) ?? 'logo';
@@ -169,6 +152,10 @@ function fillBody(el: HTMLElement): void {
   }
   if (status === 'error' && ui.state.messages.length === 0) {
     el.append(errorCard());
+    return;
+  }
+  if (ui.state.restoringSession) {
+    el.append(bootStar(true));
     return;
   }
   if (ui.state.messages.length === 0) {
@@ -848,7 +835,9 @@ function pinChatIfNeeded(): void {
   if (bodyKind(ui.state) !== 'chat') {
     return;
   }
-  ui.stickToBottom = true;
+  if (!ui.stickToBottom) {
+    return;
+  }
   scrollTranscript(true);
 }
 
@@ -897,7 +886,9 @@ function pinTranscript(el: HTMLElement): void {
   el.scrollTop = el.scrollHeight;
   ui.transcriptScroll = el.scrollTop;
   scrollState.transcriptScroll = el.scrollTop;
-  scrollState.pinLock = false;
+  requestAnimationFrame(() => {
+    scrollState.pinLock = false;
+  });
 }
 
 function bindTranscriptScroll(el?: HTMLElement | null): void {
@@ -913,6 +904,23 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
   };
   node.addEventListener('pointerdown', markUser, { passive: true });
   node.addEventListener('wheel', markUser, { passive: true });
+  node.addEventListener(
+    'keydown',
+    (event) => {
+      if (
+        event.key === 'PageUp' ||
+        event.key === 'PageDown' ||
+        event.key === 'Home' ||
+        event.key === 'End' ||
+        event.key === 'ArrowUp' ||
+        event.key === 'ArrowDown' ||
+        event.key === ' '
+      ) {
+        markUser();
+      }
+    },
+    { passive: true },
+  );
   node.addEventListener(
     'scroll',
     () => {
@@ -964,6 +972,8 @@ function turnSig(turn: Turn, split: boolean): string {
     ui.copiedId === a?.id ? 'c' : '',
     stepsKey(a ? visibleSteps(a) : undefined),
     turn.user?.text.length ?? 0,
+    turn.user?.files?.length ?? 0,
+    turn.user?.images?.length ?? 0,
     ui.editingUserId === turn.user?.id ? 'e' : '',
     ui.copiedId === turn.user?.id ? 'uc' : '',
   ].join(':');
@@ -1063,11 +1073,39 @@ function userBubble(message: ChatMessage): HTMLElement {
     setMarkdown(body, message.text, false);
     bubble.append(body);
   }
+  if (!editing && message.files?.length) {
+    bubble.append(messageFileRow(message));
+  }
   if (!editing && message.images?.length) {
     bubble.append(imageGallery(message.images));
   }
   el.append(bubble, userActions(message, editing));
   return el;
+}
+
+function messageFileRow(message: ChatMessage): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'msg-files';
+  for (const file of message.files ?? []) {
+    if (!file.path && !file.folder && !file.mimeType) {
+      const quote = document.createElement('span');
+      quote.className = 'chip chip-quote';
+      quote.textContent = file.label;
+      row.append(quote);
+      continue;
+    }
+    const wrap = document.createElement('span');
+    wrap.innerHTML = fileLinkHtml(
+      file.folder
+        ? { kind: 'folder', name: file.label, path: file.path }
+        : { kind: 'file', name: file.label, path: file.path },
+    );
+    const node = wrap.firstElementChild;
+    if (node) {
+      row.append(node);
+    }
+  }
+  return row;
 }
 
 function userActions(message: ChatMessage, editing: boolean): HTMLElement {

@@ -36,6 +36,8 @@ function onContextMenu(event: MouseEvent): void {
     return;
   }
   const filePath = link.dataset.path?.trim();
+  const lineRaw = link.dataset.line?.trim();
+  const line = lineRaw ? Number(lineRaw) : undefined;
   if (!filePath) {
     return;
   }
@@ -45,7 +47,9 @@ function onContextMenu(event: MouseEvent): void {
   const menu = document.createElement('div');
   menu.className = `picker-menu ${MENU_CLASS}`;
   menu.append(
-    menuItem(tr('openFileLink'), () => post({ type: 'openFile', path: filePath })),
+    menuItem(tr('openFileLink'), () =>
+      post({ type: 'openFile', path: filePath, line: Number.isFinite(line) ? line : undefined }),
+    ),
     menuItem(tr('revealInExplorer'), () => post({ type: 'revealFile', path: filePath })),
   );
   dummy = document.createElement('div');
