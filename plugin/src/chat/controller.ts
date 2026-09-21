@@ -3066,7 +3066,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     try {
-      this.apis = await listApiEndpoints();
+      this.apis = await listApiEndpoints(this.models?.available ?? this.catalogModels?.available ?? []);
       this.apisLoaded = true;
     } catch (error) {
       logWarn(`api list: ${error instanceof Error ? error.message : error}`);

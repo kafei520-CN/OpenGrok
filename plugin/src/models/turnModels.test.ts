@@ -100,6 +100,44 @@ describe('turn model stamps', () => {
     assert.equal(next?.currentId, 'grok-4');
   });
 
+  it('hides an official model even when the store only has the off switch', () => {
+    const next = overlayApiModels(
+      {
+        currentId: 'grok-4.6',
+        available: [
+          { id: 'grok-4.6', name: 'Grok 4.6' },
+          { id: 'endpoint-2', name: '阶跃5' },
+        ],
+      },
+      [
+        {
+          id: 'grok-4.6',
+          name: 'Grok 4.6',
+          model: 'grok-4.6',
+          baseUrl: 'https://api.x.ai',
+          backend: 'chat_completions',
+          hasKey: false,
+          enabled: false,
+          builtin: true,
+        },
+        {
+          id: 'endpoint-2',
+          name: '阶跃5',
+          model: 'step-5-preview',
+          baseUrl: 'https://api.stepfun.com/v1',
+          backend: 'chat_completions',
+          hasKey: true,
+          enabled: true,
+        },
+      ],
+    );
+    assert.deepEqual(
+      next?.available.map((model) => model.id),
+      ['endpoint-2'],
+    );
+    assert.equal(next?.currentId, 'endpoint-2');
+  });
+
   it('hides custom catalog rows after the API manager list is empty', () => {
     const next = overlayApiModels(
       {

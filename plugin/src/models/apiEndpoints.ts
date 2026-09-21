@@ -431,6 +431,12 @@ export async function toggleApiEndpoint(id: string): Promise<ApiEndpoint> {
     await persistApiFile(file);
     return toBuiltinEndpoint(official);
   }
+  if (!id.startsWith('endpoint-')) {
+    const added: OfficialRecord = { id, name: id, enabled: false };
+    file.official = [...file.official, added];
+    await persistApiFile(file);
+    return toBuiltinEndpoint(added);
+  }
   const existing = file.endpoints.find((row) => row.id === id);
   if (!existing) {
     throw new Error('failed to toggle API endpoint');

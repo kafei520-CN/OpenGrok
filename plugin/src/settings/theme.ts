@@ -33,7 +33,7 @@ export const DEFAULT_THEME: ThemeColors = {
   secondary: '#737373',
 };
 
-/** OpenGrok desktop seed: white plate, dark type, frosted glass. */
+/** OpenGrok desktop seed: white plate, frosted glass, opaque panel fill. */
 export const DEFAULT_DESKTOP_THEME: ThemeColors = {
   primary: '#1c1c1c',
   secondary: '#737373',
@@ -42,7 +42,7 @@ export const DEFAULT_DESKTOP_THEME: ThemeColors = {
   chromeGlass: true,
   glassBlur: DEFAULT_GLASS_BLUR,
   chromeBlur: DEFAULT_CHROME_BLUR,
-  glassOpacity: DEFAULT_GLASS_OPACITY,
+  glassOpacity: 100,
 };
 
 export const THEME_PRESETS: Array<{

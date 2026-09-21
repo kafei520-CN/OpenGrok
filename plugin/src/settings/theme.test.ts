@@ -32,11 +32,12 @@ describe('theme', () => {
     assert.equal(rgbToHex('transparent'), undefined);
   });
 
-  it('seeds the desktop default as white glass', () => {
+  it('seeds the desktop default as white glass with opaque panels', () => {
     assert.equal(DEFAULT_DESKTOP_THEME.background, '#ffffff');
     assert.equal(DEFAULT_DESKTOP_THEME.primary, '#1c1c1c');
     assert.equal(DEFAULT_DESKTOP_THEME.surface, 'glass');
     assert.equal(DEFAULT_DESKTOP_THEME.chromeGlass, true);
+    assert.equal(DEFAULT_DESKTOP_THEME.glassOpacity, 100);
   });
 
   it('falls back to the Ice palette without locking a background', () => {

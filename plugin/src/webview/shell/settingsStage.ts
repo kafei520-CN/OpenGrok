@@ -133,6 +133,9 @@ function stageKey(tab: DeskTab): string {
     ui.state.extTab ?? '',
     (ui.state.plugins ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
     (ui.state.ogPlugins ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
+    (ui.state.apis ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
+    (ui.state.models?.available ?? []).map((row) => row.id).join('|'),
+    ui.state.models?.currentId ?? '',
     (ui.state.mcps ?? []).map((row) => `${row.id}:${row.enabled}`).join('|'),
     ui.state.theme?.background ?? '',
     ui.state.theme?.primary ?? '',
@@ -1004,7 +1007,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'og-set-stack';
-  const version = document.documentElement.dataset.version || '0.5.4';
+  const version = document.documentElement.dataset.version || '0.5.5';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';
   const logo = document.createElement('img');
@@ -1148,8 +1151,8 @@ function resetAppearance(): void {
     secondary: def.secondary ?? '#737373',
     background: def.background ?? '#ffffff',
     surface: def.surface ?? 'glass',
-    chromeGlass: true,
-    glassOpacity: def.glassOpacity ?? DEFAULT_GLASS_OPACITY,
+    chromeGlass: def.chromeGlass !== false,
+    glassOpacity: def.glassOpacity ?? 100,
     glassBlur: def.glassBlur ?? DEFAULT_GLASS_BLUR,
     chromeBlur: def.chromeBlur ?? DEFAULT_CHROME_BLUR,
     wallpaper: '',

@@ -709,6 +709,22 @@ const LEGACY_INK_SEED = {
   chromeGlass: true,
 } as const;
 
+const LEGACY_GLASS_SEED = {
+  primary: '#1c1c1c',
+  secondary: '#737373',
+  background: '#ffffff',
+  surface: 'glass',
+  chromeGlass: true,
+} as const;
+
+const LEGACY_SOLID_SEED = {
+  primary: '#1c1c1c',
+  secondary: '#737373',
+  background: '#ffffff',
+  surface: 'solid',
+  chromeGlass: false,
+} as const;
+
 function themeEq(raw: unknown, expected: { primary: string; secondary: string; background: string; surface: string; chromeGlass: boolean }): boolean {
   if (!raw || typeof raw !== 'object') {
     return false;
@@ -772,7 +788,15 @@ function seedTheme(): void {
   const file = path.join(dataDir(), 'ui.json');
   const all = readUiState();
   const current = all['ui.theme'];
-  if (current && !themeEq(current, LEGACY_INK_SEED)) {
+  if (
+    current &&
+    !themeEq(current, LEGACY_INK_SEED) &&
+    !themeEq(current, LEGACY_GLASS_SEED) &&
+    !themeEq(current, LEGACY_SOLID_SEED)
+  ) {
+    return;
+  }
+  if (current && typeof current === 'object' && (current as { wallpaper?: unknown }).wallpaper) {
     return;
   }
   all['ui.theme'] = { ...DEFAULT_DESKTOP_THEME };
