@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { isArchivePath, looksLikeZip, readArchiveText, splitArchivePath } from './archives';
 import { logError, logInfo } from '../core/logger';
 import { plat } from '../core/platform';
 import { asObject, asString } from '../core/wire';
@@ -33,6 +34,16 @@ export async function readWorkspaceFile(
     }
     return { content: '' };
   }
+  const archivePath = splitArchivePath(filePath).archive;
+  if (isArchivePath(archivePath) || isArchivePath(filePath)) {
+    try {
+      return sliceContent(await readArchiveText(filePath), obj);
+    } catch (error) {
+      throw new Error(
+        `cannot read archive ${path.basename(archivePath)}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
   if (!isImagePath(filePath)) {
     const open = await openBuffer(filePath);
     if (open !== undefined) {
@@ -40,6 +51,13 @@ export async function readWorkspaceFile(
     }
   }
   const bytes = Buffer.from(await plat().readFile(filePath));
+  if (looksLikeZip(bytes)) {
+    try {
+      return sliceContent(await readArchiveText(filePath), obj);
+    } catch {
+      /* fall through to base64 */
+    }
+  }
   if (shouldSendBase64(filePath, bytes)) {
     return {
       content: bytes.toString('base64'),

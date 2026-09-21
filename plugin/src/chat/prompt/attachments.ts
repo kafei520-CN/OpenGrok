@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { clipboardToPath, splitClipboardPaths } from './clipboard';
+import { ARCHIVE_MIME, archiveExt, isArchivePath, looksLikeZip } from '../../agent/archives';
 import { isImagePath, looksLikeImage, mimeFromImagePath } from '../../agent/clientHandlers';
 import { plat } from '../../core/platform';
 import type { Attachment, ChatMessage, MediaItem, MessageFile, QueuedPrompt } from '../../core/types';
@@ -280,6 +281,8 @@ export async function attachPath(host: AttachmentHost, filePath: string): Promis
     const bytes = await plat().readFile(filePath);
     if (isPdfPath(filePath) || looksLikePdf(bytes)) {
       mimeType = 'application/pdf';
+    } else if (isArchivePath(filePath) || looksLikeZip(bytes)) {
+      mimeType = ARCHIVE_MIME[archiveExt(filePath)] ?? 'application/zip';
     } else if ((isImagePath(filePath) && !isPdfPath(filePath)) || looksLikeImage(bytes)) {
       mimeType = mimeFromImagePath(filePath) ?? mimeFromMagic(bytes) ?? 'image/png';
       if (bytes.byteLength <= IMAGE_ATTACH_MAX) {
@@ -332,11 +335,11 @@ function isUtf8Payload(bytes: Uint8Array): boolean {
 }
 
 function mimeFromFileName(filePath: string): string | undefined {
-  const ext = path.extname(filePath).replace(/^\./, '').toLowerCase();
+  const ext = archiveExt(filePath) || path.extname(filePath).replace(/^\./, '').toLowerCase();
   if (ext === 'pdf') {
     return 'application/pdf';
   }
-  return undefined;
+  return ARCHIVE_MIME[ext];
 }
 
 function mimeFromMagic(bytes: Uint8Array): string | undefined {

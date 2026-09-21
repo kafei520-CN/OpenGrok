@@ -152,6 +152,22 @@ describe('attachments', () => {
     assert.equal(host.attachments[0]?.text, undefined);
   });
 
+  it('attaches a zip as a file chip, not a folder', async () => {
+    const zip = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
+    bindPlatform(
+      fakePlat({
+        readFile: async () => zip,
+      }),
+    );
+    const host: AttachmentHost = { attachments: [], emit() {} };
+    await pasteClipboard(host, { uris: ['file:///E:/mods/pack.zip'] });
+    assert.equal(host.attachments.length, 1);
+    assert.equal(host.attachments[0]?.path, 'E:/mods/pack.zip');
+    assert.equal(host.attachments[0]?.mimeType, 'application/zip');
+    assert.equal(host.attachments[0]?.folder, false);
+    assert.equal(host.attachments[0]?.data, undefined);
+  });
+
   it('attaches a folder path when readFile fails', async () => {
     bindPlatform(
       fakePlat({

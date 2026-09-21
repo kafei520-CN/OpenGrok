@@ -1,6 +1,13 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+import { promisify } from 'node:util';
+import { zipEntryUnsafe } from '../hosts/skills/skillsHost';
+import { logWarn } from '../core/logger';
 import type { OgPluginInfo, OgPluginStateFile } from './types';
+
+const execFileAsync = promisify(execFile);
+const PLUGIN_FILES = new Set(['ui.js', 'host.js', 'style.css', 'plugin.json']);
 
 export function opengrokHome(homeDir: string): string {
   return path.join(homeDir, '.opengrok');
@@ -63,19 +70,38 @@ async function readOptional(file: string): Promise<string | undefined> {
   }
 }
 
+export function pluginUnpackDir(homeDir: string): string {
+  return path.join(opengrokHome(homeDir), 'plugin-unpack');
+}
+
 async function scanDir(
   root: string,
   disabled: Set<string>,
+  unpackRoot: string,
+  kind: 'user' | 'project',
 ): Promise<Map<string, OgPluginInfo>> {
   const out = new Map<string, OgPluginInfo>();
-  let names: string[] = [];
+  let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
   try {
-    names = await readdir(root);
+    entries = await readdir(root, { withFileTypes: true });
   } catch {
     return out;
   }
-  for (const folderName of names.sort()) {
-    const dir = path.join(root, folderName);
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name.startsWith('.') || entry.name === '__MACOSX') {
+      continue;
+    }
+    let dir: string | undefined;
+    let folderName = entry.name;
+    if (entry.isFile() && /\.zip$/i.test(entry.name)) {
+      folderName = entry.name.replace(/\.zip$/i, '');
+      dir = await unpackPluginZip(path.join(root, entry.name), unpackRoot, `${kind}-${folderName}`);
+    } else if (entry.isDirectory()) {
+      dir = path.join(root, entry.name);
+    }
+    if (!dir) {
+      continue;
+    }
     const manifest = await readManifest(dir, folderName);
     const id = (manifest.id?.trim() || folderName).trim();
     if (!id) {
@@ -109,16 +135,71 @@ export async function scanOgPlugins(opts: {
   workspaceFolder?: string;
 }): Promise<OgPluginInfo[]> {
   const disabled = await readPluginState(opts.homeDir);
+  const unpackRoot = pluginUnpackDir(opts.homeDir);
   const userDir = opengrokPluginsDir(opts.homeDir);
-  const found = await scanDir(userDir, disabled);
+  const found = await scanDir(userDir, disabled, unpackRoot, 'user');
   const projectDir = projectOpengrokPluginsDir(opts.workspaceFolder);
   if (projectDir) {
-    const extra = await scanDir(projectDir, disabled);
+    const extra = await scanDir(projectDir, disabled, unpackRoot, 'project');
     for (const [id, plugin] of extra) {
       found.set(id, plugin);
     }
   }
   return [...found.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+async function unpackPluginZip(
+  zipPath: string,
+  unpackRoot: string,
+  stem: string,
+): Promise<string | undefined> {
+  const dest = path.join(unpackRoot, stem);
+  const stampPath = path.join(dest, '.og-unpack-stamp');
+  try {
+    const zipStat = await stat(zipPath);
+    const stamp = await readFile(stampPath, 'utf8');
+    if (stamp === String(zipStat.mtimeMs)) {
+      return pluginRoot(dest);
+    }
+  } catch {
+    /* unpack or refresh */
+  }
+  try {
+    await rm(dest, { recursive: true, force: true });
+    await mkdir(dest, { recursive: true });
+    const listed = await execFileAsync('tar', ['-tf', zipPath], {
+      windowsHide: true,
+      maxBuffer: 8_000_000,
+    });
+    const destRoot = path.resolve(dest);
+    for (const line of String(listed.stdout).split(/\r?\n/)) {
+      if (zipEntryUnsafe(destRoot, line)) {
+        throw new Error(`unsafe plugin zip path: ${line.trim()}`);
+      }
+    }
+    await execFileAsync('tar', ['-xf', zipPath, '-C', dest], { windowsHide: true });
+    const zipStat = await stat(zipPath);
+    await writeFile(stampPath, String(zipStat.mtimeMs), 'utf8');
+    return pluginRoot(dest);
+  } catch (error) {
+    logWarn(`opengrok plugin zip ${zipPath}: ${error instanceof Error ? error.message : error}`);
+    return undefined;
+  }
+}
+
+async function pluginRoot(extracted: string): Promise<string> {
+  let names: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
+  try {
+    names = await readdir(extracted, { withFileTypes: true });
+  } catch {
+    return extracted;
+  }
+  const files = names.filter((entry) => entry.isFile() && PLUGIN_FILES.has(entry.name));
+  const dirs = names.filter((entry) => entry.isDirectory() && entry.name !== '__MACOSX');
+  if (!files.length && dirs.length === 1 && dirs[0]) {
+    return path.join(extracted, dirs[0].name);
+  }
+  return extracted;
 }
 
 export async function ensureOgPluginsDir(homeDir: string): Promise<string> {
