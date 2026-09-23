@@ -87,6 +87,8 @@ export interface Platform {
   readOpenText?(path: string): Promise<string | undefined>;
   applyText?(path: string, text: string): Promise<boolean>;
   createTerminal(name: string, command: string): void;
+  /** Desktop side-browser control used by the browser MCP tools. */
+  browserDock?(payload: Record<string, unknown>): Promise<unknown>;
   spawnAgentTerminal?(opts: AgentTerminalSpawn): AgentTerminal;
   closeSidebar(): Promise<void>;
   focusChat(): void;

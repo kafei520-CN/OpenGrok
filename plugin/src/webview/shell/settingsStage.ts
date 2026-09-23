@@ -62,6 +62,9 @@ import { petMarkPreview } from '../pet/preview';
 
 export function patchSettingsStage(parent: HTMLElement): void {
   const existing = document.getElementById('og-settings');
+  if (!ui.state.settingsOpen || ui.state.settingsPage !== 'theme-preview') {
+    document.getElementById('og-wp-cross')?.remove();
+  }
   if (!ui.state.settingsOpen) {
     existing?.remove();
     return;
@@ -190,6 +193,7 @@ function mountStage(tab: DeskTab): HTMLElement {
     el.append(mountThemePreview());
     return el;
   }
+  document.getElementById('og-wp-cross')?.remove();
   el.append(pane(tab));
   return el;
 }
@@ -1007,7 +1011,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'og-set-stack';
-  const version = document.documentElement.dataset.version || '0.5.5';
+  const version = document.documentElement.dataset.version || '0.5.6';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';
   const logo = document.createElement('img');

@@ -13,6 +13,7 @@ import {
   setAutoUpdate,
   updateSnapshot,
 } from './updater';
+import { labShellResize, labShellStart, labShellStop, labShellWrite, labShells } from './labHost';
 
 const electron = resolveElectron();
 const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = electron;
@@ -170,7 +171,7 @@ function seedOfficeSkills(): void {
   }
 }
 
-const TITLEBAR_H = 36;
+const TITLEBAR_H = 52;
 
 type TitleChrome = {
   background: string;
@@ -229,6 +230,7 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      webviewTag: true,
     },
   });
   win.setAlwaysOnTop(false);
@@ -244,8 +246,14 @@ function createWindow(): BrowserWindow {
     event.preventDefault();
     hideToTray();
   });
-  win.on('maximize', () => win.webContents.send('grok-maximized', true));
-  win.on('unmaximize', () => win.webContents.send('grok-maximized', false));
+  win.on('maximize', () => {
+    applyTitleBarOverlay(win);
+    win.webContents.send('grok-maximized', true);
+  });
+  win.on('unmaximize', () => {
+    applyTitleBarOverlay(win);
+    win.webContents.send('grok-maximized', false);
+  });
   return win;
 }
 
@@ -989,6 +997,8 @@ async function runHost(method: string, params: Record<string, unknown>): Promise
     case 'createTerminal':
       openTerminal(String(params['command'] ?? ''), cwd);
       return true;
+    case 'browserDock':
+      return askBrowser(params);
     case 'closeSidebar':
       return true;
     case 'focusChat':
@@ -1036,21 +1046,8 @@ function writeText(filePath: string, text: string): void {
   fs.writeFileSync(filePath, text);
 }
 
-function openTerminal(command: string, cwd: string): void {
-  if (process.platform === 'win32') {
-    spawn('cmd.exe', ['/c', 'start', APP_NAME, 'cmd.exe', '/k', command || 'echo OpenGrok'], {
-      cwd,
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-    }).unref();
-    return;
-  }
-  spawn('x-terminal-emulator', ['-e', command || 'bash'], {
-    cwd,
-    detached: true,
-    stdio: 'ignore',
-  }).unref();
+function openTerminal(command: string, _cwd: string): void {
+  sendUi({ type: 'dockRun', command });
 }
 
 function openPrompt(config: unknown): Promise<unknown> {
@@ -1244,6 +1241,68 @@ ipcMain.on('pet-menu', () => {
     { type: 'separator' },
     { label: '退出', click: () => quitApp() },
   ]).popup({ window: petWindow });
+});
+
+ipcMain.handle('og-term-shells', () => labShells().map(({ id, label }) => ({ id, label })));
+
+ipcMain.handle('og-term-start', (event, opts: { shellId?: string; cwd?: string; cols?: number; rows?: number }) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return { ok: false, error: '没有窗口' };
+  }
+  return labShellStart(
+    win,
+    String(opts?.shellId ?? ''),
+    typeof opts?.cwd === 'string' ? opts.cwd : undefined,
+    Number(opts?.cols) || 80,
+    Number(opts?.rows) || 24,
+  );
+});
+
+ipcMain.on('og-term-write', (_event, data: unknown) => {
+  if (typeof data === 'string') {
+    labShellWrite(data);
+  }
+});
+
+ipcMain.on('og-term-resize', (_event, opts: { cols?: number; rows?: number }) => {
+  labShellResize(Number(opts?.cols) || 0, Number(opts?.rows) || 0);
+});
+
+ipcMain.on('og-term-kill', () => {
+  labShellStop();
+});
+
+const browserWait = new Map<number, (value: unknown) => void>();
+let browserSeq = 0;
+
+function askBrowser(params: Record<string, unknown>): Promise<unknown> {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    return Promise.resolve({ ok: false, error: '窗口还没打开' });
+  }
+  const id = ++browserSeq;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      browserWait.delete(id);
+      resolve({ ok: false, error: '浏览器没有在 20 秒内回应' });
+    }, 20_000);
+    browserWait.set(id, (value) => {
+      clearTimeout(timer);
+      resolve(value);
+    });
+    win.webContents.send('og-browser-req', { ...params, id });
+  });
+}
+
+ipcMain.on('og-browser-res', (_event, msg: { id?: number; result?: unknown }) => {
+  const id = Number(msg?.id);
+  const done = browserWait.get(id);
+  if (!done) {
+    return;
+  }
+  browserWait.delete(id);
+  done(msg.result);
 });
 
 ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: string; surface?: string }) => {

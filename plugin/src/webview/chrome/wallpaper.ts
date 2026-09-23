@@ -63,7 +63,7 @@ export function syncSurface(
 }
 
 export function chromeKeepers(): HTMLElement[] {
-  return ['grok-wallpaper', 'grok-frost', 'grok-veil']
+  return ['grok-wallpaper', 'grok-frost', 'grok-veil', 'og-dock']
     .map((id) => document.getElementById(id))
     .filter((node): node is HTMLElement => node instanceof HTMLElement);
 }

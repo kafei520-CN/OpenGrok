@@ -144,6 +144,12 @@ function fillBody(el: HTMLElement): void {
   }
   if (status === 'connecting') {
     el.append(bootStar());
+    if (ui.state.permission) {
+      el.append(permissionBar());
+    }
+    if (visibleAsk()) {
+      el.append(askBar());
+    }
     return;
   }
   if (status === 'login' || status === 'authenticating') {

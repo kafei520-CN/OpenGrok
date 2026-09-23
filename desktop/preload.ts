@@ -50,6 +50,30 @@ contextBridge.exposeInMainWorld('opengrok', {
       handler(state);
     });
   },
+  termShells(): Promise<Array<{ id: string; label: string }>> {
+    return ipcRenderer.invoke('og-term-shells');
+  },
+  termStart(opts: { shellId: string; cwd?: string; cols?: number; rows?: number }): Promise<{ ok: boolean; error?: string }> {
+    return ipcRenderer.invoke('og-term-start', opts);
+  },
+  termWrite(data: string) {
+    ipcRenderer.send('og-term-write', data);
+  },
+  termResize(opts: { cols: number; rows: number }) {
+    ipcRenderer.send('og-term-resize', opts);
+  },
+  termKill() {
+    ipcRenderer.send('og-term-kill');
+  },
+  onTerm(handler: (data: string) => void) {
+    ipcRenderer.on('og-term-data', (_event, data: string) => handler(data));
+  },
+  onBrowser(handler: (req: { id: number } & Record<string, unknown>) => void) {
+    ipcRenderer.on('og-browser-req', (_event, req: { id: number } & Record<string, unknown>) => handler(req));
+  },
+  browserDone(id: number, result: unknown) {
+    ipcRenderer.send('og-browser-res', { id, result });
+  },
 });
 
 contextBridge.exposeInMainWorld('opengrokPet', {

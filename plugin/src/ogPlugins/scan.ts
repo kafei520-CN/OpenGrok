@@ -95,6 +95,14 @@ async function scanDir(
     let folderName = entry.name;
     if (entry.isFile() && /\.zip$/i.test(entry.name)) {
       folderName = entry.name.replace(/\.zip$/i, '');
+      const sibling = path.join(root, folderName);
+      try {
+        if ((await stat(sibling)).isDirectory()) {
+          continue;
+        }
+      } catch {
+        /* no unpacked folder beside the zip */
+      }
       dir = await unpackPluginZip(path.join(root, entry.name), unpackRoot, `${kind}-${folderName}`);
     } else if (entry.isDirectory()) {
       dir = path.join(root, entry.name);

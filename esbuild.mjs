@@ -51,7 +51,7 @@ const jobs = [
     outfile: 'dist/main.js',
     platform: 'node',
     format: 'cjs',
-    external: ['electron'],
+    external: ['electron', 'node-pty'],
   },
   {
     ...common,
@@ -73,6 +73,7 @@ const jobs = [
 
 copyKatex();
 copyMonaco();
+copyXterm();
 
 if (watch) {
   const contexts = await Promise.all(jobs.map((job) => esbuild.context(job)));
@@ -81,6 +82,14 @@ if (watch) {
   await new Promise(() => {});
 } else {
   await Promise.all(jobs.map((job) => esbuild.build(job)));
+}
+
+function copyXterm() {
+  const src = path.join('node_modules', '@xterm', 'xterm', 'css', 'xterm.css');
+  if (!existsSync(src)) {
+    return;
+  }
+  cpSync(src, path.join('desktop', 'xterm.css'));
 }
 
 function copyKatex() {

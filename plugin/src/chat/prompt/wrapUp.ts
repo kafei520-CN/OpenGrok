@@ -3,6 +3,36 @@ import { plat } from '../../core/platform';
 import type { ChatMessage } from '../../core/types';
 
 export const WRAP_UP_RULE_FILE = 'opengrok-wrap-up.md';
+export const BROWSER_RULE_FILE = 'opengrok-browser.md';
+
+const BROWSER_RULE = `# OpenGrok browser
+
+The side-panel browser tools are already registered. Call the names in your tool list. They may show up as browser_open or browser_browser_open. Do not search the workspace, docs, or tool index.
+
+- open a page: browser_open or browser_browser_open { url }
+- look: browser_look or browser_browser_look
+- click: browser_click { x, y } or { selector } — x,y are screenshot pixels
+- drag: browser_drag { x1, y1, x2, y2 } — sling, pointer, mousemove, mouse hold
+- browser_type { text }
+- browser_press { key } — Enter, Space, ArrowLeft, ArrowRight, ArrowUp, ArrowDown
+- browser_scroll { dy }
+
+After one action, call browser_look once. Do not grep the repo.
+`;
+
+export async function ensureBrowserRule(): Promise<void> {
+  const filePath = path.join(plat().homeDir(), '.grok', 'rules', BROWSER_RULE_FILE);
+  try {
+    const bytes = await plat().readFile(filePath);
+    const text = Buffer.from(bytes).toString('utf8');
+    if (text.includes('browser_browser_open')) {
+      return;
+    }
+  } catch {
+    // First run: write the rule below.
+  }
+  await plat().writeFile(filePath, Buffer.from(BROWSER_RULE, 'utf8'));
+}
 
 const WRAP_UP_MARK = '# OpenGrok wrap-up';
 

@@ -91,6 +91,7 @@ export const ui = {
   wsFolderOpen: new Set<string>(),
   wsNavPx: readPx(vscode.getState(), 'wsNavPx', 220),
   wsChatPx: readPx(vscode.getState(), 'wsChatPx', 360),
+  dockPx: readPx(vscode.getState(), 'dockPx', 460),
   deskTab: 'account' as DeskTab,
   heatGranularity: 'day' as 'day' | 'week' | 'cumul',
   chosenModelId: undefined as string | undefined,
@@ -221,6 +222,7 @@ export function persistUi(): void {
     remoteView: ui.remoteView,
     wsNavPx: ui.wsNavPx,
     wsChatPx: ui.wsChatPx,
+    dockPx: ui.dockPx,
     theme,
   });
   if (next === prefsToken) {
@@ -236,6 +238,7 @@ export function persistUi(): void {
     remoteView: ui.remoteView,
     wsNavPx: ui.wsNavPx,
     wsChatPx: ui.wsChatPx,
+    dockPx: ui.dockPx,
     theme,
   });
 }

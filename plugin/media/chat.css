@@ -3388,6 +3388,10 @@ kbd {
   backdrop-filter: none;
 }
 
+html.opengrok .settings.wp-editor {
+  background: transparent;
+}
+
 .settings-head {
   display: flex;
   align-items: center;
@@ -4163,7 +4167,7 @@ kbd {
 
 #app[data-surface='glass'] .topbar,
 #app[data-surface='solid'] .topbar {
-  border-bottom: 1px solid var(--line);
+  border-bottom: none;
 }
 
 #app[data-surface='glass'] .composer-wrap,

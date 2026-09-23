@@ -20,6 +20,7 @@ import { mountDashboard } from '../shell/dashboard';
 import { listedSessions, mountSessionsDrawer } from '../shell/sessions';
 import { superGrokKind, superGrokMark } from '../shell/superGrokMark';
 import { mountTasks } from '../shell/tasks';
+import { toolsMenuButton } from '../shell/toolsDock';
 
 let headerLocale: string | undefined;
 
@@ -148,7 +149,7 @@ export function renderHeader(): HTMLElement {
         .opengrok;
       host?.window?.('max');
     });
-    el.append(brand);
+    el.append(brand, toolsMenuButton());
     return el;
   }
   const actions = document.createElement('div');

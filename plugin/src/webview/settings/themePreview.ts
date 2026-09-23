@@ -29,17 +29,26 @@ export function mountThemePreview(): HTMLElement {
   wrap.className = 'wp-editor-root';
   const stage = document.createElement('div');
   stage.className = 'wp-editor-stage';
-  stage.style.backgroundColor = theme.background ?? 'var(--bg)';
+  if (!usesWindowWallpaper()) {
+    stage.style.backgroundColor = theme.background ?? 'var(--bg)';
+  }
   const layer = document.createElement('div');
   layer.className = 'wp-editor-layer';
   layer.style.opacity = String((theme.wallpaperOpacity ?? DEFAULT_WALLPAPER_OPACITY) / 100);
   const cross = document.createElement('div');
+  cross.id = 'og-wp-cross';
   cross.className = 'wp-editor-cross';
   cross.setAttribute('aria-hidden', 'true');
   const aim = document.createElement('div');
   aim.className = 'wp-editor-aim';
   cross.append(aim);
-  stage.append(layer, cross);
+  stage.append(layer);
+  document.getElementById('og-wp-cross')?.remove();
+  if (usesWindowWallpaper()) {
+    document.getElementById('app')?.append(cross);
+  } else {
+    stage.append(cross);
+  }
   const tip = document.createElement('div');
   tip.className = 'wp-editor-tip';
   tip.textContent = tr('themePreviewHint');
@@ -76,7 +85,8 @@ function hud(stage: HTMLElement, layer: HTMLElement): HTMLElement {
   });
   zoom.addEventListener('change', () => persistPreview(withPos(liveX, liveY, Number(zoom.value))));
   const syncSize = (): void => {
-    size.textContent = tr('themePreviewSize', { w: stage.clientWidth, h: stage.clientHeight });
+    const box = wallpaperBox(stage);
+    size.textContent = tr('themePreviewSize', { w: box.clientWidth, h: box.clientHeight });
     const theme = currentTheme();
     writeHud(stage, theme);
     paintLayer(layer, theme, stage);
@@ -102,8 +112,8 @@ function bindPreviewPointer(stage: HTMLElement, layer: HTMLElement): void {
       moved = true;
     }
     const next = withPos(
-      panWallpaperPct(origX, event.clientX - startX, stage.clientWidth, paintedW),
-      panWallpaperPct(origY, event.clientY - startY, stage.clientHeight, paintedH),
+      panWallpaperPct(origX, event.clientX - startX, wallpaperBox(stage).clientWidth, paintedW),
+      panWallpaperPct(origY, event.clientY - startY, wallpaperBox(stage).clientHeight, paintedH),
       origScale,
     );
     placeLive(layer, next, stage);
@@ -118,10 +128,11 @@ function bindPreviewPointer(stage: HTMLElement, layer: HTMLElement): void {
     stage.style.cursor = 'crosshair';
     const natural = readNatural(layer);
     if (!moved && natural) {
-      const rect = stage.getBoundingClientRect();
+      const rect = wallpaperBox(stage).getBoundingClientRect();
+      const box = wallpaperBox(stage);
       const next = withPos(
-        centerWallpaperPct(origX, event.clientX - rect.left, stage.clientWidth, paintedW),
-        centerWallpaperPct(origY, event.clientY - rect.top, stage.clientHeight, paintedH),
+        centerWallpaperPct(origX, event.clientX - rect.left, box.clientWidth, paintedW),
+        centerWallpaperPct(origY, event.clientY - rect.top, box.clientHeight, paintedH),
         origScale,
       );
       placeLive(layer, next, stage);
@@ -131,8 +142,8 @@ function bindPreviewPointer(stage: HTMLElement, layer: HTMLElement): void {
       return;
     }
     persistPreview(withPos(
-      panWallpaperPct(origX, event.clientX - startX, stage.clientWidth, paintedW),
-      panWallpaperPct(origY, event.clientY - startY, stage.clientHeight, paintedH),
+      panWallpaperPct(origX, event.clientX - startX, wallpaperBox(stage).clientWidth, paintedW),
+      panWallpaperPct(origY, event.clientY - startY, wallpaperBox(stage).clientHeight, paintedH),
       origScale,
     ));
   };
@@ -159,11 +170,12 @@ function bindPreviewPointer(stage: HTMLElement, layer: HTMLElement): void {
     origY = theme.wallpaperY ?? 50;
     origScale = theme.wallpaperScale ?? DEFAULT_WALLPAPER_SCALE;
     liveScale = origScale;
+    const box = wallpaperBox(stage);
     const painted = wallpaperPaintedSize(
       natural.w,
       natural.h,
-      stage.clientWidth,
-      stage.clientHeight,
+      box.clientWidth,
+      box.clientHeight,
       origScale,
     );
     paintedW = painted.w;
@@ -180,8 +192,9 @@ function freezeScale(theme: ThemeColors, natural: { w: number; h: number }, stag
   if (theme.wallpaperScale != null) {
     return theme;
   }
-  const painted = wallpaperPaintedSize(natural.w, natural.h, stage.clientWidth, stage.clientHeight);
-  return withPos(theme.wallpaperX ?? 50, theme.wallpaperY ?? 50, wallpaperScaleFromPainted(painted.w, stage.clientWidth));
+  const box = wallpaperBox(stage);
+  const painted = wallpaperPaintedSize(natural.w, natural.h, box.clientWidth, box.clientHeight);
+  return withPos(theme.wallpaperX ?? 50, theme.wallpaperY ?? 50, wallpaperScaleFromPainted(painted.w, box.clientWidth));
 }
 
 function currentTheme(): ThemeColors {
@@ -208,25 +221,52 @@ function withPos(x: number, y: number, scale: number): ThemeColors {
   };
 }
 
+function usesWindowWallpaper(): boolean {
+  return document.documentElement.classList.contains('opengrok');
+}
+
+function wallpaperBox(stage: HTMLElement): HTMLElement {
+  if (!usesWindowWallpaper()) {
+    return stage;
+  }
+  return document.getElementById('app') ?? stage;
+}
+
+function liveLayer(layer: HTMLElement): HTMLElement {
+  if (!usesWindowWallpaper()) {
+    return layer;
+  }
+  const real = document.getElementById('grok-wallpaper');
+  return real instanceof HTMLElement ? real : layer;
+}
+
 function paintLayer(layer: HTMLElement, theme: ThemeColors, stage: HTMLElement): void {
-  fillWallpaperLayer(layer, theme, { w: stage.clientWidth, h: stage.clientHeight }, { playing: true });
+  const box = wallpaperBox(stage);
+  if (usesWindowWallpaper()) {
+    syncWallpaper(box, theme);
+    return;
+  }
+  fillWallpaperLayer(layer, theme, { w: box.clientWidth, h: box.clientHeight }, { playing: true });
 }
 
 function placeLive(layer: HTMLElement, theme: ThemeColors, stage: HTMLElement): void {
-  const media = wallpaperMediaEl(layer);
-  const size = readNatural(layer);
+  const host = liveLayer(layer);
+  const media = wallpaperMediaEl(host);
+  const size = readNatural(host);
+  const box = wallpaperBox(stage);
   if (!media || !size) {
     return;
   }
   placeWallpaperMedia(
     media,
-    wallpaperPlacement(theme, size.w, size.h, stage.clientWidth, stage.clientHeight),
+    wallpaperPlacement(theme, size.w, size.h, box.clientWidth, box.clientHeight),
   );
 }
 
 function readNatural(layer: HTMLElement): { w: number; h: number } | undefined {
-  const w = Number(layer.dataset.nw);
-  const h = Number(layer.dataset.nh);
+  const host = liveLayer(layer);
+  const w = Number(host.dataset.nw);
+  const h = Number(host.dataset.nh);
   return w > 0 && h > 0 ? { w, h } : undefined;
 }
 

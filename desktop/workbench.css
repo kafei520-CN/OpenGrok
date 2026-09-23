@@ -1,6 +1,6 @@
 html.opengrok {
   --og-rail: 264px;
-  --og-title: env(titlebar-area-height, 36px);
+  --og-title: 52px;
   --motion: 180ms cubic-bezier(0.22, 1, 0.36, 1);
   --motion-spring: 340ms cubic-bezier(0.22, 1.35, 0.36, 1);
   --motion-out: 160ms cubic-bezier(0.4, 0, 1, 1);
@@ -65,6 +65,17 @@ html.opengrok body {
 
 #og-titlebar {
   display: none;
+}
+
+html.opengrok .og-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  background: var(--bg, #fff);
+  pointer-events: none;
 }
 
 .og-drag {
@@ -915,9 +926,12 @@ html.opengrok #app[data-surface='solid'] .topbar {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   box-shadow: none;
+  border-bottom: none;
 }
 
 html.opengrok .og-session-title {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   overflow: hidden;
@@ -929,8 +943,524 @@ html.opengrok .og-topbar {
   justify-content: flex-start;
 }
 
+html.opengrok .og-topbar .brand {
+  flex: 1;
+  min-width: 0;
+}
+
 html.opengrok .og-topbar .header-actions {
   display: none;
+}
+
+html.opengrok .og-tools {
+  position: fixed;
+  top: 0;
+  right: 138px;
+  width: 46px;
+  height: var(--og-title);
+  z-index: 80;
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+html.opengrok .og-tools-btn {
+  width: 46px;
+  height: 100%;
+  border-radius: 0;
+  color: var(--fg);
+  display: grid;
+  place-items: center;
+  -webkit-app-region: no-drag;
+}
+
+html.opengrok .og-tools-btn:hover,
+html.opengrok .og-tools-btn.on {
+  background: var(--hover);
+}
+
+html.opengrok .og-tools-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 168px;
+  padding: 6px;
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+html.opengrok .og-tools-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+html.opengrok .og-tools-item svg {
+  flex: 0 0 auto;
+}
+
+html.opengrok .og-dock-context .menu-item,
+html.opengrok .og-dock-context .menu-item span {
+  color: var(--fg);
+}
+
+html.opengrok .og-tab-menu {
+  width: 280px;
+  padding: 8px;
+}
+
+html.opengrok .og-tab-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--muted);
+}
+
+html.opengrok .og-tab-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+html.opengrok .og-tab-menu-body {
+  max-height: 320px;
+  overflow: auto;
+}
+
+html.opengrok .og-tab-section {
+  margin: 8px 6px 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+html.opengrok .og-tab-rows + .og-tab-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+html.opengrok .og-tab-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+html.opengrok .og-tab-row.on,
+html.opengrok .og-tab-row:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+
+html.opengrok .og-tab-row span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+html.opengrok .og-tab-row time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+html.opengrok .og-tab-row .og-dock-tab-x {
+  flex: 0 0 auto;
+}
+
+html.opengrok #app.og-dock-on {
+  grid-template-columns: var(--og-rail) minmax(0, 1fr) var(--og-dock-w, 460px);
+}
+
+html.opengrok #app.og-dock-on .topbar,
+html.opengrok #app.og-dock-on #grok-header {
+  grid-column: 2 / -1;
+  grid-row: 1;
+}
+
+html.opengrok #app.og-dock-on #grok-body,
+html.opengrok #app.og-dock-on #composer-wrap {
+  grid-column: 2;
+}
+
+html.opengrok #og-dock {
+  position: relative;
+  grid-column: 3;
+  grid-row: 2 / -1;
+  z-index: 2;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+html.opengrok .og-dock-sash {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+
+html.opengrok .og-dock-sash::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+}
+
+html.opengrok .og-dock-sash:hover::before,
+html.opengrok .og-dock-sash.drag::before {
+  width: 3px;
+  background: color-mix(in srgb, var(--fg) 55%, transparent);
+}
+
+html.opengrok.og-dock-dragging,
+html.opengrok.og-dock-dragging * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+html.opengrok .og-dock-drag-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+html.opengrok #app[data-surface='glass'] #og-dock {
+  background: transparent;
+  color: var(--fg);
+}
+
+html.opengrok:not(.maximized) #app.og-dock-on[data-surface='glass'] #og-dock {
+  margin-left: calc(var(--og-inset) * -1);
+}
+
+html.opengrok .og-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+html.opengrok .og-dock-head[hidden] {
+  display: none;
+}
+
+html.opengrok .og-dock-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 42px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+html.opengrok .og-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+html.opengrok .og-dock-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+html.opengrok .og-dock-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  max-width: 180px;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--muted);
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+html.opengrok .og-dock-tab svg {
+  flex: 0 0 auto;
+}
+
+html.opengrok .og-dock-tab span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+html.opengrok .og-dock-tab.on {
+  background: color-mix(in srgb, var(--fg) 16%, transparent);
+  color: var(--fg);
+}
+
+html.opengrok .og-dock-tab-x,
+html.opengrok .og-dock-add,
+html.opengrok .og-dock-chevron,
+html.opengrok .og-dock-mini {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+html.opengrok .og-dock-add,
+html.opengrok .og-dock-chevron,
+html.opengrok .og-dock-mini {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  color: var(--fg);
+}
+
+html.opengrok .og-dock-add {
+  font-size: 18px;
+  line-height: 1;
+}
+
+html.opengrok .og-dock-tab-x:hover,
+html.opengrok .og-dock-add:hover,
+html.opengrok .og-dock-chevron:hover,
+html.opengrok .og-dock-mini:hover,
+html.opengrok .og-dock-tab:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+html.opengrok .og-dock-frames {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html.opengrok .og-dock-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html.opengrok .og-dock-pane[hidden] {
+  display: none !important;
+}
+
+html.opengrok .og-dock-url {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+  caret-color: var(--fg);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+html.opengrok .og-dock-url::placeholder {
+  color: var(--muted);
+}
+
+html.opengrok .og-dock-xterm {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+html.opengrok .og-dock-xterm .xterm {
+  height: 100%;
+}
+
+html.opengrok .og-dock-xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+html.opengrok .og-dock-term {
+  flex: 1;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  outline: none;
+  cursor: text;
+  background: transparent;
+  color: var(--fg);
+  font: 13px/1.45 ui-monospace, Consolas, monospace;
+}
+
+html.opengrok .og-dock-caret {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  margin-left: 1px;
+  background: var(--fg);
+  vertical-align: text-bottom;
+  pointer-events: none;
+  opacity: 0;
+}
+
+html.opengrok .og-dock-term:focus .og-dock-caret {
+  opacity: 1;
+  animation: og-dock-caret 1.05s steps(1) infinite;
+}
+
+html.opengrok .og-dock-tab-x {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+@keyframes og-dock-caret {
+  50% { opacity: 0; }
+}
+
+html.opengrok .og-dock-pick {
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  text-align: center;
+  gap: 8px;
+}
+
+html.opengrok .og-dock-pick h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+html.opengrok .og-dock-pick p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+html.opengrok .og-dock-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: min(100%, 280px);
+}
+
+html.opengrok .og-dock-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 84px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+html.opengrok .og-dock-card:hover {
+  background: var(--hover);
+}
+
+html.opengrok .og-dock-frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+html.opengrok .og-dock-blank {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px;
+}
+
+html.opengrok .og-dock-blank h2 {
+  margin: 12px 0 0;
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+html.opengrok .og-dock-blank p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+html.opengrok .og-dock-webview {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+}
+
+html.opengrok .og-dock-blank[hidden],
+html.opengrok .og-dock-webview[hidden] {
+  display: none !important;
 }
 
 html.opengrok .send-fab,
@@ -3084,11 +3614,28 @@ html.opengrok #grok-floats .og-account-menu {
   overflow: visible;
 }
 
-html.opengrok #og-settings.wp-editor {
+html.opengrok #og-settings.wp-editor,
+html.opengrok #app[data-surface='solid'] #og-settings.wp-editor {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   padding: 0;
-  background: var(--bg);
+  background: transparent;
+}
+
+html.opengrok .wp-editor-layer,
+html.opengrok .wp-editor-stage,
+html.opengrok .wp-editor-root {
+  background: transparent;
+}
+
+html.opengrok .wp-editor-layer {
+  display: none;
+}
+
+html.opengrok #og-wp-cross {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
 }
 
 html.opengrok #app[data-surface='glass'] .queue {

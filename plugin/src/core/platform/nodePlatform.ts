@@ -303,6 +303,10 @@ export class NodePlatform implements Platform {
     void this.opts.request('createTerminal', { name, command });
   }
 
+  browserDock(payload: Record<string, unknown>): Promise<unknown> {
+    return this.opts.request('browserDock', payload);
+  }
+
   spawnAgentTerminal(opts: import('./index').AgentTerminalSpawn) {
     return spawnProcessTerminal(opts);
   }

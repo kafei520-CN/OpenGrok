@@ -83,4 +83,20 @@ describe('OpenGrok plugin scan', () => {
     assert.equal(loaded[0]?.id, 'demo-skin');
     assert.equal(loaded[0]?.ui?.includes('nested zip'), true);
   });
+
+  it('does not unpack a zip when the same-named folder is already there', async () => {
+    const home = await mkdtemp(path.join(tmpdir(), 'og-plug-'));
+    const plugins = opengrokPluginsDir(home);
+    const folder = path.join(plugins, 'live');
+    await mkdir(folder, { recursive: true });
+    await writeFile(path.join(folder, 'ui.js'), '/* from folder */', 'utf8');
+    const src = path.join(home, 'zip-src');
+    await mkdir(src, { recursive: true });
+    await writeFile(path.join(src, 'ui.js'), '/* from zip */', 'utf8');
+    const zip = path.join(plugins, 'live.zip');
+    await execFileAsync('tar', ['-a', '-cf', zip, '-C', src, 'ui.js'], { windowsHide: true });
+    const loaded = await scanOgPlugins({ homeDir: home });
+    assert.equal(loaded[0]?.ui?.includes('from folder'), true);
+    assert.equal(loaded[0]?.ui?.includes('from zip'), false);
+  });
 });

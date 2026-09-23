@@ -10,6 +10,7 @@ import { patchDesktopDash } from './shell/dashboard';
 import { closeDesktopReview, openDesktopReview, patchReviewStage, reviewOpen } from './shell/reviewStage';
 import { patchSettingsStage } from './shell/settingsStage';
 import { patchHeader, renderDrawer, renderLightbox, renderRenameDialog } from './chrome';
+import { bindDockBrowser, patchToolsDock, runInDockTerminal } from './shell/toolsDock';
 import { mountComposer, patchComposer } from './chrome/composer';
 import { removeSlot, replaceSlot } from './dom';
 import { closeSettingsPicker, patchSettings, settingsBackMessage } from './settings';
@@ -35,6 +36,26 @@ import {
 } from './shell/workspace';
 
 bindRender(render);
+
+let restoreWatch: ReturnType<typeof setTimeout> | undefined;
+
+function watchRestore(): void {
+  if (restoreWatch) {
+    clearTimeout(restoreWatch);
+    restoreWatch = undefined;
+  }
+  if (!ui.state.restoringSession) {
+    return;
+  }
+  restoreWatch = setTimeout(() => {
+    restoreWatch = undefined;
+    if (!ui.state.restoringSession) {
+      return;
+    }
+    ui.state.restoringSession = false;
+    render();
+  }, 4000);
+}
 
 type HostMsg = {
   type: string;
@@ -63,6 +84,7 @@ type HostMsg = {
     bubbles?: boolean;
   };
   tab?: string;
+  command?: string;
 } & Partial<StreamTail>;
 
 let hydrateGen = 0;
@@ -106,6 +128,10 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     if (chromeChanged) {
       render();
     }
+    return;
+  }
+  if (data.type === 'dockRun' && typeof data.command === 'string' && data.command) {
+    void runInDockTerminal(data.command);
     return;
   }
   if (data.type === 'openDesk' && data.tab) {
@@ -168,6 +194,7 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       };
     }
     ui.state = incoming;
+    watchRestore();
     persistUi();
     const cue = ui.state.notify;
     if (cue && ui.state.settings?.notifySound !== false) {
@@ -335,6 +362,7 @@ function scheduleTailPaint(): void {
 
 function render(): void {
   try {
+    document.querySelector('.og-splash')?.remove();
     document.documentElement.lang = ui.state.locale === 'zh-CN' ? 'zh-CN' : 'en';
     applyThemeTo(
       document.documentElement.style,
@@ -373,6 +401,9 @@ function render(): void {
     root.classList.toggle('og-settings-on', settingsOn);
     if (!settingsOn || isDesktop()) {
       patchHeader(root);
+    }
+    if (isDesktop()) {
+      patchToolsDock(root);
     }
     if (!settingsOn && !reviewing) {
       patchBody(root);
@@ -453,6 +484,7 @@ function render(): void {
 function boot(): void {
   (window as unknown as { __grokPrime?: () => void }).__grokPrime?.();
   ensureOgPluginRoot();
+  bindDockBrowser();
   bindQuoteMenu();
   bindFileLinkMenu();
   post({ type: 'ready' });

@@ -50,7 +50,7 @@ import { tr, uiLocale } from '../core/i18n/locale';
 import { logError, logInfo, logWarn, showLog } from '../core/logger';
 import { buildPromptBlocks } from './prompt';
 import { resolveExistingChatPath } from './prompt/resolvePath';
-import { ensureWrapUpRule, scrubUserMessages, stripWrapUpText } from './prompt/wrapUp';
+import { ensureBrowserRule, ensureWrapUpRule, scrubUserMessages, stripWrapUpText } from './prompt/wrapUp';
 import { formatAgentError, formatErrorLine, isCancelError } from '../core/errors';
 import { readGrokSettings } from '../settings/settings';
 import {
@@ -89,6 +89,7 @@ import {
   promptModeMeta,
   type HostAction,
 } from './prompt/slash';
+import { browserMcpServersMeta } from '../core/runtime/browserTool';
 import { imageMcpServersMeta } from '../core/runtime/imageTool';
 import { isOfficialGrokAccount, parseBilling, type BillingQuota } from '../billing/billing';
 import { withCachedSubscription } from '../billing/billingCache';
@@ -3050,7 +3051,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private async startInner(): Promise<void> {
-    await this.reloadOgPlugins();
+    void this.reloadOgPlugins();
     this.startOgPluginWatch();
     const epoch = this.agentGen;
     this.error = undefined;
@@ -3107,7 +3108,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         spawned.dispose();
         return;
       }
-      const init = await spawned.initialize();
+      const init = await withTimeout(spawned.initialize(), 20_000, 'Grok 启动超时');
       if (epoch !== this.agentGen) {
         spawned.dispose();
         return;
@@ -3315,7 +3316,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!settings.useTerminal) {
       extra.disallowedTools = ['bash', 'execute', 'terminal', 'run_terminal_command'];
     }
-    extra['x.ai/mcp/servers'] = imageMcpServersMeta();
+    const mcpServers = imageMcpServersMeta();
+    if (plat().browserDock) {
+      mcpServers.push(...browserMcpServersMeta());
+    }
+    extra['x.ai/mcp/servers'] = mcpServers;
     const hints = this.startupHints();
     if (hints) {
       extra.startupHints = hints;
@@ -3385,6 +3390,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     });
     this.setStatus('ready');
     void ensureWrapUpRule();
+    void ensureBrowserRule();
     this.refreshBilling();
     this.startBillingPoll();
     this.refreshHeatmap();
@@ -3710,4 +3716,20 @@ function savedPickerEffort(raw: unknown): string | undefined {
     return undefined;
   }
   return text;
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
 }

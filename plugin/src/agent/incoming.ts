@@ -1,6 +1,7 @@
 import { parseSessionUpdate } from './agent';
 import { handleTerminalMethod, isTerminalMethod } from './acpTerminal';
 import { readWorkspaceFile, writeWorkspaceFile } from './clientHandlers';
+import { browserAction, browserServerIds, handleBrowserMcpMessage } from '../core/runtime/browserTool';
 import { handleMcpSdkCall } from '../core/runtime/imageTool';
 import { logInfo } from '../core/logger';
 import { RpcError } from './rpc';
@@ -62,6 +63,16 @@ export async function handleIncoming(
     return controller.reviewPlan(params);
   }
   if (name === 'x.ai/mcp/sdk_call') {
+    const call = asObject(params);
+    const serverId = asString(call['serverId']) ?? asString(call['server_id']) ?? '';
+    const message = call['message'] ?? call;
+    const toolName =
+      asString(asObject(asObject(message)['params'])['name']) ??
+      asString(call['name']) ??
+      '';
+    if (browserServerIds().includes(serverId) || browserAction(toolName)) {
+      return handleBrowserMcpMessage(message);
+    }
     return handleMcpSdkCall(params, (filePath, data) => {
       controller.rememberWorkspaceImage?.(filePath, data);
     });
