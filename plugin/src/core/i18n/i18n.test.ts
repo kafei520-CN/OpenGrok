@@ -27,6 +27,17 @@ describe('i18n', () => {
     assert.deepEqual(zhKeys, enKeys);
   });
 
+  it('keeps catalog copy free of replacement characters', () => {
+    for (const [name, catalog] of [
+      ['en', EN],
+      ['zh-CN', ZH],
+    ] as const) {
+      for (const [key, value] of Object.entries(catalog)) {
+        assert.equal(value.includes('\uFFFD'), false, `${name}.${key}`);
+      }
+    }
+  });
+
   it('fills placeholders', () => {
     assert.equal(t('en', 'editsTitle', { n: 3 }), '3 changes');
     assert.equal(t('zh-CN', 'editsTitle', { n: 3 }), '3 处修改');
