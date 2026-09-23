@@ -113,6 +113,9 @@ async function scanDir(
     if (!ui && !css && !host) {
       continue;
     }
+    if (entry.isFile() && out.has(id)) {
+      continue;
+    }
     const enabled = manifest.enabled !== false && !disabled.has(id);
     out.set(id, {
       id,
