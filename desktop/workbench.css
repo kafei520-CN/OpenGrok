@@ -211,10 +211,6 @@ html.opengrok.maximized #app[data-surface='endfield'] {
   padding-top: var(--og-max-inset);
 }
 
-html.opengrok.maximized .og-tools {
-  top: var(--og-max-inset);
-}
-
 html.opengrok.maximized #app[data-surface='glass'] #og-rail,
 html.opengrok.maximized #app[data-surface='glass'] #og-dash {
   border-radius: 0;
