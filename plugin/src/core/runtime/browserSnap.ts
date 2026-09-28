@@ -171,6 +171,57 @@ export function controlByRef(picture: PagePicture | undefined, ref: string): Sna
   return picture?.nodes.find((node) => node.ref === trimmed);
 }
 
+/** Text fields are replaced. Buttons and the page itself are left alone. */
+export function shouldClearBeforeType(role: string, append: boolean): boolean {
+  if (append) {
+    return false;
+  }
+  return role === 'textbox' || role === 'searchbox' || role === 'combobox';
+}
+
+/**
+ * After a navigation, wait until the document is complete and the DOM sits
+ * still. Cap the wait so a page that never goes idle (video, analytics)
+ * still returns. Same idea as ZCode's networkidle, without a 25s hang.
+ */
+export const NAV_SETTLE_JS = `new Promise((resolve) => {
+  const root = document.documentElement;
+  let last = Date.now();
+  const start = last;
+  const obs = new MutationObserver(() => { last = Date.now(); });
+  if (root) obs.observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
+  const tick = () => {
+    const now = Date.now();
+    const ready = document.readyState === 'complete';
+    if ((ready && now - last >= 300) || now - start >= 2500) {
+      obs.disconnect();
+      resolve(now - start);
+      return;
+    }
+    setTimeout(tick, 50);
+  };
+  setTimeout(tick, 50);
+})`;
+
+/** Clears the focused field. No-op when focus is not an editor. */
+export const CLEAR_FIELD_JS = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return false;
+  const tag = el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    const input = el;
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  if (el.isContentEditable) {
+    el.textContent = '';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  return false;
+})()`;
+
 /** Waits for new elements, not for text or a player that never sits still. */
 export const SETTLE_JS = `new Promise((resolve) => {
   const root = document.documentElement;

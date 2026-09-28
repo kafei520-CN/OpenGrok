@@ -5,36 +5,18 @@ import type { ChatMessage } from '../../core/types';
 export const WRAP_UP_RULE_FILE = 'opengrok-wrap-up.md';
 export const BROWSER_RULE_FILE = 'opengrok-browser.md';
 
-const BROWSER_RULE_MARK = 'browser_click { ref';
-
-const BROWSER_RULE = `# OpenGrok browser
-
-The side-panel browser tools are already registered. Call the names in your tool list. They may show up as browser_open or browser_browser_open. Do not search the workspace, docs, or tool index.
-
-- open a page: browser_open or browser_browser_open { url }
-  The result includes the page structure. Do not call browser_look after open.
-- click: browser_click { ref } — ref comes from the structure, for example e12. The result includes what changed.
-- type: browser_type { ref, text }
-- press: browser_press { key } — Enter, Space, ArrowLeft, ArrowRight, ArrowUp, ArrowDown
-- scroll: browser_scroll { dy }
-- drag: browser_drag { x1, y1, x2, y2 } — screenshot pixels, for canvas and sling gestures
-- look: browser_look — only when you have no structure yet. Pass { image: true } only for icon buttons with no name, charts, or canvas.
-
-Do not click with x,y when a ref exists. Do not call browser_look after click, type, press, or scroll; those results already include the new structure. x,y are for a spot with no ref. Do not grep the repo.
-`;
-
-export async function ensureBrowserRule(): Promise<void> {
-  const filePath = path.join(plat().homeDir(), '.grok', 'rules', BROWSER_RULE_FILE);
-  try {
-    const bytes = await plat().readFile(filePath);
-    const text = Buffer.from(bytes).toString('utf8');
-    if (text.includes(BROWSER_RULE_MARK)) {
-      return;
+/** Drop builtin rule files so the CLI does not attach them to a chat. */
+export async function retireBuiltinRules(): Promise<void> {
+  const dir = path.join(plat().homeDir(), '.grok', 'rules');
+  for (const name of [BROWSER_RULE_FILE, WRAP_UP_RULE_FILE]) {
+    for (const fileName of [name, `${name}.disabled`]) {
+      try {
+        await plat().deleteFile(path.join(dir, fileName), true);
+      } catch {
+        // Already gone.
+      }
     }
-  } catch {
-    // First run: write the rule below.
   }
-  await plat().writeFile(filePath, Buffer.from(BROWSER_RULE, 'utf8'));
 }
 
 const WRAP_UP_MARK = '# OpenGrok wrap-up';
@@ -65,21 +47,6 @@ export function wrapUpRulePath(homeDir: string): string {
   return path.join(homeDir, '.grok', 'rules', WRAP_UP_RULE_FILE);
 }
 
-/** Create the rule once. Upgrade only the file-chip marker instruction. */
-export async function ensureWrapUpRule(): Promise<void> {
-  const filePath = wrapUpRulePath(plat().homeDir());
-  try {
-    const bytes = await plat().readFile(filePath);
-    const text = Buffer.from(bytes).toString('utf8');
-    const next = upgradeWrapUpRule(text);
-    if (next !== text) {
-      await plat().writeFile(filePath, Buffer.from(next, 'utf8'));
-    }
-  } catch {
-    await plat().writeFile(filePath, Buffer.from(WRAP_UP_NOTE, 'utf8'));
-  }
-}
-
 export function upgradeWrapUpRule(text: string): string {
   let next = text;
   next = next.replace(
@@ -103,13 +70,21 @@ export function upgradeWrapUpRule(text: string): string {
   return next;
 }
 
-/** CLI may have glued the old prompt-block wrap-up onto a user turn. */
+const HIDDEN_RULE_MARKS = [WRAP_UP_MARK, '# OpenGrok browser'];
+
+/** CLI may have glued a builtin rule onto a user turn. Cut it before display. */
 export function stripWrapUpText(text: string): string {
-  const idx = text.indexOf(WRAP_UP_MARK);
-  if (idx < 0) {
+  let cut = text.length;
+  for (const mark of HIDDEN_RULE_MARKS) {
+    const idx = text.indexOf(mark);
+    if (idx >= 0 && idx < cut) {
+      cut = idx;
+    }
+  }
+  if (cut === text.length) {
     return text;
   }
-  return text.slice(0, idx).replace(/[#\s]+$/u, '').trimEnd();
+  return text.slice(0, cut).replace(/[#\s]+$/u, '').trimEnd();
 }
 
 export function scrubUserMessages(messages: ChatMessage[]): void {

@@ -5,6 +5,7 @@ import {
   PAGE_SNAPSHOT_JS,
   SETTLE_JS,
   buildSnapView,
+  shouldClearBeforeType,
   clickTargetScript,
   cropRect,
   focusTargetScript,
@@ -142,5 +143,12 @@ describe('browser snap', () => {
     for (const source of sources) {
       assert.doesNotThrow(() => new Function(source));
     }
+  });
+
+  it('clears text fields before typing unless append is set', () => {
+    assert.equal(shouldClearBeforeType('textbox', false), true);
+    assert.equal(shouldClearBeforeType('searchbox', false), true);
+    assert.equal(shouldClearBeforeType('textbox', true), false);
+    assert.equal(shouldClearBeforeType('button', false), false);
   });
 });

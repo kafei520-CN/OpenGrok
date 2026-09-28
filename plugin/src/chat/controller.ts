@@ -50,7 +50,7 @@ import { tr, uiLocale } from '../core/i18n/locale';
 import { logError, logInfo, logWarn, showLog } from '../core/logger';
 import { buildPromptBlocks } from './prompt';
 import { resolveExistingChatPath } from './prompt/resolvePath';
-import { ensureBrowserRule, ensureWrapUpRule, scrubUserMessages, stripWrapUpText } from './prompt/wrapUp';
+import { retireBuiltinRules, scrubUserMessages, stripWrapUpText } from './prompt/wrapUp';
 import { formatAgentError, formatErrorLine, isCancelError } from '../core/errors';
 import { readGrokSettings } from '../settings/settings';
 import {
@@ -3557,8 +3557,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.emit();
     });
     this.setStatus('ready');
-    void ensureWrapUpRule();
-    void ensureBrowserRule();
+    void retireBuiltinRules();
     this.refreshBilling();
     this.startBillingPoll();
     this.refreshHeatmap();

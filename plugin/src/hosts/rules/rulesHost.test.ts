@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseRuleFileName, safeRuleStem } from './rulesHost';
+import { isHiddenBuiltinRule, parseRuleFileName, safeRuleStem } from './rulesHost';
 
 describe('rules files', () => {
   it('parses enabled and disabled markdown names', () => {
@@ -15,6 +15,12 @@ describe('rules files', () => {
       name: 'CLAUDE',
       enabled: false,
     });
+  });
+
+  it('hides builtin instruction files from the rules list', () => {
+    assert.equal(isHiddenBuiltinRule('opengrok-browser'), true);
+    assert.equal(isHiddenBuiltinRule('opengrok-wrap-up'), true);
+    assert.equal(isHiddenBuiltinRule('Grok Build规则'), false);
   });
 
   it('strips extension and unsafe characters from import stems', () => {

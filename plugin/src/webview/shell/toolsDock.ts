@@ -13,7 +13,10 @@ import {
   needsShot,
   PAGE_SNAPSHOT_JS,
   parsePicture,
+  CLEAR_FIELD_JS,
+  NAV_SETTLE_JS,
   SETTLE_JS,
+  shouldClearBeforeType,
   stampScript,
 } from '../../core/runtime/browserSnap';
 import { copyText, isDesktop, persistUi, post, tr, ui } from '../app';
@@ -1051,6 +1054,7 @@ type BrowserReq = {
   image?: boolean;
   dx?: number;
   dy?: number;
+  append?: boolean;
 };
 
 let lastShot = { width: 1, height: 1, cssX: 0, cssY: 0, cssW: 1, cssH: 1 };
@@ -1104,7 +1108,7 @@ export async function controlDockBrowser(req: BrowserReq): Promise<Record<string
       await ensureWatch(view);
       const before = guestUrl(view);
       const clicked = await clickBrowser(view, req);
-      const observed = await finishAction(view, '已点击。');
+      const observed = await finishAction(view, '已点击。', before);
       if (clicked && (clicked.role === 'textbox' || clicked.role === 'searchbox') && String(observed['url'] ?? '') === before) {
         observed['summary'] = `已点中输入框 ${clicked.ref}。用 browser_type 写入文字，然后 browser_press Enter。不要再点这个框。`;
       }
@@ -1119,7 +1123,7 @@ export async function controlDockBrowser(req: BrowserReq): Promise<Record<string
     if (action === 'type') {
       const view = await ensureVisibleBrowser();
       await ensureWatch(view);
-      await typeBrowser(view, String(req.text ?? ''), req.selector, req.ref);
+      await typeBrowser(view, String(req.text ?? ''), req.selector, req.ref, req.append === true);
       return finishAction(view, '已输入。');
     }
     if (action === 'press') {
@@ -1202,7 +1206,7 @@ function loadView(view: WebViewEl, href: string): Promise<void> {
       window.clearTimeout(timer);
       view.removeEventListener('did-stop-loading', onStop);
       view.removeEventListener('dom-ready', onStop);
-      resolve();
+      void navSettle(view).finally(() => resolve());
     };
     const onStop = () => {
       const url = guestUrl(view);
@@ -1234,10 +1238,27 @@ function showGuest(view: WebViewEl): void {
   }
 }
 
-async function finishAction(view: WebViewEl, summary: string): Promise<Record<string, unknown>> {
+async function finishAction(
+  view: WebViewEl,
+  summary: string,
+  previousUrl?: string,
+): Promise<Record<string, unknown>> {
+  const started = guestUrl(view);
   await settleView(view);
+  const after = guestUrl(view);
+  if ((previousUrl && after && after !== previousUrl) || (after && after !== started)) {
+    await navSettle(view);
+  }
   const observed = await observe(view, false);
   return { ...observed, summary };
+}
+
+async function navSettle(view: WebViewEl): Promise<void> {
+  try {
+    await view.executeJavaScript(NAV_SETTLE_JS, true);
+  } catch {
+    await wait(200);
+  }
 }
 
 async function observe(view: WebViewEl, forceImage: boolean): Promise<Record<string, unknown>> {
@@ -1636,9 +1657,16 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-async function typeBrowser(view: WebViewEl, text: string, selector?: string, ref?: string): Promise<void> {
+async function typeBrowser(
+  view: WebViewEl,
+  text: string,
+  selector?: string,
+  ref?: string,
+  append = false,
+): Promise<void> {
   view.focus();
   const target = ref?.trim();
+  const role = target ? (controlByRef(lastPicture, target)?.role ?? '') : '';
   if (target) {
     await activateRef(view, target, 'focus');
   } else if (selector) {
@@ -1648,6 +1676,13 @@ async function typeBrowser(view: WebViewEl, text: string, selector?: string, ref
     );
     if (!found) {
       throw new Error(`找不到 ${selector}`);
+    }
+  }
+  if (shouldClearBeforeType(role, append) || (!append && !role)) {
+    try {
+      await view.executeJavaScript(CLEAR_FIELD_JS, true);
+    } catch {
+      // A field that cannot be cleared still receives the keystrokes.
     }
   }
   for (const ch of text) {

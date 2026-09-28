@@ -34,5 +34,6 @@ describe('wrap-up instruction', () => {
     const glued = '那你为什么最后一直卡着不结束对话，是网络问题吗# OpenGrok wrap-up\nWhen you finish actual work';
     assert.equal(stripWrapUpText(glued), '那你为什么最后一直卡着不结束对话，是网络问题吗');
     assert.equal(stripWrapUpText('hello'), 'hello');
+    assert.equal(stripWrapUpText('打开页面 # OpenGrok browser\nclick'), '打开页面');
   });
 });

@@ -145,13 +145,17 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '输入文字',
       description:
-        '手脚。把文字输入编号对应的控件。传 ref，例如 e12。返回输入后的页面变化，不必再调用 browser_look。没有编号时可以传 selector。游戏里的单次按键用 browser_press。',
+        '手脚。把文字写入编号对应的输入框，默认先清空再写。传 append:true 才接在原文字后面。传 ref，例如 e12。返回输入后的页面变化，不必再调用 browser_look。游戏里的单次按键用 browser_press。',
       inputSchema: {
         type: 'object',
         properties: {
           text: { type: 'string', description: '要输入的文字。' },
           ref: { type: 'string', description: '要输入的控件编号，例如 e12。' },
           selector: { type: 'string', description: '可选。先聚焦的 CSS 选择器。' },
+          append: {
+            type: 'boolean',
+            description: '为 true 时接在原文字后面。默认先清空输入框再写入。',
+          },
         },
         required: ['text'],
       },

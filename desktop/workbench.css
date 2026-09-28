@@ -2304,8 +2304,8 @@ html.opengrok #app[data-surface='glass'] .og-set-pane {
   gap: 0;
   flex-shrink: 0;
   position: relative;
-  z-index: 3;
-  margin: 0 0 -1px;
+  z-index: 4;
+  margin: 0;
   overflow: visible;
 }
 
@@ -2338,20 +2338,14 @@ html.opengrok #app[data-surface='glass'] .og-set-pane {
 
 .og-deck-tab.on {
   z-index: 5;
+  margin-bottom: -2px;
   background: var(--bg);
   color: var(--fg);
   border-bottom: none;
 }
 
 .og-deck-tab.on::after {
-  content: "";
-  position: absolute;
-  left: -1px;
-  right: -1px;
-  bottom: -8px;
-  height: 10px;
-  background: var(--bg);
-  pointer-events: none;
+  content: none;
 }
 
 .og-deck-stack {
@@ -3266,21 +3260,16 @@ html.opengrok #app[data-surface='glass'] .og-deck-tab.on {
   border-color: var(--glass-edge);
   border-bottom: none;
   box-shadow: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  -webkit-backdrop-filter: var(--og-pane-blur);
+  backdrop-filter: var(--og-pane-blur);
 }
 
 html.opengrok #app[data-surface='glass'] .og-deck-tab.on::after {
-  display: block;
-  background: var(--og-pane-glass);
-  left: -1px;
-  right: -1px;
-  bottom: -8px;
-  height: 10px;
+  content: none;
 }
 
 html.opengrok #app[data-surface='glass'] .og-deck-tabs {
-  margin-bottom: -1px;
+  margin-bottom: 0;
   gap: 0;
 }
 

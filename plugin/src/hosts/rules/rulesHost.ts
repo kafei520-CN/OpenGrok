@@ -5,6 +5,13 @@ import type { RuleItem } from '../../core/types';
 
 const DISABLED = '.disabled';
 
+/** Built-in instructions. They are not user rules and must not be listed or sent. */
+const HIDDEN_RULE_STEMS = new Set(['opengrok-browser', 'opengrok-wrap-up']);
+
+export function isHiddenBuiltinRule(name: string): boolean {
+  return HIDDEN_RULE_STEMS.has(name.trim().toLowerCase());
+}
+
 /** Named instruction files Grok loads from ~/.claude and ~/.cursor. */
 export const COMPAT_NAMED_RULES = [
   'AGENTS.md',
@@ -114,7 +121,7 @@ async function collectRules(
   const rows: RuleItem[] = [];
   for (const fileName of names) {
     const parsed = parseRuleFileName(fileName);
-    if (!parsed) {
+    if (!parsed || isHiddenBuiltinRule(parsed.name)) {
       continue;
     }
     const filePath = path.join(dir, fileName);
