@@ -560,7 +560,6 @@ textarea:focus-visible {
 
 .transcript.catching-up {
   scroll-behavior: auto;
-  pointer-events: none;
 }
 
 .transcript.catching-up::after {

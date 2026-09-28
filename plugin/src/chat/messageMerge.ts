@@ -29,6 +29,19 @@ export function stabilizeIncomingChat<T extends { id?: string }>(opts: {
   return { messages, restoring, merge };
 }
 
+/**
+ * A large session can stay empty on the client longer than the restore timer.
+ * Clearing the flag then paints the home cards, and the transcript shows up later.
+ * Hold the restore screen until that session actually has messages.
+ */
+export function holdOpenRestore(state: {
+  restoringSession?: boolean;
+  currentSessionId?: string;
+  messages: { length: number };
+}): boolean {
+  return Boolean(state.restoringSession && state.currentSessionId && state.messages.length === 0);
+}
+
 /** Keep the open transcript when a live update omits history or only appends new turns. */
 export function mergeTranscript<T extends { id?: string }>(had: T[], incoming: T[]): T[] {
   if (!incoming.length) {

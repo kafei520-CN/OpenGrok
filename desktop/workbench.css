@@ -1,6 +1,7 @@
 html.opengrok {
   --og-rail: 264px;
   --og-title: 52px;
+  --og-max-inset: 0px;
   --motion: 180ms cubic-bezier(0.22, 1, 0.36, 1);
   --motion-spring: 340ms cubic-bezier(0.22, 1.35, 0.36, 1);
   --motion-out: 160ms cubic-bezier(0.4, 0, 1, 1);
@@ -201,7 +202,17 @@ html.opengrok #app[data-surface='glass'] {
 
 html.opengrok.maximized #app[data-surface='glass'] {
   padding: 0;
+  padding-top: var(--og-max-inset);
   gap: 0;
+}
+
+html.opengrok.maximized #app[data-surface='solid'],
+html.opengrok.maximized #app[data-surface='endfield'] {
+  padding-top: var(--og-max-inset);
+}
+
+html.opengrok.maximized .og-tools {
+  top: var(--og-max-inset);
 }
 
 html.opengrok.maximized #app[data-surface='glass'] #og-rail,

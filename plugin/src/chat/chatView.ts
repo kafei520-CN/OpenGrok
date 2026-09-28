@@ -25,6 +25,9 @@ export class GrokChatViewProvider implements vscode.WebviewViewProvider, vscode.
   ) {
     this.disposables.push(
       controller.onDidChange((state) => this.postState(state)),
+      controller.onDidTranscript((frame) => {
+        void this.view?.webview.postMessage(frame);
+      }),
       controller.onDidStream((tail) => {
         void this.view?.webview.postMessage(tail);
       }),

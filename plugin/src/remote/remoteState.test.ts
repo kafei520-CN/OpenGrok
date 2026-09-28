@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  holdOpenRestore,
   mergeLiveMessages,
   mergeTranscript,
   resolveIncomingMessages,
@@ -208,6 +209,18 @@ describe('remote state packing', () => {
       next.messages.map((row) => row.id),
       ['u', 'a'],
     );
+  });
+
+  it('holds the restore screen while a chosen session has no transcript yet', () => {
+    assert.equal(
+      holdOpenRestore({ restoringSession: true, currentSessionId: 'big', messages: [] }),
+      true,
+    );
+    assert.equal(
+      holdOpenRestore({ restoringSession: true, currentSessionId: 'big', messages: [{ id: 'a' }] }),
+      false,
+    );
+    assert.equal(holdOpenRestore({ restoringSession: false, currentSessionId: 'big', messages: [] }), false);
   });
 
   it('still restores when the session id actually changes', () => {

@@ -1,6 +1,33 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { paintAlign, tailStart } from './historyPaint';
+import { paintAlign, shouldLoadOlder, tailStart } from './historyPaint';
+
+describe('shouldLoadOlder', () => {
+  it('keeps pulling while the tail is shorter than the screen', () => {
+    assert.equal(
+      shouldLoadOlder({ scrollTop: 0, scrollHeight: 400, clientHeight: 800, olderCount: 3 }),
+      true,
+    );
+  });
+
+  it('pulls when the viewport is near the top of a long transcript', () => {
+    assert.equal(
+      shouldLoadOlder({ scrollTop: 40, scrollHeight: 4000, clientHeight: 800, olderCount: 12 }),
+      true,
+    );
+  });
+
+  it('leaves history alone while the reader is on the latest turns', () => {
+    assert.equal(
+      shouldLoadOlder({ scrollTop: 3000, scrollHeight: 4000, clientHeight: 800, olderCount: 12 }),
+      false,
+    );
+    assert.equal(
+      shouldLoadOlder({ scrollTop: 0, scrollHeight: 400, clientHeight: 800, olderCount: 0 }),
+      false,
+    );
+  });
+});
 
 describe('paintAlign', () => {
   it('treats empty lists as equal', () => {

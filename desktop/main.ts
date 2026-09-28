@@ -16,7 +16,7 @@ import {
 import { labShellResize, labShellStart, labShellStop, labShellWrite, labShells } from './labHost';
 
 const electron = resolveElectron();
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray } = electron;
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, screen, shell, Tray, webContents } = electron;
 
 function resolveElectron(): typeof import('electron') {
   const mod = ElectronNS as typeof import('electron') & { default?: typeof import('electron') };
@@ -200,6 +200,33 @@ function applyTitleBarOverlay(win: BrowserWindow, chrome = readThemeChrome()): v
   }
 }
 
+/** Maximized Windows windows hang above the work area, so the top of a 52px bar is clipped. */
+function maximizedTopClip(win: BrowserWindow): number {
+  if (!win.isMaximized()) {
+    return 0;
+  }
+  const bounds = win.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  return Math.max(0, Math.round(display.workArea.y - bounds.y));
+}
+
+let lastMaximizedChrome = '';
+
+function syncMaximizedChrome(win: BrowserWindow): void {
+  if (win.isDestroyed()) {
+    return;
+  }
+  applyTitleBarOverlay(win);
+  const on = win.isMaximized();
+  const inset = on ? maximizedTopClip(win) : 0;
+  const signature = `${on ? 1 : 0}:${inset}`;
+  if (signature === lastMaximizedChrome) {
+    return;
+  }
+  lastMaximizedChrome = signature;
+  win.webContents.send('grok-maximized', on, inset);
+}
+
 function createWindow(): BrowserWindow {
   const bounds = readState().bounds;
   const chrome = readThemeChrome();
@@ -246,14 +273,14 @@ function createWindow(): BrowserWindow {
     event.preventDefault();
     hideToTray();
   });
+  const syncChrome = () => syncMaximizedChrome(win);
   win.on('maximize', () => {
-    applyTitleBarOverlay(win);
-    win.webContents.send('grok-maximized', true);
+    syncChrome();
+    setTimeout(syncChrome, 0);
+    setTimeout(syncChrome, 80);
   });
-  win.on('unmaximize', () => {
-    applyTitleBarOverlay(win);
-    win.webContents.send('grok-maximized', false);
-  });
+  win.on('unmaximize', syncChrome);
+  win.on('resized', syncChrome);
   return win;
 }
 
@@ -1294,6 +1321,47 @@ function askBrowser(params: Record<string, unknown>): Promise<unknown> {
     win.webContents.send('og-browser-req', { ...params, id });
   });
 }
+
+const CDP_METHODS = new Set([
+  'Accessibility.enable',
+  'Accessibility.getFullAXTree',
+  'DOM.resolveNode',
+  'Runtime.callFunctionOn',
+]);
+
+ipcMain.handle('og-cdp', async (event, webContentsId: unknown, method: unknown, params: unknown) => {
+  const guestId = Number(webContentsId);
+  const command = typeof method === 'string' ? method : '';
+  if (!CDP_METHODS.has(command)) {
+    return { ok: false, error: '这个调试命令不能用' };
+  }
+  const guest = webContents.fromId(guestId);
+  const host = guest?.hostWebContents;
+  if (!guest || guest.isDestroyed() || !host || host.id !== event.sender.id) {
+    return { ok: false, error: '页面不在了' };
+  }
+  try {
+    if (!guest.debugger.isAttached()) {
+      guest.debugger.attach('1.3');
+      guest.once('destroyed', () => {
+        try {
+          if (guest.debugger.isAttached()) {
+            guest.debugger.detach();
+          }
+        } catch {
+          // The page is already gone.
+        }
+      });
+    }
+    return await guest.debugger.sendCommand(command, params && typeof params === 'object' ? params as Record<string, unknown> : {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/already attached/i.test(message)) {
+      return guest.debugger.sendCommand(command, params && typeof params === 'object' ? params as Record<string, unknown> : {});
+    }
+    return { ok: false, error: message };
+  }
+});
 
 ipcMain.on('og-browser-res', (_event, msg: { id?: number; result?: unknown }) => {
   const id = Number(msg?.id);

@@ -176,6 +176,9 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
     case 'loadSession':
       void controller.loadSession(message.sessionId, message.cwd);
       return;
+    case 'loadOlder':
+      controller.loadOlder();
+      return;
     case 'renameSession':
       await controller.renameListedSession(message.sessionId, message.title);
       return;

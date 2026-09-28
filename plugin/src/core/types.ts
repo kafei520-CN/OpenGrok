@@ -562,6 +562,8 @@ export interface ChatState {
   notify?: 'done' | 'fail';
   currentSessionId?: string;
   restoringSession?: boolean;
+  /** Messages still on the host, above the loaded window. ZCode tail snapshot. */
+  olderCount?: number;
   /** Live snapshot omitted history; the webview must keep its transcript. */
   mergeTranscript?: boolean;
   hideSessionPreview?: boolean;
@@ -771,6 +773,7 @@ export type WebviewToHost =
     }
   | { type: 'closeDrawer' }
   | { type: 'loadSession'; sessionId: string; cwd?: string }
+  | { type: 'loadOlder' }
   | { type: 'renameSession'; sessionId: string; title?: string }
   | { type: 'deleteSession'; sessionId: string }
   | { type: 'rewindTo'; index: number }

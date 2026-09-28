@@ -60,8 +60,10 @@
         if (!og) {
           return;
         }
-        function setMax(on) {
+        function setMax(on, inset) {
           document.documentElement.classList.toggle('maximized', Boolean(on));
+          var px = on ? Math.max(0, Number(inset) || 0) : 0;
+          document.documentElement.style.setProperty('--og-max-inset', px + 'px');
         }
         if (og.onMaximized) {
           og.onMaximized(setMax);

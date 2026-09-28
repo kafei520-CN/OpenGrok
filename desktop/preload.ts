@@ -25,9 +25,9 @@ contextBridge.exposeInMainWorld('opengrok', {
   maximized(): Promise<boolean> {
     return ipcRenderer.invoke('grok-maximized');
   },
-  onMaximized(handler: (value: boolean) => void) {
-    ipcRenderer.on('grok-maximized', (_event, value: boolean) => {
-      handler(value);
+  onMaximized(handler: (value: boolean, inset?: number) => void) {
+    ipcRenderer.on('grok-maximized', (_event, value: boolean, inset?: number) => {
+      handler(value, inset);
     });
   },
   updateState() {
@@ -73,6 +73,9 @@ contextBridge.exposeInMainWorld('opengrok', {
   },
   browserDone(id: number, result: unknown) {
     ipcRenderer.send('og-browser-res', { id, result });
+  },
+  cdp(webContentsId: number, method: string, params?: unknown): Promise<unknown> {
+    return ipcRenderer.invoke('og-cdp', webContentsId, method, params ?? {});
   },
 });
 

@@ -81,7 +81,7 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '打开网页',
       description:
-        '手脚。在 OpenGrok 右侧边栏的浏览器里打开网址，并返回当前画面。用来开始网页测试或网页游戏测试。url 可以是 https://example.com，也可以只写域名。',
+        '手脚。在 OpenGrok 右侧边栏的浏览器里打开网址，并直接返回页面结构。不必再调用 browser_look。url 可以是 https://example.com，也可以只写域名。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -96,8 +96,13 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '看网页',
       description:
-        'look。截下侧边栏浏览器现在的画面。点击和拖拽的坐标用这张截图的像素，原点在左上角。操作一次后再看一次，不要反复搜索工具名。',
-      inputSchema: { type: 'object', properties: {} },
+        'look。立刻读取侧边栏浏览器里可点控件的名字和用途，带编号，例如 e12。hint 写了「输入后按 Enter」就是搜索框，用 browser_type 再按 Enter。打开、点击、输入、按键、滚动的返回值里已经是刚发生的变化，不要为了看画面再调用。截图只在没有名字、或你传 image:true 时才附上。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          image: { type: 'boolean', description: '为 true 时附上一张印着编号的画面。' },
+        },
+      },
     };
   }
   if (name === 'browser_click') {
@@ -105,12 +110,13 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '点击网页',
       description:
-        'click。在侧边栏浏览器里点一下。x 和 y 是 browser_look 截图像素。也可以传 selector。拖拽用 browser_drag，不要搜代码。',
+        'click。优先传 ref，例如 e12。返回点击后的页面变化，不必再调用 browser_look。hint 写了「输入后按 Enter」的是搜索框：用 browser_type 写入关键词，再 browser_press Enter，不要反复点。带路径的 link 是内容，不是功能按钮。没有编号时才用截图像素 x、y（画布内部）或 selector。拖拽用 browser_drag，不要搜代码。',
       inputSchema: {
         type: 'object',
         properties: {
-          x: { type: 'number', description: '截图像素，距左边。' },
-          y: { type: 'number', description: '截图像素，距上边。' },
+          ref: { type: 'string', description: '页面结构里的编号，例如 e12。' },
+          x: { type: 'number', description: '没有编号时的截图像素，距左边。' },
+          y: { type: 'number', description: '没有编号时的截图像素，距上边。' },
           selector: { type: 'string', description: '可选。要点的元素的 CSS 选择器。' },
         },
       },
@@ -121,7 +127,7 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '拖拽',
       description:
-        'drag pointer mousemove mouse hold。按住鼠标从截图坐标 (x1,y1) 拖到 (x2,y2)。弹弓、滑动、画线直接用这个，不要搜索仓库或文档。',
+        'drag pointer mousemove mouse hold。按住鼠标从截图坐标 (x1,y1) 拖到 (x2,y2)。弹弓、滑动、画线直接用这个。返回拖完后的页面变化，不必再调用 browser_look。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -139,11 +145,12 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '输入文字',
       description:
-        '手脚。把文字输入侧边栏浏览器当前焦点。传 selector 时先点中那个输入框。游戏里的单次按键用 browser_press，不要用这个。',
+        '手脚。把文字输入编号对应的控件。传 ref，例如 e12。返回输入后的页面变化，不必再调用 browser_look。没有编号时可以传 selector。游戏里的单次按键用 browser_press。',
       inputSchema: {
         type: 'object',
         properties: {
           text: { type: 'string', description: '要输入的文字。' },
+          ref: { type: 'string', description: '要输入的控件编号，例如 e12。' },
           selector: { type: 'string', description: '可选。先聚焦的 CSS 选择器。' },
         },
         required: ['text'],
@@ -155,7 +162,7 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
       name,
       title: '按键',
       description:
-        '手脚。在侧边栏浏览器里按一次键。适合网页游戏。key 可以是 Enter、Space、ArrowLeft、ArrowRight、ArrowUp、ArrowDown、Escape，或单个字母如 w、a、d。',
+        '手脚。在侧边栏浏览器里按一次键。适合网页游戏。返回按键后的页面变化，不必再调用 browser_look。key 可以是 Enter、Space、ArrowLeft、ArrowRight、ArrowUp、ArrowDown、Escape，或单个字母如 w、a、d。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -168,7 +175,7 @@ function toolDescriptor(name: (typeof TOOLS)[number]): Record<string, unknown> {
   return {
     name,
     title: '滚动网页',
-    description: '手脚。滚动侧边栏浏览器。dy 大于 0 向下，小于 0 向上。dx 左右滚动。',
+    description: '手脚。滚动侧边栏浏览器。dy 大于 0 向下，小于 0 向上。dx 左右滚动。返回滚动后的页面变化，不必再调用 browser_look。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -223,19 +230,23 @@ function describe(result: Record<string, unknown>): string {
   if (url) {
     lines.push(`网址: ${url}`);
   }
+  const tree = asString(result['tree']);
+  if (tree) {
+    lines.push(tree);
+  }
   const viewport = asObject(result['viewport']);
   const image = asObject(result['image']);
   if (typeof image['width'] === 'number') {
     lines.push(
-      `截图 ${image['width']}×${image['height']} 像素，对应页面视口 ${viewport['width'] ?? '?'}×${viewport['height'] ?? '?'}。点击时用截图像素。`,
+      `截图 ${image['width']}×${image['height']} 像素，对应页面视口 ${viewport['width'] ?? '?'}×${viewport['height'] ?? '?'}。编号印在画面上。没有编号的位置才用截图像素点击。`,
     );
   }
   const text = asString(result['text']);
-  if (text) {
+  if (text && !tree) {
     lines.push(text);
   }
   const elements = Array.isArray(result['elements']) ? result['elements'] : [];
-  if (elements.length) {
+  if (!tree && elements.length) {
     lines.push('可点元素（下面的坐标是页面视口像素。点击请用截图像素或 selector）:');
     for (const item of elements.slice(0, 30)) {
       const row = asObject(item);

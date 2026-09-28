@@ -195,6 +195,9 @@ controller.onDidChange((state) => {
     process.stdout.write(`${frame}\n`);
   }
 });
+controller.onDidTranscript((frame) => {
+  process.stdout.write(`${JSON.stringify(frame)}\n`);
+});
 controller.onDidStream((tail) => send(tail));
 controller.onDidExtraUi((payload) => send({ type: 'ogPlugin', payload }));
 

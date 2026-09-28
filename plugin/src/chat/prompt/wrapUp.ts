@@ -5,19 +5,22 @@ import type { ChatMessage } from '../../core/types';
 export const WRAP_UP_RULE_FILE = 'opengrok-wrap-up.md';
 export const BROWSER_RULE_FILE = 'opengrok-browser.md';
 
+const BROWSER_RULE_MARK = 'browser_click { ref';
+
 const BROWSER_RULE = `# OpenGrok browser
 
 The side-panel browser tools are already registered. Call the names in your tool list. They may show up as browser_open or browser_browser_open. Do not search the workspace, docs, or tool index.
 
 - open a page: browser_open or browser_browser_open { url }
-- look: browser_look or browser_browser_look
-- click: browser_click { x, y } or { selector } — x,y are screenshot pixels
-- drag: browser_drag { x1, y1, x2, y2 } — sling, pointer, mousemove, mouse hold
-- browser_type { text }
-- browser_press { key } — Enter, Space, ArrowLeft, ArrowRight, ArrowUp, ArrowDown
-- browser_scroll { dy }
+  The result includes the page structure. Do not call browser_look after open.
+- click: browser_click { ref } — ref comes from the structure, for example e12. The result includes what changed.
+- type: browser_type { ref, text }
+- press: browser_press { key } — Enter, Space, ArrowLeft, ArrowRight, ArrowUp, ArrowDown
+- scroll: browser_scroll { dy }
+- drag: browser_drag { x1, y1, x2, y2 } — screenshot pixels, for canvas and sling gestures
+- look: browser_look — only when you have no structure yet. Pass { image: true } only for icon buttons with no name, charts, or canvas.
 
-After one action, call browser_look once. Do not grep the repo.
+Do not click with x,y when a ref exists. Do not call browser_look after click, type, press, or scroll; those results already include the new structure. x,y are for a spot with no ref. Do not grep the repo.
 `;
 
 export async function ensureBrowserRule(): Promise<void> {
@@ -25,7 +28,7 @@ export async function ensureBrowserRule(): Promise<void> {
   try {
     const bytes = await plat().readFile(filePath);
     const text = Buffer.from(bytes).toString('utf8');
-    if (text.includes('browser_browser_open')) {
+    if (text.includes(BROWSER_RULE_MARK)) {
       return;
     }
   } catch {

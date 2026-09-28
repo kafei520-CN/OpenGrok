@@ -150,6 +150,55 @@ describe('browser tool', () => {
     assert.match(text, /127\.0\.0\.1:8765/);
   });
 
+  it('returns a ref tree without a screenshot', async () => {
+    bindPlatform(
+      fakePlat({
+        browserDock: async () => ({
+          ok: true,
+          summary: '已点击。',
+          url: 'https://example.com',
+          title: 'Example',
+          tree: '- button "查询" [ref=e1]',
+        }),
+      }),
+    );
+    const result = await handleBrowserMcpMessage({
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: { name: 'browser_click', arguments: { ref: 'e1' } },
+    });
+    const content = (result.result as { content: Array<{ type: string; text?: string }> }).content;
+    assert.equal(content.length, 1);
+    assert.match(content[0]?.text ?? '', /\[ref=e1\]/);
+    assert.doesNotMatch(content[0]?.text ?? '', /截图像素/);
+  });
+
+  it('asks for a picture only when look sets image', async () => {
+    let payload: Record<string, unknown> = {};
+    bindPlatform(
+      fakePlat({
+        browserDock: async (body) => {
+          payload = body;
+          return { ok: true, summary: '结构不足以判断，附上画面。', tree: '- button "" [ref=e3]' };
+        },
+      }),
+    );
+    await handleBrowserMcpMessage({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'browser_look', arguments: { image: true } },
+    });
+    assert.equal(payload['action'], 'look');
+    assert.equal(payload['image'], true);
+    const listed = await handleBrowserMcpMessage({ jsonrpc: '2.0', id: 8, method: 'tools/list' });
+    const tools = (listed.result as { tools: Array<{ name: string; description: string; inputSchema: { properties: Record<string, unknown> } }> }).tools;
+    const click = tools.find((tool) => tool.name === 'browser_click');
+    assert.ok(click?.inputSchema.properties['ref']);
+    assert.match(click?.description ?? '', /不必再调用 browser_look/);
+  });
+
   it('says the browser is desktop-only when the host has no hands', async () => {
     bindPlatform(fakePlat());
     const result = await handleBrowserMcpMessage({

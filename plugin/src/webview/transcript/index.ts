@@ -40,14 +40,14 @@ import {
 } from './markdown';
 import { fileLinkHtml } from './fileLinks';
 import {
-  HISTORY_FLUSH_TURNS,
-  HISTORY_SLICE_MS,
   HISTORY_SLICE_TURNS,
   HISTORY_TAIL,
   paintAlign,
+  shouldLoadOlder,
   tailStart,
 } from './historyPaint';
 import { fireOgPatch } from '../ogPlugins';
+import { post } from '../app';
 
 type Turn = { user?: ChatMessage; assistant?: ChatMessage };
 
@@ -213,6 +213,8 @@ function patchTranscript(): void {
 
 let historyPaintGen = 0;
 let historyPaintRaf = 0;
+/** Last host olderCount we already asked for, so a scroll doesn't re-request the same page. */
+let askedOlder = -1;
 
 function cancelHistoryPaint(): void {
   historyPaintGen += 1;
@@ -229,6 +231,7 @@ function syncTranscript(transcript: HTMLElement): void {
     cancelHistoryPaint();
     clearTurns(transcript);
     transcript.dataset.sid = session;
+    askedOlder = -1;
   }
   const grouped = groupTurns(ui.state.messages);
   const wanted = grouped.map(turnId);
@@ -242,12 +245,13 @@ function syncTranscript(transcript: HTMLElement): void {
     return;
   }
   if (align.kind === 'prefix') {
-    patchTurnRange(grouped, nodes, 0);
-    if (align.extra <= HISTORY_TAIL) {
-      paintTurnRange(transcript, grouped, nodes.length, grouped.length);
-    } else {
-      scheduleHistoryPaint(transcript);
+    if (align.extra > HISTORY_TAIL) {
+      // 一次接上大段历史时，顺着已画的开头往下补会从第一轮铺到最后一轮。
+      paintOpenTail(transcript, grouped);
+      return;
     }
+    patchTurnRange(grouped, nodes, 0);
+    paintTurnRange(transcript, grouped, nodes.length, grouped.length);
     return;
   }
   if (align.kind === 'trim') {
@@ -258,16 +262,20 @@ function syncTranscript(transcript: HTMLElement): void {
     return;
   }
   if (align.kind === 'suffix') {
-    scheduleHistoryPaint(transcript);
+    patchTurnRange(grouped, nodes, grouped.length - nodes.length);
+    queueViewportFill(transcript);
     return;
   }
+  paintOpenTail(transcript, grouped);
+}
+
+/** 打开历史时只画最新几轮，并钉在底部。更早的轮次等滚到顶边再向上补。 */
+function paintOpenTail(transcript: HTMLElement, grouped: Turn[]): void {
   cancelHistoryPaint();
   clearTurns(transcript);
   const start = tailStart(grouped.length);
   paintTurnRange(transcript, grouped, start, grouped.length);
-  if (start > 0) {
-    scheduleHistoryPaint(transcript);
-  }
+  queueViewportFill(transcript);
 }
 
 function clearTurns(transcript: HTMLElement): void {
@@ -335,40 +343,57 @@ function syncTurnNode(node: HTMLElement, turn: Turn, split: boolean): void {
   }
 }
 
-function scheduleHistoryPaint(transcript: HTMLElement): void {
+function olderTurnCount(transcript: HTMLElement): number {
+  const grouped = groupTurns(ui.state.messages);
+  const align = paintAlign(
+    grouped.map(turnId),
+    turnNodes(transcript).map((node) => node.dataset.turnId ?? ''),
+  );
+  return align.kind === 'suffix' ? align.extra : 0;
+}
+
+/** 把紧挨着已画尾部的更早几轮插到上面，阅读位置不动。 */
+function prependOlder(transcript: HTMLElement, limit: number): boolean {
+  const grouped = groupTurns(ui.state.messages);
+  const nodes = turnNodes(transcript);
+  const align = paintAlign(
+    grouped.map(turnId),
+    nodes.map((node) => node.dataset.turnId ?? ''),
+  );
+  if (align.kind !== 'suffix' || align.extra <= 0) {
+    return false;
+  }
+  const count = Math.min(limit, align.extra);
+  const start = align.extra - count;
+  const fromBottom = transcript.scrollHeight - transcript.scrollTop;
+  const frag = document.createDocumentFragment();
+  for (let i = start; i < align.extra; i += 1) {
+    const turn = grouped[i];
+    if (!turn) {
+      break;
+    }
+    frag.append(turnEl(turn, i < grouped.length - 1));
+  }
+  const anchor = nodes[0] ?? promptAnchor(transcript);
+  if (anchor) {
+    transcript.insertBefore(frag, anchor);
+  } else {
+    transcript.append(frag);
+  }
+  transcript.scrollTop = Math.max(0, transcript.scrollHeight - fromBottom);
+  fireOgPatch();
+  return true;
+}
+
+/** 尾部还不满一屏时逐帧向上补，补满就停，避免把整段历史一次性铺开。 */
+function queueViewportFill(transcript: HTMLElement): void {
   if (historyPaintRaf) {
     return;
   }
+  if (transcript.clientHeight > 0 && transcript.scrollHeight > transcript.clientHeight + 8) {
+    return;
+  }
   const token = historyPaintGen;
-  const pending: HTMLElement[] = [];
-  const finish = (flushed: boolean) => {
-    transcript.classList.remove('catching-up');
-    if (flushed) {
-      fireOgPatch();
-      if (ui.stickToBottom) {
-        pinTranscript(transcript);
-      }
-    }
-  };
-  const flushPending = (before: HTMLElement | null) => {
-    if (!pending.length) {
-      return false;
-    }
-    const fromBottom = transcript.scrollHeight - transcript.scrollTop;
-    const frag = document.createDocumentFragment();
-    for (const node of pending) {
-      frag.append(node);
-    }
-    pending.length = 0;
-    const anchor = before ?? promptAnchor(transcript);
-    if (anchor) {
-      transcript.insertBefore(frag, anchor);
-    } else {
-      transcript.append(frag);
-    }
-    transcript.scrollTop = Math.max(0, transcript.scrollHeight - fromBottom);
-    return true;
-  };
   const run = () => {
     historyPaintRaf = 0;
     if (token !== historyPaintGen) {
@@ -377,68 +402,61 @@ function scheduleHistoryPaint(transcript: HTMLElement): void {
     if (document.getElementById('transcript') !== transcript) {
       return;
     }
-    transcript.classList.add('catching-up');
-    const grouped = groupTurns(ui.state.messages);
-    const wanted = grouped.map(turnId);
-    const nodes = turnNodes(transcript);
-    const next = paintAlign(
-      wanted,
-      nodes.map((node) => node.dataset.turnId ?? ''),
-    );
-    if (next.kind !== 'suffix' && next.kind !== 'prefix') {
-      const flushed = flushPending(nodes[0] ?? null);
-      finish(flushed || next.kind === 'equal');
+    if (transcript.scrollHeight > transcript.clientHeight + 8) {
+      if (ui.stickToBottom) {
+        pinTranscript(transcript);
+      }
       return;
     }
-    const started = performance.now();
-    let built = 0;
-    if (next.kind === 'suffix') {
-      let idx = next.extra - 1 - pending.length;
-      while (idx >= 0 && built < HISTORY_SLICE_TURNS) {
-        if (built > 0 && performance.now() - started >= HISTORY_SLICE_MS) {
-          break;
-        }
-        const turn = grouped[idx];
-        if (!turn) {
-          break;
-        }
-        pending.unshift(turnEl(turn, idx < grouped.length - 1));
-        built += 1;
-        idx -= 1;
+    if (!prependOlder(transcript, HISTORY_SLICE_TURNS)) {
+      if ((ui.state.olderCount ?? 0) > 0) {
+        requestHostOlder();
+        return;
       }
-      const remain = next.extra - pending.length;
-      if (remain <= 0 || pending.length >= HISTORY_FLUSH_TURNS) {
-        flushPending(nodes[0] ?? null);
+      if (ui.stickToBottom) {
+        pinTranscript(transcript);
       }
-    } else {
-      let idx = nodes.length + pending.length;
-      while (idx < grouped.length && built < HISTORY_SLICE_TURNS) {
-        if (built > 0 && performance.now() - started >= HISTORY_SLICE_MS) {
-          break;
-        }
-        const turn = grouped[idx];
-        if (!turn) {
-          break;
-        }
-        pending.push(turnEl(turn, idx < grouped.length - 1));
-        built += 1;
-        idx += 1;
-      }
-      if (idx >= grouped.length || pending.length >= HISTORY_FLUSH_TURNS) {
-        flushPending(promptAnchor(transcript));
-      }
-    }
-    const left = paintAlign(
-      wanted,
-      turnNodes(transcript).map((node) => node.dataset.turnId ?? ''),
-    );
-    if (left.kind === 'suffix' || left.kind === 'prefix' || pending.length) {
-      historyPaintRaf = requestAnimationFrame(run);
       return;
     }
-    finish(true);
+    historyPaintRaf = requestAnimationFrame(run);
   };
   historyPaintRaf = requestAnimationFrame(run);
+}
+
+function requestHostOlder(): void {
+  const count = ui.state.olderCount ?? 0;
+  if (count <= 0 || askedOlder === count || ui.state.restoringSession) {
+    return;
+  }
+  askedOlder = count;
+  post({ type: 'loadOlder' });
+}
+
+function scheduleOlderPage(transcript: HTMLElement): void {
+  if (historyPaintRaf) {
+    return;
+  }
+  const token = historyPaintGen;
+  historyPaintRaf = requestAnimationFrame(() => {
+    historyPaintRaf = 0;
+    if (token !== historyPaintGen) {
+      return;
+    }
+    if (document.getElementById('transcript') !== transcript) {
+      return;
+    }
+    if (
+      !shouldLoadOlder({
+        scrollTop: transcript.scrollTop,
+        scrollHeight: transcript.scrollHeight,
+        clientHeight: transcript.clientHeight,
+        olderCount: olderTurnCount(transcript),
+      })
+    ) {
+      return;
+    }
+    prependOlder(transcript, HISTORY_SLICE_TURNS);
+  });
 }
 
 function lastTurn(messages: ChatMessage[]): Turn | undefined {
@@ -947,6 +965,20 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
       ui.stickToBottom = next.stickToBottom;
       ui.transcriptScroll = next.transcriptScroll;
       patchJumpBottom();
+      if (
+        shouldLoadOlder({
+          scrollTop: node.scrollTop,
+          scrollHeight: node.scrollHeight,
+          clientHeight: node.clientHeight,
+          olderCount: olderTurnCount(node) || ui.state.olderCount || 0,
+        })
+      ) {
+        if (olderTurnCount(node) > 0) {
+          scheduleOlderPage(node);
+        } else {
+          requestHostOlder();
+        }
+      }
     },
     { passive: true },
   );

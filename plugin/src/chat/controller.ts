@@ -109,6 +109,8 @@ import { bindOgPostToUi, loadOgHostPlugins } from '../ogPlugins/hostRuntime';
 import { watchOgPluginDirs } from '../ogPlugins/watch';
 import type { OgPluginInfo } from '../ogPlugins/types';
 import { pathToFileURL } from 'node:url';
+import { createSessionFlow, type SessionFlowItem } from './sessionFlow';
+import { initialSessionFloor, sessionOlderPage } from './sessionWindow';
 import {
   buildStreamTail,
   emptyStreamCursor,
@@ -301,6 +303,22 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   sessions?: SessionRow[];
   currentSessionId?: string;
   private readonly parked = new Map<string, ParkedSession>();
+  /** First message index the webview already has. Earlier rows stay on the host. */
+  private clientFloor = 0;
+  private readonly transcriptListeners = new Set<
+    (frame: {
+      type: 'messages';
+      messages: ChatMessage[];
+      prepend: true;
+      olderCount: number;
+      sessionId?: string;
+      done: true;
+    }) => void
+  >();
+  private readonly sessionFlow = createSessionFlow({
+    deliver: (item) => this.deliverSessionEvent(item),
+    onBackgroundBurst: (sessionId) => this.noteBackgroundStreaming(sessionId),
+  });
   private parkedRecent: string[] = [];
   private promptSessions = new Set<string>();
   private promptSessionId?: string;
@@ -443,16 +461,30 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     return { dispose: () => this.streamListeners.delete(listener) };
   }
 
+  onDidTranscript(
+    listener: (frame: {
+      type: 'messages';
+      messages: ChatMessage[];
+      prepend: true;
+      olderCount: number;
+      sessionId?: string;
+      done: true;
+    }) => void,
+  ): { dispose(): void } {
+    this.transcriptListeners.add(listener);
+    return { dispose: () => this.transcriptListeners.delete(listener) };
+  }
+
   onDidExtraUi(listener: (msg: unknown) => void): { dispose(): void } {
     this.extraUi.add(listener);
     return { dispose: () => this.extraUi.delete(listener) };
   }
 
-  snapshot(opts?: { messages?: 'all' | 'none' | 'tail' }): ChatState {
+  snapshot(opts?: { messages?: 'all' | 'none' | 'tail' | 'window' }): ChatState {
     const settings = readGrokSettings();
     const mode = opts?.messages ?? 'all';
-    const source =
-      mode === 'none' ? [] : mode === 'tail' ? this.messages.slice(-2) : this.messages;
+    const windowed = this.windowedSource(mode);
+    const source = windowed.source;
     return {
       status: this.status,
       error: this.error,
@@ -467,16 +499,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       login: this.loginView,
       models: this.models,
       modeId: this.modeId,
-      messages: source.map((message) => ({
-        ...message,
-        text: message.role === 'user' ? stripWrapUpText(message.text) : message.text,
-        tools: message.tools.map((tool) => ({ ...tool })),
-        steps: message.steps?.map((step) => ({ ...step })),
-        edits: message.edits?.length ? publicEdits(message.edits) : message.edits,
-        images: message.images?.map((image) => ({ ...image })),
-        files: message.files?.map((file) => ({ ...file })),
-      })),
-      mergeTranscript: mode !== 'all',
+      messages: this.presentMessages(source),
+      mergeTranscript: mode !== 'all' && mode !== 'window',
+      olderCount: windowed.olderCount,
       permission: this.permission,
       ask: this.ask,
       attachments: this.attachments,
@@ -589,6 +614,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   async newSession(): Promise<void> {
     this.sessionOp += 1;
+    this.settleCurrentLane();
     this.parkForeground();
     trimParkedSessions(this.parked, undefined, this.parkedRecent);
     this.clearGoalFinishTimer();
@@ -603,6 +629,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     drawers.stopDashboardPoll(this);
     this.replaying = false;
     this.restoringSession = false;
+    this.clientFloor = 0;
     this.hideSessionPreview = true;
     this.viewStamp = '';
     this.currentSessionId = undefined;
@@ -1110,6 +1137,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       /* already dead */
     }
     disposeAllTerminals();
+    this.sessionFlow.dispose();
     this.parked.clear();
     this.parkedRecent = [];
     this.promptSessions.clear();
@@ -1712,6 +1740,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       await this.agent?.deleteSession(sessionId);
       await this.journal.dropSession(sessionId);
       this.parked.delete(sessionId);
+      this.sessionFlow.discard(sessionId);
       if (sessionId === this.currentSessionId) {
         this.currentSessionId = undefined;
         await this.newSession();
@@ -1796,23 +1825,35 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.parkForeground();
     trimParkedSessions(this.parked, sessionId, this.parkedRecent);
     const parked = this.parked.get(sessionId);
+    const restoreMemory = Boolean(parked && parked.messages.length > 0);
+    // 本地已有正文时，把后台合并的增量补上再显示。空会话走 CLI 回放，这段前缀回放里会再来一次。
+    if (!restoreMemory) {
+      this.sessionFlow.dropPending(sessionId);
+    }
+    this.sessionFlow.setMode(sessionId, 'replaying');
     const cwd =
       sessionCwd ??
       this.sessions?.find((row) => row.id === sessionId)?.cwd ??
       parked?.cwd ??
       this.cwd();
+    this.sessionFlow.hold(sessionId);
     this.showRestoreSpinner(sessionId, cwd);
     await new Promise<void>((resolve) => setTimeout(resolve, 16));
     if (op !== this.sessionOp) {
+      this.abandonSessionLane(sessionId);
       return;
     }
-    if (parked && parked.messages.length > 0) {
+    if (restoreMemory && parked) {
       this.restoreParked(sessionId);
       this.compactGate = emptyCompactGate();
       agent.sessionId = sessionId;
       this.hideSessionPreview = false;
       this.restoringSession = true;
       this.replaying = false;
+      this.sessionFlow.discardBufferedReplay(sessionId);
+      this.sessionFlow.unhold(sessionId);
+      this.sessionFlow.setMode(sessionId, 'foreground');
+      this.sessionFlow.releaseBuffered(sessionId);
       this.revealSession();
       this.restoringSession = false;
       return;
@@ -1826,6 +1867,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     drawers.stopDashboardPoll(this);
     this.hideSessionPreview = false;
     this.restoringSession = true;
+    this.sessionFlow.discardBufferedReplay(sessionId);
+    this.sessionFlow.unhold(sessionId);
+    this.sessionFlow.setMode(sessionId, 'replaying');
     this.replaying = true;
     this.currentSessionId = sessionId;
     this.sessionCwd = cwd;
@@ -1836,6 +1880,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       }
       this.models = this.overlayModels(modelsFromResult(result));
       this.currentSessionId = agent.sessionId ?? sessionId;
+      this.sessionFlow.releaseBuffered(sessionId);
       finalizeReplayTimes(this.messages);
       scrubUserMessages(this.messages);
       applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
@@ -1860,8 +1905,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.fail('Could not restore that session', error);
     } finally {
       if (op === this.sessionOp) {
+        this.sessionFlow.unhold(sessionId);
+        this.sessionFlow.releaseBuffered(sessionId);
         this.replaying = false;
-        this.restoringSession = false;
         finalizeReplayTimes(this.messages);
         scrubUserMessages(this.messages);
         applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
@@ -1869,7 +1915,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         applyRestoredTurnModels(this.messages, this.models);
         void persistTurnModels(this.currentSessionId, this.messages);
         void persistUserMedia(this.currentSessionId, this.messages);
+        this.sessionFlow.setMode(sessionId, 'foreground');
         this.revealSession();
+        this.restoringSession = false;
+      } else {
+        this.abandonSessionLane(sessionId);
       }
     }
   }
@@ -2787,13 +2837,73 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       parked: this.parked,
       promptSessionId: this.promptSessionId,
     });
-    if (target && this.currentSessionId && target !== this.currentSessionId) {
-      this.applyBackgroundUpdate(target, update, isReplay);
+    const id = target ?? this.currentSessionId;
+    if (!id) {
+      this.applyForegroundUpdate(update, isReplay);
       return;
     }
+    this.syncSessionLane(id);
+    this.sessionFlow.accept(id, update, isReplay);
+  }
+
+  /** 回放中和正文未就位时不改通道，避免实时 token 被当成前台直接写进旧消息。 */
+  private syncSessionLane(sessionId: string): void {
+    if (this.sessionFlow.isHeld(sessionId) || this.sessionFlow.mode(sessionId) === 'replaying') {
+      return;
+    }
+    const mode =
+      sessionId !== this.currentSessionId ? 'background' : this.replaying ? 'replaying' : 'foreground';
+    this.sessionFlow.setMode(sessionId, mode);
+  }
+
+  private deliverSessionEvent(item: SessionFlowItem): void {
+    if (item.sessionId !== this.currentSessionId) {
+      this.applyBackgroundUpdate(item.sessionId, item.update, item.isReplay);
+      return;
+    }
+    this.applyForegroundUpdate(item.update, item.isReplay);
+  }
+
+  private noteBackgroundStreaming(sessionId: string): void {
+    if (sessionId === this.currentSessionId) {
+      return;
+    }
+    let row = this.parked.get(sessionId);
+    if (!row) {
+      row = emptyParked(sessionId);
+      this.parked.set(sessionId, row);
+    }
+    if (row.status === 'streaming') {
+      return;
+    }
+    row.status = 'streaming';
+    this.publishSnapshot('none');
+  }
+
+  /** 离开当前会话前，把还攒着的增量写进正文，再降为后台。 */
+  private settleCurrentLane(): void {
+    const id = this.currentSessionId;
+    if (!id) {
+      return;
+    }
+    this.sessionFlow.flush(id);
+    this.sessionFlow.unhold(id);
+    this.sessionFlow.releaseBuffered(id);
+    this.sessionFlow.setMode(id, 'background');
+  }
+
+  /** 后一次切换取消了这次打开时，把攒下的实时事件补进已停放的会话。 */
+  private abandonSessionLane(sessionId: string): void {
+    this.sessionFlow.unhold(sessionId);
+    this.sessionFlow.setMode(sessionId, 'background');
+    this.sessionFlow.releaseBuffered(sessionId);
+  }
+
+  private applyForegroundUpdate(update: SessionUpdate, isReplay: boolean): void {
+    const replay = isReplay || this.replaying;
     const view = {
-      replaying: this.replaying || isReplay,
-      replayUpdate: isReplay,
+      replaying: replay,
+      replayUpdate: replay,
       messages: this.messages,
       nextTurn: () => ++this.turn,
       modeId: this.modeId,
@@ -2811,7 +2921,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         this.journal.capturePrevious(filePath, previous),
       displayPath: (filePath: string) => this.displayPath(filePath),
       emitUnlessReplaying: () => this.emitUnlessReplaying(),
-      refreshEditStats: (assistant) => {
+      refreshEditStats: (assistant: ChatMessage) => {
         void this.syncEditStats(assistant);
       },
       termEncoding: readGrokSettings().termEncoding,
@@ -3173,12 +3283,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (this.emitTimer) {
       return;
     }
-    const n = this.messages.at(-1)?.text.length ?? 0;
-    const delay = Math.min(220, 80 + Math.floor(n / 3000));
+    // 前台按一帧刷出。延迟随字数拉到 220ms 时，正文会一块一块跳。
     this.emitTimer = setTimeout(() => {
       this.emitTimer = undefined;
       this.emitTail();
-    }, delay);
+    }, 16);
   }
 
   private flushEmitTimer(): void {
@@ -3205,9 +3314,68 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
   }
 
+  loadOlder(): void {
+    if (this.restoringSession) {
+      return;
+    }
+    const page = sessionOlderPage(this.messages.length, this.clientFloor);
+    if (!page) {
+      return;
+    }
+    const batch = this.presentMessages(this.messages.slice(page.start, page.end));
+    this.clientFloor = page.start;
+    const frame = {
+      type: 'messages' as const,
+      messages: batch,
+      prepend: true as const,
+      olderCount: this.clientFloor,
+      sessionId: this.currentSessionId,
+      done: true as const,
+    };
+    for (const listener of this.transcriptListeners) {
+      listener(frame);
+    }
+  }
+
+  private windowedSource(mode: 'all' | 'none' | 'tail' | 'window'): {
+    source: ChatMessage[];
+    olderCount: number;
+  } {
+    if (this.clientFloor < 0 || this.clientFloor >= this.messages.length) {
+      this.clientFloor = initialSessionFloor(this.messages.length);
+    }
+    if (mode === 'none') {
+      return { source: [], olderCount: this.clientFloor };
+    }
+    if (mode === 'tail') {
+      return { source: this.messages.slice(-2), olderCount: this.clientFloor };
+    }
+    if (mode === 'window') {
+      this.clientFloor = initialSessionFloor(this.messages.length);
+      return { source: this.messages.slice(this.clientFloor), olderCount: this.clientFloor };
+    }
+    if (this.clientFloor > 0) {
+      return { source: this.messages.slice(this.clientFloor), olderCount: this.clientFloor };
+    }
+    return { source: this.messages, olderCount: 0 };
+  }
+
+  private presentMessages(source: ChatMessage[]): ChatMessage[] {
+    return source.map((message) => ({
+      ...message,
+      text: message.role === 'user' ? stripWrapUpText(message.text) : message.text,
+      tools: message.tools.map((tool) => ({ ...tool })),
+      steps: message.steps?.map((step) => ({ ...step })),
+      edits: message.edits?.length ? publicEdits(message.edits) : message.edits,
+      images: message.images?.map((image) => ({ ...image })),
+      files: message.files?.map((file) => ({ ...file })),
+    }));
+  }
+
   private showRestoreSpinner(sessionId: string, cwd?: string): void {
     this.currentSessionId = sessionId;
     this.sessionCwd = cwd;
+    this.clientFloor = 0;
     this.restoringSession = true;
     this.hideSessionPreview = false;
     this.streamPosted = false;
@@ -3217,19 +3385,19 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.publishSnapshot('none');
   }
 
-  /** Full transcript after a session switch, even if a background turn is still streaming. */
+  /** Tail window after a session switch. Older rows stay on the host until loadOlder. */
   private revealSession(): void {
     this.streamPosted = false;
     this.viewStamp = '';
     this.streamCursor = emptyStreamCursor();
-    this.publishSnapshot('all');
+    this.publishSnapshot('window');
     this.viewStamp = this.transcriptStamp();
     if (this.status === 'streaming') {
       this.streamPosted = true;
     }
   }
 
-  private publishSnapshot(messages: 'all' | 'none' | 'tail'): void {
+  private publishSnapshot(messages: 'all' | 'none' | 'tail' | 'window'): void {
     const state = this.snapshot({ messages });
     for (const listener of this.listeners) {
       listener(state);

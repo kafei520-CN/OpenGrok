@@ -1,5 +1,21 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type ITheme } from '@xterm/xterm';
+import { formatAxTree } from '../../core/runtime/browserAx';
+import type { PagePicture, SnapControl } from '../../core/runtime/browserSnap';
+import {
+  buildSnapView,
+  CLEAR_STAMP_JS,
+  clickTargetScript,
+  controlByRef,
+  cropRect,
+  ENSURE_WATCH_JS,
+  focusTargetScript,
+  needsShot,
+  PAGE_SNAPSHOT_JS,
+  parsePicture,
+  SETTLE_JS,
+  stampScript,
+} from '../../core/runtime/browserSnap';
 import { copyText, isDesktop, persistUi, post, tr, ui } from '../app';
 
 type LabShell = { id: string; label: string };
@@ -1010,7 +1026,8 @@ type WebViewEl = HTMLElement & {
   reload(): void;
   getURL(): string;
   getTitle(): string;
-  capturePage(): Promise<WebImage>;
+  getWebContentsId?(): number;
+  capturePage(rect?: { x: number; y: number; width: number; height: number }): Promise<WebImage>;
   executeJavaScript(code: string, userGesture?: boolean): Promise<unknown>;
   sendInputEvent(event: Record<string, unknown>): void;
   addEventListener(type: string, listener: (event: Event) => void): void;
@@ -1030,11 +1047,18 @@ type BrowserReq = {
   selector?: string;
   text?: string;
   key?: string;
+  ref?: string;
+  image?: boolean;
   dx?: number;
   dy?: number;
 };
 
-let lastShot = { width: 1, height: 1 };
+let lastShot = { width: 1, height: 1, cssX: 0, cssY: 0, cssW: 1, cssH: 1 };
+let lastPicture: PagePicture | undefined;
+const backendRefs = new Map<number, string>();
+const lastBackends = new Map<string, number>();
+let backendSeq = 0;
+let axUrl = '';
 
 export function bindDockBrowser(): void {
   const api = (window as unknown as {
@@ -1069,35 +1093,46 @@ export async function controlDockBrowser(req: BrowserReq): Promise<Record<string
         return { ok: false, error: '缺少网址' };
       }
       const view = await openAndGo(href);
-      return lookAt(view);
+      lastPicture = undefined;
+      return observe(view, false);
     }
     if (action === 'look') {
-      return lookAt(await ensureVisibleBrowser());
+      return observe(await ensureVisibleBrowser(), wantImage(req.image));
     }
     if (action === 'click') {
       const view = await ensureVisibleBrowser();
-      await clickBrowser(view, req);
-      return { ok: true, summary: '已点击。接着调用 browser_look。' };
+      await ensureWatch(view);
+      const before = guestUrl(view);
+      const clicked = await clickBrowser(view, req);
+      const observed = await finishAction(view, '已点击。');
+      if (clicked && (clicked.role === 'textbox' || clicked.role === 'searchbox') && String(observed['url'] ?? '') === before) {
+        observed['summary'] = `已点中输入框 ${clicked.ref}。用 browser_type 写入文字，然后 browser_press Enter。不要再点这个框。`;
+      }
+      return observed;
     }
     if (action === 'drag') {
       const view = await ensureVisibleBrowser();
+      await ensureWatch(view);
       await dragBrowser(view, req);
-      return { ok: true, summary: '已拖拽。接着调用 browser_look。' };
+      return finishAction(view, '已拖拽。');
     }
     if (action === 'type') {
       const view = await ensureVisibleBrowser();
-      await typeBrowser(view, String(req.text ?? ''), req.selector);
-      return { ok: true, summary: '已输入。接着调用 browser_look。' };
+      await ensureWatch(view);
+      await typeBrowser(view, String(req.text ?? ''), req.selector, req.ref);
+      return finishAction(view, '已输入。');
     }
     if (action === 'press') {
       const view = await ensureVisibleBrowser();
+      await ensureWatch(view);
       pressBrowser(view, String(req.key ?? ''));
-      return { ok: true, summary: `已按 ${req.key ?? ''}。接着调用 browser_look。` };
+      return finishAction(view, `已按 ${req.key ?? ''}。`);
     }
     if (action === 'scroll') {
       const view = await ensureVisibleBrowser();
+      await ensureWatch(view);
       scrollBrowser(view, Number(req.dx) || 0, Number(req.dy) || 0);
-      return { ok: true, summary: '已滚动。接着调用 browser_look。' };
+      return finishAction(view, '已滚动。');
     }
     return { ok: false, error: `未知操作 ${action}` };
   } catch (error) {
@@ -1199,44 +1234,13 @@ function showGuest(view: WebViewEl): void {
   }
 }
 
-async function lookAt(view: WebViewEl): Promise<Record<string, unknown>> {
-  const facts = await pageFacts(view);
-  const href = String(facts['url'] ?? '');
-  if (!href || href === 'about:blank') {
-    return { ok: true, summary: '浏览器还是空白页。先用打开网页。', ...facts };
-  }
-  try {
-    const image = await view.capturePage();
-    const size = image.getSize();
-    const cap = 640;
-    const long = Math.max(size.width, size.height);
-    const scaled = long > cap
-      ? image.resize(size.width >= size.height ? { width: cap } : { height: cap })
-      : image;
-    const out = scaled.getSize();
-    lastShot = { width: out.width || 1, height: out.height || 1 };
-    const bytes = scaled.toJPEG(42);
-    return {
-      ok: true,
-      summary: '这是侧边栏浏览器现在的画面。',
-      ...facts,
-      image: {
-        width: out.width,
-        height: out.height,
-        mimeType: 'image/jpeg',
-        data: bytesToBase64(bytes),
-      },
-    };
-  } catch (error) {
-    return {
-      ok: true,
-      summary: `画面没有截下来：${error instanceof Error ? error.message : String(error)}`,
-      ...facts,
-    };
-  }
+async function finishAction(view: WebViewEl, summary: string): Promise<Record<string, unknown>> {
+  await settleView(view);
+  const observed = await observe(view, false);
+  return { ...observed, summary };
 }
 
-async function pageFacts(view: WebViewEl): Promise<Record<string, unknown>> {
+async function observe(view: WebViewEl, forceImage: boolean): Promise<Record<string, unknown>> {
   const url = guestUrl(view);
   let title = '';
   try {
@@ -1244,29 +1248,249 @@ async function pageFacts(view: WebViewEl): Promise<Record<string, unknown>> {
   } catch {
     title = '';
   }
-  let text = '';
-  let elements: unknown[] = [];
-  try {
-    const snap = (await view.executeJavaScript(SNAPSHOT_JS, true)) as {
-      text?: string;
-      elements?: unknown[];
-    };
-    text = snap?.text ?? '';
-    elements = Array.isArray(snap?.elements) ? snap.elements : [];
-  } catch {
-    text = '';
+  if (!url || url === 'about:blank') {
+    lastPicture = undefined;
+    return { ok: true, summary: '浏览器还是空白页。先用打开网页。', url, title };
   }
-  return {
+  const read = await readPicture(view, url);
+  const picture = read.picture;
+  const snap = buildSnapView(lastPicture, picture);
+  if (snap.mode === 'full' && read.hierarchy?.length) {
+    snap.lines = read.hierarchy;
+  }
+  lastPicture = picture;
+  const tree = snap.lines.join('\n');
+  const base = {
+    ok: true,
+    summary: snap.mode === 'diff' ? '这是页面变化。用编号点击。' : '这是页面结构。用编号点击。',
     url,
     title,
     viewport: { width: view.clientWidth, height: view.clientHeight },
-    text: text.slice(0, 400),
-    elements,
+    tree,
   };
+  if (!needsShot(picture, forceImage)) {
+    return base;
+  }
+  const changed = picture.canvas || snap.mode === 'full' ? [] : snap.changed;
+  const image = await shoot(view, picture, changed);
+  if (!image) {
+    return { ...base, summary: '结构不足以判断，画面也没有截下来。' };
+  }
+  return { ...base, summary: '结构不足以判断，附上画面。编号印在画面上。', image };
 }
 
-async function clickBrowser(view: WebViewEl, req: BrowserReq): Promise<void> {
+async function readPicture(view: WebViewEl, url: string): Promise<{ picture: PagePicture; hierarchy?: string[] }> {
+  const fast = await readFastPicture(view, url);
+  if (pictureHasMeaning(fast)) {
+    lastBackends.clear();
+    return { picture: fast };
+  }
+  const ax = await readAxTree(view, url);
+  if (ax && ax.nodes.length) {
+    lastBackends.clear();
+    for (const node of ax.nodes) {
+      if (node.backend) {
+        lastBackends.set(node.ref, node.backend);
+      }
+    }
+    return {
+      picture: {
+        url,
+        nodes: ax.nodes,
+        rows: fast.rows,
+        canvas: false,
+        flashes: fast.flashes,
+        truncated: false,
+        note: ax.note,
+      },
+      hierarchy: ax.lines,
+    };
+  }
+  lastBackends.clear();
+  return { picture: fast };
+}
+
+function pictureHasMeaning(picture: PagePicture): boolean {
+  return picture.nodes.some((node) => node.role !== 'heading' && (node.name.trim() !== '' || node.hint.trim() !== ''));
+}
+
+async function readFastPicture(view: WebViewEl, url: string): Promise<PagePicture> {
+  try {
+    return parsePicture(url, await view.executeJavaScript(PAGE_SNAPSHOT_JS, true));
+  } catch {
+    return parsePicture(url, {});
+  }
+}
+
+function refForBackend(url: string, backend: number): string {
+  if (axUrl !== url) {
+    axUrl = url;
+    backendRefs.clear();
+    backendSeq = 0;
+  }
+  const existing = backendRefs.get(backend);
+  if (existing) {
+    return existing;
+  }
+  backendSeq += 1;
+  const ref = `e${backendSeq}`;
+  backendRefs.set(backend, ref);
+  return ref;
+}
+
+async function readAxTree(view: WebViewEl, url: string): Promise<{ nodes: SnapControl[]; lines: string[]; note: string } | undefined> {
+  const guestId = view.getWebContentsId?.();
+  const cdp = dockCdp();
+  if (!cdp || typeof guestId !== 'number') {
+    return undefined;
+  }
+  try {
+    await cdp(guestId, 'Accessibility.enable', {});
+    let raw = await cdp(guestId, 'Accessibility.getFullAXTree', { depth: 14 });
+    if (cdpFailed(raw)) {
+      raw = await cdp(guestId, 'Accessibility.getFullAXTree', {});
+    }
+    if (cdpFailed(raw)) {
+      return undefined;
+    }
+    const tree = formatAxTree(raw, (backend) => refForBackend(url, backend));
+    return tree.nodes.length ? tree : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function cdpFailed(raw: unknown): boolean {
+  return raw !== null && typeof raw === 'object' && 'error' in raw && !('nodes' in raw);
+}
+
+function dockCdp(): ((webContentsId: number, method: string, params?: unknown) => Promise<unknown>) | undefined {
+  const api = (window as unknown as {
+    opengrok?: { cdp?: (webContentsId: number, method: string, params?: unknown) => Promise<unknown> };
+  }).opengrok;
+  return api?.cdp;
+}
+
+const AX_CLICK_JS = `function() {
+  this.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const rect = this.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const hit = document.elementFromPoint(x, y);
+  const owns = (node, target) => !!node && !!target && (node === target || node.contains(target) || target.contains(node));
+  if (hit && !owns(this, hit)) {
+    const label = (hit.getAttribute && (hit.getAttribute('aria-label') || hit.getAttribute('title'))) || '';
+    const text = label || (hit.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
+    return { ok: false, covered: text || hit.tagName };
+  }
+  try { this.focus(); } catch (e) {}
+  if (typeof this.click === 'function') this.click();
+  return { ok: true };
+}`;
+
+async function actOnBackend(view: WebViewEl, backend: number, kind: 'click' | 'focus'): Promise<'done' | 'fallback' | string> {
+  const guestId = view.getWebContentsId?.();
+  const cdp = dockCdp();
+  if (!cdp || typeof guestId !== 'number') {
+    return 'fallback';
+  }
+  try {
+    const resolved = (await cdp(guestId, 'DOM.resolveNode', { backendNodeId: backend })) as {
+      object?: { objectId?: string };
+    };
+    const objectId = resolved?.object?.objectId;
+    if (!objectId) {
+      return '找不到这个控件了。重新看一次页面。';
+    }
+    const called = (await cdp(guestId, 'Runtime.callFunctionOn', {
+      objectId,
+      returnByValue: true,
+      userGesture: true,
+      functionDeclaration: kind === 'click' ? AX_CLICK_JS : 'function() { try { this.focus(); } catch (e) {} return { ok: true }; }',
+    })) as { result?: { value?: { ok?: boolean; covered?: string } } };
+    const value = called?.result?.value;
+    if (value?.ok === true) {
+      return 'done';
+    }
+    if (value?.covered) {
+      return `这个控件被「${value.covered}」挡住了。先处理挡住它的那一层。`;
+    }
+    return '点下去没有生效。重新看一次页面。';
+  } catch {
+    return 'fallback';
+  }
+}
+
+async function shoot(
+  view: WebViewEl,
+  picture: PagePicture,
+  changed: SnapControl[],
+): Promise<Record<string, unknown> | undefined> {
+  const viewport = { width: view.clientWidth || 1, height: view.clientHeight || 1 };
+  const crop = cropRect(changed, viewport);
+  const marks = crop ? picture.nodes.filter((node) => intersects(node, crop)) : picture.nodes;
+  try {
+    if (marks.some((node) => node.role !== 'heading')) {
+      await view.executeJavaScript(stampScript(marks), true);
+    }
+    const image = crop ? await view.capturePage(crop) : await view.capturePage();
+    const size = image.getSize();
+    const long = Math.max(size.width, size.height);
+    const scaled = long > 640 ? image.resize(size.width >= size.height ? { width: 640 } : { height: 640 }) : image;
+    const out = scaled.getSize();
+    lastShot = {
+      width: out.width || 1,
+      height: out.height || 1,
+      cssX: crop?.x ?? 0,
+      cssY: crop?.y ?? 0,
+      cssW: crop?.width ?? viewport.width,
+      cssH: crop?.height ?? viewport.height,
+    };
+    return {
+      width: out.width,
+      height: out.height,
+      mimeType: 'image/jpeg',
+      data: bytesToBase64(scaled.toJPEG(60)),
+    };
+  } catch {
+    return undefined;
+  } finally {
+    try {
+      await view.executeJavaScript(CLEAR_STAMP_JS, true);
+    } catch {
+      // The overlay has pointer-events:none. The next stamp removes it.
+    }
+  }
+}
+
+function intersects(node: SnapControl, rect: { x: number; y: number; width: number; height: number }): boolean {
+  return node.x < rect.x + rect.width && node.x + node.w > rect.x && node.y < rect.y + rect.height && node.y + node.h > rect.y;
+}
+
+async function ensureWatch(view: WebViewEl): Promise<void> {
+  try {
+    await view.executeJavaScript(ENSURE_WATCH_JS, true);
+  } catch {
+    // The next snapshot installs the same watcher.
+  }
+}
+
+async function settleView(view: WebViewEl): Promise<void> {
+  try {
+    await view.executeJavaScript(SETTLE_JS, true);
+  } catch {
+    await wait(150);
+  }
+}
+
+async function clickBrowser(view: WebViewEl, req: BrowserReq): Promise<{ ref: string; role: string } | undefined> {
   view.focus();
+  const ref = req.ref?.trim();
+  if (ref) {
+    const known = controlByRef(lastPicture, ref);
+    await activateRef(view, ref, 'click');
+    return { ref, role: known?.role ?? '' };
+  }
   if (req.selector) {
     const point = (await view.executeJavaScript(
       `(() => { const el = document.querySelector(${JSON.stringify(req.selector)}); if (!el) return null; el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`,
@@ -1276,21 +1500,65 @@ async function clickBrowser(view: WebViewEl, req: BrowserReq): Promise<void> {
       throw new Error(`找不到 ${req.selector}`);
     }
     await pointerPath(view, [point as { x: number; y: number }]);
-    return;
+    return undefined;
   }
   if (typeof req.x !== 'number' || typeof req.y !== 'number') {
-    throw new Error('点击需要截图上的 x、y，或一个 selector');
+    throw new Error('点击需要编号 ref。没有编号时用截图上的 x、y，或一个 selector');
   }
   await pointerPath(view, [toCss(view, req.x, req.y)]);
+  return undefined;
+}
+
+async function activateRef(view: WebViewEl, ref: string, kind: 'click' | 'focus'): Promise<void> {
+  const backend = lastBackends.get(ref);
+  if (backend) {
+    const acted = await actOnBackend(view, backend, kind);
+    if (acted === 'done') {
+      return;
+    }
+    if (acted !== 'fallback') {
+      throw new Error(acted);
+    }
+  }
+  const known = controlByRef(lastPicture, ref);
+  const script = kind === 'click'
+    ? clickTargetScript(ref, known?.role ?? '', known?.name ?? '')
+    : focusTargetScript(ref, known?.role ?? '', known?.name ?? '');
+  let hit = { ok: false, ambiguous: false };
+  try {
+    hit = asHit(await view.executeJavaScript(script, true));
+  } catch {
+    // A navigation can destroy the guest before the script result comes back.
+    return;
+  }
+  if (hit.ambiguous) {
+    const label = known?.name ? `「${known.name}」` : ref;
+    throw new Error(`有多个${label}，编号 ${ref} 已失效。重新看一次页面。`);
+  }
+  if (!hit.ok) {
+    throw new Error(`找不到 ${ref}。重新看一次页面。`);
+  }
+}
+
+function asHit(raw: unknown): { ok: boolean; ambiguous: boolean } {
+  if (raw === null || typeof raw !== 'object') {
+    return { ok: false, ambiguous: false };
+  }
+  const obj = raw as Record<string, unknown>;
+  return { ok: obj['ok'] === true, ambiguous: obj['ambiguous'] === true };
 }
 
 function toCss(view: WebViewEl, x: number, y: number): { x: number; y: number } {
-  const vw = view.clientWidth || lastShot.width;
-  const vh = view.clientHeight || lastShot.height;
+  const cssW = lastShot.cssW || view.clientWidth || 1;
+  const cssH = lastShot.cssH || view.clientHeight || 1;
   return {
-    x: Math.round((x / lastShot.width) * vw),
-    y: Math.round((y / lastShot.height) * vh),
+    x: Math.round(lastShot.cssX + (x / lastShot.width) * cssW),
+    y: Math.round(lastShot.cssY + (y / lastShot.height) * cssH),
   };
+}
+
+function wantImage(value: unknown): boolean {
+  return value === true || value === 'true' || value === 1;
 }
 
 function mouseClick(view: WebViewEl, x: number, y: number): void {
@@ -1368,9 +1636,12 @@ function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-async function typeBrowser(view: WebViewEl, text: string, selector?: string): Promise<void> {
+async function typeBrowser(view: WebViewEl, text: string, selector?: string, ref?: string): Promise<void> {
   view.focus();
-  if (selector) {
+  const target = ref?.trim();
+  if (target) {
+    await activateRef(view, target, 'focus');
+  } else if (selector) {
     const found = await view.executeJavaScript(
       `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.focus(); return true; })()`,
       true,
@@ -1450,17 +1721,6 @@ function bytesToBase64(bytes: Uint8Array): string {
   }
   return btoa(text);
 }
-
-const SNAPSHOT_JS = `(() => {
-  const nodes = Array.from(document.querySelectorAll('a,button,input,textarea,select,[role="button"]')).slice(0, 12);
-  const elements = nodes.map((el) => {
-    const r = el.getBoundingClientRect();
-    const text = (el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
-    return { tag: el.tagName.toLowerCase(), text, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
-  }).filter((item) => item.text || item.tag === 'input');
-  const text = (document.body && document.body.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim().slice(0, 400);
-  return { text, elements };
-})()`;
 
 function guest(): WebViewEl | undefined {
   const node = document.querySelector('.og-dock-pane:not([hidden]) .og-dock-webview');

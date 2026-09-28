@@ -1,6 +1,6 @@
 import type { ChatState, StreamTail } from '../core/types';
 import { applyEditStatsToMessages, type EditStatsItem } from '../edits/editStats';
-import { resolveIncomingMessages, stabilizeIncomingChat } from '../chat/messageMerge';
+import { holdOpenRestore, resolveIncomingMessages, stabilizeIncomingChat } from '../chat/messageMerge';
 import { mergeStreamTail } from '../chat/streamTail';
 import { applyThemeTo } from '../settings/theme';
 import { bindRender, isBooting, isDesktop, isRemoteWeb, normalizeState, persistUi, post, root, ui } from './app';
@@ -52,6 +52,10 @@ function watchRestore(): void {
     if (!ui.state.restoringSession) {
       return;
     }
+    if (holdOpenRestore(ui.state)) {
+      watchRestore();
+      return;
+    }
     ui.state.restoringSession = false;
     render();
   }, 4000);
@@ -67,6 +71,7 @@ type HostMsg = {
   theme?: unknown;
   truncated?: boolean;
   messages?: ChatState['messages'];
+  olderCount?: number;
   hydrate?: number;
   merge?: boolean;
   prepend?: boolean;
@@ -227,6 +232,9 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       ui.state.messages = batch.concat(ui.state.messages);
     } else {
       ui.state.messages = ui.state.messages.concat(batch);
+    }
+    if (typeof data.olderCount === 'number') {
+      ui.state.olderCount = data.olderCount;
     }
     if (typeof data.hydrate === 'number' && !data.done) {
       if (ui.state.restoringSession || ui.state.messages.length === 0) {
