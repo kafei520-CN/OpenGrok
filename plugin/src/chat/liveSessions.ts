@@ -5,6 +5,7 @@ import type {
   ChatStatus,
   PermissionPrompt,
   QueuedPrompt,
+  RosterActivity,
   SessionRow,
   SessionRunState,
 } from '../core/types';
@@ -57,6 +58,61 @@ export function emptyParked(id: string, cwd?: string): ParkedSession {
     queue: [],
     runGen: 0,
   };
+}
+
+/** 名单连续两次报空闲，且这段时间没有新 token，才认定 session/prompt 已经挂死。 */
+export const PROMPT_IDLE_GRACE_MS = 6_000;
+export const PROMPT_IDLE_QUIET_MS = 3_000;
+export const PROMPT_IDLE_POLLS = 2;
+export const ROSTER_WATCH_MS = 3_000;
+
+/** 还在往外写的那条助手消息。排队的用户气泡可以排在它后面。 */
+export function liveAssistant(messages: ChatMessage[]): ChatMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role === 'assistant' && message.streaming) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 名单说这轮不在跑时怎么处理本地的 streaming。
+ * clear：本地并没有 session/prompt，橙点是旧的。
+ * finish：这轮 prompt 还挂着，但 CLI 已经空闲，该松手。
+ */
+export function streamingReleaseDecision(opts: {
+  prompting: boolean;
+  activity?: RosterActivity;
+  absent: boolean;
+  idleStreak: number;
+  now: number;
+  startedAt?: number;
+  lastUpdateAt?: number;
+  promptGraceMs?: number;
+  quietMs?: number;
+  hungPolls?: number;
+}): 'keep' | 'clear' | 'finish' {
+  const grace = opts.promptGraceMs ?? PROMPT_IDLE_GRACE_MS;
+  const quiet = opts.quietMs ?? PROMPT_IDLE_QUIET_MS;
+  const polls = opts.hungPolls ?? PROMPT_IDLE_POLLS;
+  const live = !opts.absent && (opts.activity === 'working' || opts.activity === 'needs_input');
+  if (live) {
+    return 'keep';
+  }
+  if (!opts.prompting) {
+    return 'clear';
+  }
+  if (opts.absent) {
+    return 'keep';
+  }
+  const started = opts.startedAt ?? opts.now;
+  const last = opts.lastUpdateAt ?? started;
+  if (opts.now - started < grace || opts.now - last < quiet || opts.idleStreak < polls) {
+    return 'keep';
+  }
+  return 'finish';
 }
 
 export function sessionIsLive(

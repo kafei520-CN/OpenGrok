@@ -75,17 +75,17 @@ describe('markdown', () => {
     assert.match(html, /<td style="text-align:left"><strong>1<\/strong><\/td>/);
   });
 
-  it('turns @-marked file paths into clickable filename chips', () => {
-    const html = renderMarkdown('Edit `@plugin/src/foo.ts` and @C:\\work\\bar.css later.');
+  it('turns quoted @File markers into clickable filename chips', () => {
+    const html = renderMarkdown('Edit `@File:"plugin/src/foo.ts"` and @File:"C:\\work\\bar.css" later.');
     assert.match(html, /class="md-file"/);
     assert.match(html, /data-path="plugin\/src\/foo.ts"/);
     assert.match(html, />foo\.ts<\/span>/);
     assert.match(html, /data-path="C:\\work\\bar.css"/);
-    assert.doesNotMatch(html, /<code>@plugin\/src\/foo\.ts<\/code>/);
+    assert.doesNotMatch(html, /<code>@File:&quot;plugin\/src\/foo\.ts&quot;<\/code>/);
   });
 
   it('leaves unmarked paths and fractions as text', () => {
-    const html = renderMarkdown('正确率都是 1/5。平均 `plugin/src/foo.ts` 和 README.md');
+    const html = renderMarkdown('正确率都是 1/5。平均 `plugin/src/foo.ts`、@plugin/src/foo.ts 和 README.md');
     assert.doesNotMatch(html, /class="md-file"/);
     assert.match(html, /<code>plugin\/src\/foo\.ts<\/code>/);
     assert.match(html, /1\/5/);
@@ -93,7 +93,7 @@ describe('markdown', () => {
 
   it('renders method refs with line jumps and leaves assignments as code', () => {
     const html = renderMarkdown(
-      'Fix `@tightenShortenedSegments (line 228)` and keep `DAMPING = 0.965`.',
+      'Fix `@Line:"tightenShortenedSegments(line 228)"` and keep `DAMPING = 0.965`.',
     );
     assert.match(html, /class="md-file md-sym"/);
     assert.match(html, /data-line="228"/);

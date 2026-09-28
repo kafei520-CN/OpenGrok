@@ -339,12 +339,21 @@ function applyTail(tail: StreamTail): void {
   }
   const messages = ui.state.messages;
   const incoming = tail.message;
-  const at = messages.findIndex((item) => item.id === incoming.id);
-  if (at < 0) {
+  let at = messages.findIndex((item) => item.id === incoming.id);
+  if (at < 0 && incoming.role === 'assistant') {
+    // 快照没把这条助手消息送进来时，丢掉 tail 会让后文永远不出现。
+    let insertAt = messages.length;
+    while (insertAt > 0 && messages[insertAt - 1]?.role === 'user') {
+      insertAt -= 1;
+    }
+    messages.splice(insertAt, 0, mergeStreamTail(undefined, tail));
+    at = insertAt;
+  } else if (at >= 0) {
+    messages[at] = mergeStreamTail(messages[at], tail);
+  } else {
     patchComposer();
     return;
   }
-  messages[at] = mergeStreamTail(messages[at], tail);
   ui.state.status = tail.status;
   ui.state.context = tail.context;
   ui.state.queue = tail.queue;

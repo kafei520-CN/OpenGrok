@@ -515,6 +515,9 @@ function patchStreamingTurn(node: HTMLElement, turn: Turn): void {
       if (label) {
         label.textContent = workLabel(assistant);
       }
+      if (!ui.workOpen.has(assistant.id) && workShouldOpen(assistant)) {
+        work.open = true;
+      }
       if (work.open) {
         patchWorkBody(work.querySelector('.work-body') as HTMLElement | null, assistant);
       }
@@ -545,26 +548,14 @@ function patchWorkBody(body: HTMLElement | null, message: ChatMessage): void {
     return;
   }
   const streaming = Boolean(message.streaming);
-  if (message.thinking) {
-    let think = body.querySelector('.md.thinking') as HTMLElement | null;
-    if (!think) {
-      think = document.createElement('div');
-      think.className = 'md thinking';
-      body.prepend(think);
-    }
-    setMarkdown(think, message.thinking, streaming);
-  }
+  // 思考原文会在动手前写成「已经改完」。面板只留计划和工具。
+  body.querySelector('.md.thinking')?.remove();
   if (message.plan) {
     let plan = body.querySelector('.md.plan') as HTMLElement | null;
     if (!plan) {
       plan = document.createElement('div');
       plan.className = 'md plan';
-      const think = body.querySelector('.md.thinking');
-      if (think) {
-        think.after(plan);
-      } else {
-        body.prepend(plan);
-      }
+      body.prepend(plan);
     }
     setMarkdown(plan, message.plan, streaming);
   }
@@ -1350,6 +1341,11 @@ function hasWork(message: ChatMessage): boolean {
   return Boolean(message.thinking || message.plan || message.tools.length);
 }
 
+/** 只有出现计划或工具才展开。光有思考原文时保持收起。 */
+function workShouldOpen(message: ChatMessage): boolean {
+  return Boolean(message.streaming && (message.tools.length > 0 || visibleSteps(message).length > 0));
+}
+
 function thinkingWork(root: ParentNode): HTMLDetailsElement | null {
   return root.querySelector('details.work');
 }
@@ -1549,7 +1545,7 @@ function workBlock(message: ChatMessage): HTMLDetailsElement {
   const el = document.createElement('details');
   el.className = message.streaming ? 'work live' : 'work';
   el.dataset.mid = message.id;
-  const open = ui.workOpen.get(message.id) ?? Boolean(message.streaming);
+  const open = ui.workOpen.get(message.id) ?? workShouldOpen(message);
   el.open = open;
   el.addEventListener('toggle', (event) => {
     if (!event.isTrusted) {

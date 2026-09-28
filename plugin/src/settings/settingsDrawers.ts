@@ -136,6 +136,8 @@ export interface SettingsHost {
   cancelTurn(): void;
   refreshSessionsSilent(): Promise<void>;
   respawnAgent(): void;
+  /** 用 CLI 名单校正「还在跑」的标记。空名单不要传进来。 */
+  applyLiveRoster?(roster: RosterEntry[], fetchedAt?: number): void;
 }
 
 export function closeDrawer(host: SettingsHost): void {
@@ -217,6 +219,9 @@ export async function refreshDashboardInner(host: SettingsHost): Promise<void> {
     } catch (error) {
       logWarn(`roster: ${error instanceof Error ? error.message : error}`);
       host.roster = [];
+    }
+    if (host.roster.length) {
+      host.applyLiveRoster?.(host.roster);
     }
     if (!host.roster.length) {
       if (!host.sessions?.length) {

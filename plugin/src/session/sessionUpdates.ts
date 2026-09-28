@@ -288,6 +288,9 @@ export function applySessionUpdate(session: SessionView, update: SessionUpdate):
   if (assistant.error?.retrying) {
     assistant.error = undefined;
   }
+  if (!replay) {
+    assistant.streaming = true;
+  }
   if (kind === 'agent_message_chunk') {
     assistant.text += textFromContent(update.content);
   } else if (kind === 'agent_thought_chunk') {
@@ -416,6 +419,16 @@ function ensureAssistant(
       stampTurnModel(last, session.models);
     }
     return last;
+  }
+  if (!replay) {
+    const live = [...session.messages]
+      .reverse()
+      .find((item) => item.role === 'assistant' && item.streaming);
+    if (live) {
+      stampTimes(live, update, replay);
+      stampTurnModel(live, session.models);
+      return live;
+    }
   }
   const assistant: ChatMessage = {
     id: `assistant-${session.nextTurn()}`,

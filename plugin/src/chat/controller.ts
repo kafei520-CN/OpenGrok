@@ -113,6 +113,7 @@ import { createSessionFlow, type SessionFlowItem } from './sessionFlow';
 import { initialSessionFloor, sessionOlderPage } from './sessionWindow';
 import {
   buildStreamTail,
+  cursorFromMessage,
   emptyStreamCursor,
   type StreamDeltaCursor,
 } from './streamTail';
@@ -217,9 +218,12 @@ import {
   cloneMessages,
   emptyParked,
   lastAssistantInterrupted,
+  liveAssistant,
   markAssistantStopped,
   overlayLiveSessions,
   resolveIncomingSessionId,
+  ROSTER_WATCH_MS,
+  streamingReleaseDecision,
   trimParkedSessions,
   type ParkedSession,
 } from './liveSessions';
@@ -320,8 +324,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     onBackgroundBurst: (sessionId) => this.noteBackgroundStreaming(sessionId),
   });
   private parkedRecent: string[] = [];
-  private promptSessions = new Set<string>();
+  private promptRuns = new Map<string, { run: number; at: number }>();
   private promptSessionId?: string;
+  /** prompt 已经收尾，迟到的 token 不能再把会话点亮。 */
+  private settledRuns = new Set<number>();
+  private settledRunBySession = new Map<string, number>();
+  private lastSessionActivityAt = new Map<string, number>();
+  private idleStreak = new Map<string, number>();
+  private rosterTimer?: ReturnType<typeof setTimeout>;
+  private rosterInflight?: Promise<void>;
   private sessionCwd?: string;
   private restoringSession = false;
   private replaying = false;
@@ -839,6 +850,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         },
       ];
       this.attachments = [];
+      // 正在流式时 emit 会发空快照，新的用户气泡到不了界面上。
+      this.streamPosted = false;
       this.emit();
       return;
     }
@@ -895,13 +908,17 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!queued) {
       this.attachments = [];
     }
-    this.setStatus('streaming');
-    this.promptSessions.add(sid);
+    const startedAt = Date.now();
+    this.promptRuns.set(sid, { run, at: startedAt });
+    this.lastSessionActivityAt.set(sid, startedAt);
+    this.idleStreak.delete(sid);
     this.promptSessionId = sid;
+    this.streamPosted = false;
+    this.setStatus('streaming');
     try {
       await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) }, sid);
     } catch (error) {
-      if (!this.runBelongs(sid, run)) {
+      if (!this.runBelongs(sid, run) || this.settledRuns.has(run)) {
         return;
       }
       if (isCancelError(error)) {
@@ -909,29 +926,42 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         if (msgs) {
           markAssistantStopped(msgs);
         }
-        this.endTurnOn(sid);
+        this.finishRun(sid, run);
         return;
       }
+      this.settledRuns.add(run);
+      this.settledRunBySession.set(sid, run);
       this.failOn(sid, tr('turnError'), error);
       return;
     } finally {
-      this.promptSessions.delete(sid);
-      if (this.promptSessionId === sid) {
-        this.promptSessionId = [...this.promptSessions][0];
+      const claim = this.promptRuns.get(sid);
+      if (claim?.run === run) {
+        this.promptRuns.delete(sid);
+        if (this.promptSessionId === sid) {
+          this.promptSessionId = this.promptRuns.keys().next().value;
+        }
       }
     }
     if (!this.runBelongs(sid, run)) {
       return;
     }
-    this.endTurnOn(sid, 'done');
-    if (this.currentSessionId === sid) {
-      await this.flushQueue();
+    this.finishRun(sid, run, 'done');
+    if (this.currentSessionId !== sid || this.status !== 'ready' || this.promptRuns.has(sid)) {
+      return;
     }
+    await this.flushQueue();
   }
 
   cancelTurn(): void {
     const pauseGoal = this.modeId === 'goal' && this.goal?.status === 'running';
     this.clearGoalFinishTimer();
+    const sid = this.currentSessionId;
+    const claim = sid ? this.promptRuns.get(sid) : undefined;
+    if (sid && claim) {
+      this.settledRuns.add(claim.run);
+      this.settledRunBySession.set(sid, claim.run);
+      this.settleLane(sid);
+    }
     this.runGen += 1;
     abortClientRpcs(this, 'cancel');
     this.agent?.cancelTurn();
@@ -1140,8 +1170,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.sessionFlow.dispose();
     this.parked.clear();
     this.parkedRecent = [];
-    this.promptSessions.clear();
+    this.promptRuns.clear();
     this.promptSessionId = undefined;
+    this.settledRuns.clear();
+    this.settledRunBySession.clear();
+    this.lastSessionActivityAt.clear();
+    this.idleStreak.clear();
+    this.stopRosterWatch();
   }
 
   private parkForeground(): void {
@@ -1190,6 +1225,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!row) {
       return;
     }
+    const stillRunning = row.status === 'streaming' && this.promptRuns.has(id);
+    if (!stillRunning && row.status === 'streaming') {
+      row.status = 'ready';
+      const assistant = liveAssistant(row.messages);
+      if (assistant) {
+        assistant.streaming = false;
+        freezeTurnSteps(assistant);
+      }
+    }
     this.currentSessionId = id;
     this.sessionCwd = row.cwd;
     this.messages = cloneMessages(row.messages);
@@ -1203,7 +1247,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.runGen = row.runGen;
     this.permission = row.permission;
     this.ask = row.ask;
-    this.status = row.status === 'streaming' ? 'streaming' : 'ready';
+    this.status = stillRunning ? 'streaming' : 'ready';
   }
 
   private cacheCurrent(): void {
@@ -1219,6 +1263,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private endTurnOn(sid: string, cue?: NotifyCue): void {
+    this.settleLane(sid);
     if (this.currentSessionId === sid) {
       this.endStreaming(cue);
       return;
@@ -1241,6 +1286,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private failOn(sid: string, message: string, error?: unknown): void {
+    this.settleLane(sid);
     if (this.currentSessionId === sid) {
       this.fail(message, error);
       return;
@@ -1303,8 +1349,19 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       }
     }
     const last = parked.messages.filter((item) => item.role === 'assistant').at(-1);
-    if (last?.streaming) {
+    const claim = this.promptRuns.get(sessionId);
+    const settled = claim !== undefined && this.settledRuns.has(claim.run);
+    if (settled) {
+      if (last?.streaming) {
+        last.streaming = false;
+        freezeTurnSteps(last);
+      }
+      parked.status = 'ready';
+    } else if (last?.streaming) {
       parked.status = 'streaming';
+      this.watchLiveRuns();
+    } else if (!isReplay && parked.status === 'streaming' && !claim) {
+      parked.status = 'ready';
     }
     if (isReplay) {
       return;
@@ -1322,6 +1379,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     try {
       const roster = (await this.agent?.listRoster()) ?? [];
       this.roster = roster;
+      if (!roster.length) {
+        this.emit();
+        return;
+      }
       for (const item of roster) {
         if (item.id === this.currentSessionId) {
           continue;
@@ -1336,10 +1397,204 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         stub.status = item.activity === 'working' ? 'streaming' : 'ready';
         this.parked.set(item.id, stub);
       }
+      this.applyLiveRoster(roster);
       this.emit();
     } catch (error) {
       logWarn(`adopt sessions: ${error instanceof Error ? error.message : error}`);
     }
+  }
+
+  /** 把还攒在通道里的正文落地，再按当前前台/后台放行。回放进行中不拆当前会话。 */
+  private settleLane(sessionId: string): void {
+    if (!sessionId || (this.replaying && sessionId === this.currentSessionId)) {
+      return;
+    }
+    this.sessionFlow.flush(sessionId);
+    this.sessionFlow.unhold(sessionId);
+    const mode = sessionId === this.currentSessionId ? 'foreground' : 'background';
+    if (this.sessionFlow.mode(sessionId) !== mode) {
+      this.sessionFlow.setMode(sessionId, mode);
+    }
+    this.sessionFlow.releaseBuffered(sessionId);
+  }
+
+  private finishRun(sid: string, run: number, cue?: NotifyCue): void {
+    if (this.settledRuns.has(run)) {
+      return;
+    }
+    const claim = this.promptRuns.get(sid);
+    if (claim && claim.run !== run) {
+      return;
+    }
+    this.settledRuns.add(run);
+    this.settledRunBySession.set(sid, run);
+    while (this.settledRuns.size > 64) {
+      const first = this.settledRuns.values().next().value;
+      if (first === undefined) {
+        break;
+      }
+      this.settledRuns.delete(first);
+    }
+    this.idleStreak.delete(sid);
+    this.endTurnOn(sid, cue);
+  }
+
+  private hasStreamingClaim(): boolean {
+    if (this.status === 'streaming') {
+      return true;
+    }
+    for (const row of this.parked.values()) {
+      if (row.status === 'streaming') {
+        return true;
+      }
+    }
+    for (const claim of this.promptRuns.values()) {
+      if (!this.settledRuns.has(claim.run)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private watchLiveRuns(): void {
+    if (this.rosterTimer || !this.hasStreamingClaim()) {
+      return;
+    }
+    this.rosterTimer = setTimeout(() => {
+      this.rosterTimer = undefined;
+      void this.reconcileLiveRuns();
+    }, ROSTER_WATCH_MS);
+  }
+
+  private stopRosterWatch(): void {
+    if (!this.rosterTimer) {
+      return;
+    }
+    clearTimeout(this.rosterTimer);
+    this.rosterTimer = undefined;
+  }
+
+  private reconcileLiveRuns(): Promise<void> {
+    if (this.rosterInflight) {
+      return this.rosterInflight;
+    }
+    const run = this.reconcileLiveRunsInner().finally(() => {
+      if (this.rosterInflight === run) {
+        this.rosterInflight = undefined;
+      }
+    });
+    this.rosterInflight = run;
+    return run;
+  }
+
+  private async reconcileLiveRunsInner(): Promise<void> {
+    if (!this.agent || !this.hasStreamingClaim()) {
+      this.stopRosterWatch();
+      return;
+    }
+    const fetchedAt = Date.now();
+    try {
+      const roster = await this.agent.listRoster();
+      if (!this.agent) {
+        return;
+      }
+      if (roster.length) {
+        this.applyLiveRoster(roster, fetchedAt);
+        return;
+      }
+    } catch (error) {
+      logWarn(`roster: ${error instanceof Error ? error.message : error}`);
+    }
+    if (this.hasStreamingClaim()) {
+      this.watchLiveRuns();
+    }
+  }
+
+  /** CLI 名单为准：没在跑的会话去掉橙点；prompt 挂死但名单已空闲则松开这一轮。 */
+  applyLiveRoster(roster: RosterEntry[], fetchedAt = 0): void {
+    this.roster = roster;
+    const activity = new Map(roster.map((row) => [row.id, row.activity]));
+    const ids = new Set<string>();
+    if (this.status === 'streaming' && this.currentSessionId) {
+      ids.add(this.currentSessionId);
+    }
+    for (const [id, row] of this.parked) {
+      if (row.status === 'streaming') {
+        ids.add(id);
+      }
+    }
+    for (const id of this.promptRuns.keys()) {
+      ids.add(id);
+    }
+    const now = Date.now();
+    let parkedChanged = false;
+    for (const id of ids) {
+      const claim = this.promptRuns.get(id);
+      if (fetchedAt > 0 && claim && claim.at > fetchedAt) {
+        continue;
+      }
+      const current = activity.get(id);
+      const absent = current === undefined;
+      const live = !absent && (current === 'working' || current === 'needs_input');
+      const streak = live ? 0 : (this.idleStreak.get(id) ?? 0) + 1;
+      if (live) {
+        this.idleStreak.delete(id);
+      } else {
+        this.idleStreak.set(id, streak);
+      }
+      const decision = streamingReleaseDecision({
+        prompting: Boolean(claim),
+        activity: current,
+        absent,
+        idleStreak: streak,
+        now,
+        startedAt: claim?.at,
+        lastUpdateAt: this.lastSessionActivityAt.get(id),
+      });
+      if (decision === 'keep') {
+        continue;
+      }
+      if (decision === 'finish' && claim) {
+        this.finishRun(id, claim.run, 'done');
+        continue;
+      }
+      if (this.clearStaleStreaming(id)) {
+        parkedChanged = true;
+      }
+    }
+    if (parkedChanged) {
+      this.publishSnapshot('none');
+    }
+    if (this.hasStreamingClaim()) {
+      this.watchLiveRuns();
+    } else {
+      this.stopRosterWatch();
+    }
+  }
+
+  /** 没有对应 prompt 的 streaming 标记。当前会话会顺手解开输入框。 */
+  private clearStaleStreaming(id: string): boolean {
+    if (this.promptRuns.has(id)) {
+      return false;
+    }
+    const row = this.parked.get(id);
+    let parkedChanged = false;
+    if (row?.status === 'streaming') {
+      const assistant = liveAssistant(row.messages);
+      if (assistant) {
+        assistant.streaming = false;
+        freezeTurnSteps(assistant);
+      }
+      row.status = 'ready';
+      this.idleStreak.delete(id);
+      parkedChanged = id !== this.currentSessionId;
+    }
+    if (id === this.currentSessionId && this.status === 'streaming') {
+      this.idleStreak.delete(id);
+      this.endStreaming();
+      return false;
+    }
+    return parkedChanged;
   }
 
   private onAgentLost(epoch: number, error: Error): void {
@@ -2137,7 +2392,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   closeDrawer(): void { drawers.closeDrawer(this); }
   async openDashboard(): Promise<void> { await drawers.openDashboard(this); }
-  refreshDashboard(): void { drawers.refreshDashboard(this); }
+  refreshDashboard(): void {
+    if (this.drawer === 'dashboard') {
+      drawers.refreshDashboard(this);
+      return;
+    }
+    void this.reconcileLiveRuns();
+  }
   stopRosterSession(sessionId: string): void { drawers.stopRosterSession(this, sessionId); }
   async cancelSubagent(subagentId: string): Promise<void> { await drawers.cancelSubagent(this, subagentId); }
   async dashboardDispatch(text: string, sessionId?: string): Promise<void> {
@@ -2790,8 +3051,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.dropUnknownPicker();
     this.flushEmitTimer();
     if (this.status === 'streaming') {
-      this.publishSnapshot(this.streamPosted ? 'none' : 'tail');
+      const mode = this.streamPosted ? 'none' : 'tail';
+      this.publishSnapshot(mode);
       this.streamPosted = true;
+      if (mode === 'tail') {
+        const live = liveAssistant(this.messages);
+        if (live) {
+          this.streamCursor = cursorFromMessage(live);
+        }
+      }
       this.emitTail();
       return;
     }
@@ -2842,13 +3110,33 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.applyForegroundUpdate(update, isReplay);
       return;
     }
+    if (!isReplay) {
+      const settledRun = this.settledRunBySession.get(id);
+      const claim = this.promptRuns.get(id);
+      if (settledRun !== undefined && (!claim || claim.run === settledRun)) {
+        return;
+      }
+      this.lastSessionActivityAt.set(id, Date.now());
+    }
     this.syncSessionLane(id);
     this.sessionFlow.accept(id, update, isReplay);
   }
 
   /** 回放中和正文未就位时不改通道，避免实时 token 被当成前台直接写进旧消息。 */
   private syncSessionLane(sessionId: string): void {
-    if (this.sessionFlow.isHeld(sessionId) || this.sessionFlow.mode(sessionId) === 'replaying') {
+    if (this.sessionFlow.isHeld(sessionId)) {
+      return;
+    }
+    const staleReplay =
+      this.sessionFlow.mode(sessionId) === 'replaying' &&
+      !this.replaying &&
+      sessionId === this.currentSessionId;
+    if (staleReplay) {
+      this.sessionFlow.setMode(sessionId, 'foreground');
+      this.sessionFlow.releaseBuffered(sessionId);
+      return;
+    }
+    if (this.sessionFlow.mode(sessionId) === 'replaying') {
       return;
     }
     const mode =
@@ -2878,6 +3166,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     row.status = 'streaming';
     this.publishSnapshot('none');
+    this.watchLiveRuns();
   }
 
   /** 离开当前会话前，把还攒着的增量写进正文，再降为后台。 */
@@ -3299,8 +3588,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private emitTail(): void {
-    const last = this.messages.at(-1);
-    if (!last || last.role !== 'assistant' || !last.streaming || this.streamListeners.size === 0) {
+    if (this.streamListeners.size === 0) {
+      return;
+    }
+    const live = liveAssistant(this.messages);
+    const fallback =
+      this.status === 'streaming'
+        ? [...this.messages].reverse().find((message) => message.role === 'assistant')
+        : undefined;
+    const last = live ?? fallback;
+    if (!last) {
       return;
     }
     const { tail, cursor } = buildStreamTail(this.streamCursor, last, {
@@ -3793,6 +4090,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.error = undefined;
     }
     this.emit();
+    if (status === 'streaming') {
+      this.watchLiveRuns();
+    }
   }
 
   fail(message: string, error?: unknown): void {

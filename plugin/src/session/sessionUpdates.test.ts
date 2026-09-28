@@ -644,5 +644,39 @@ describe('retry errors', () => {
     assert.equal(session.messages[0]?.error, undefined);
     assert.equal(session.messages[0]?.thinking, 'thinking');
   });
+
+  it('keeps writing the live assistant when a queued user sits after it', () => {
+    const session = view({
+      replaying: false,
+      messages: [
+        { id: 'a', role: 'assistant', text: 'hello', tools: [], streaming: true },
+        { id: 'u', role: 'user', text: 'next', tools: [] },
+      ],
+    });
+    applySessionUpdate(session, {
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: ' world' },
+    });
+    assert.equal(session.messages.length, 2);
+    assert.equal(session.messages[0]?.text, 'hello world');
+    assert.equal(session.messages[0]?.streaming, true);
+    assert.equal(session.messages[1]?.role, 'user');
+  });
+
+  it('starts a new assistant after a finished replayed turn', () => {
+    const session = view({
+      messages: [
+        { id: 'a', role: 'assistant', text: 'old', tools: [], streaming: false },
+        { id: 'u', role: 'user', text: 'next', tools: [] },
+      ],
+    });
+    applySessionUpdate(session, {
+      sessionUpdate: 'agent_message_chunk',
+      content: { type: 'text', text: 'new' },
+    });
+    assert.equal(session.messages.length, 3);
+    assert.equal(session.messages[2]?.text, 'new');
+    assert.equal(session.messages[2]?.streaming, false);
+  });
 });
 

@@ -4,11 +4,13 @@ import {
   cloneMessages,
   emptyParked,
   lastAssistantInterrupted,
+  liveAssistant,
   overlayLiveSessions,
   resolveIncomingSessionId,
   sessionIsLive,
   sessionRunState,
   slimParkedRow,
+  streamingReleaseDecision,
   trimParkedSessions,
   type ParkedSession,
 } from './liveSessions';
@@ -174,6 +176,132 @@ describe('live sessions', () => {
         parked,
       }),
       'b',
+    );
+  });
+});
+
+describe('streaming release', () => {
+  const now = 20_000;
+
+  it('finds the live assistant behind a queued user bubble', () => {
+    const assistant = { id: 'a', role: 'assistant' as const, text: 'hi', tools: [], streaming: true };
+    const found = liveAssistant([
+      assistant,
+      { id: 'u', role: 'user', text: 'next', tools: [] },
+    ]);
+    assert.equal(found?.id, 'a');
+    assert.equal(liveAssistant([{ id: 'u', role: 'user', text: 'next', tools: [] }]), undefined);
+  });
+
+  it('clears an idle session that this process is not prompting', () => {
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: false,
+        activity: 'idle',
+        absent: false,
+        idleStreak: 1,
+        now,
+      }),
+      'clear',
+    );
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: false,
+        absent: true,
+        idleStreak: 1,
+        now,
+      }),
+      'clear',
+    );
+  });
+
+  it('keeps a session the roster still marks working or waiting', () => {
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: false,
+        activity: 'working',
+        absent: false,
+        idleStreak: 3,
+        now,
+      }),
+      'keep',
+    );
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: true,
+        activity: 'needs_input',
+        absent: false,
+        idleStreak: 3,
+        now,
+        startedAt: now - 30_000,
+        lastUpdateAt: now - 30_000,
+      }),
+      'keep',
+    );
+  });
+
+  it('does not drop a prompt the roster has not listed yet', () => {
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: true,
+        absent: true,
+        idleStreak: 4,
+        now,
+        startedAt: now - 30_000,
+        lastUpdateAt: now - 30_000,
+      }),
+      'keep',
+    );
+  });
+
+  it('finishes a hung prompt only after the roster has stayed idle and quiet', () => {
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: true,
+        activity: 'completed',
+        absent: false,
+        idleStreak: 1,
+        now,
+        startedAt: now - 30_000,
+        lastUpdateAt: now - 30_000,
+      }),
+      'keep',
+    );
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: true,
+        activity: 'idle',
+        absent: false,
+        idleStreak: 2,
+        now,
+        startedAt: now - 1_000,
+        lastUpdateAt: now - 1_000,
+      }),
+      'keep',
+    );
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: true,
+        activity: 'dead',
+        absent: false,
+        idleStreak: 2,
+        now,
+        startedAt: now - 30_000,
+        lastUpdateAt: now - 500,
+      }),
+      'keep',
+    );
+    assert.equal(
+      streamingReleaseDecision({
+        prompting: true,
+        activity: 'dormant',
+        absent: false,
+        idleStreak: 2,
+        now,
+        startedAt: now - 8_000,
+        lastUpdateAt: now - 4_000,
+      }),
+      'finish',
     );
   });
 });

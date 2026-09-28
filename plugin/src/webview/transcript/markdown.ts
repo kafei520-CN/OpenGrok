@@ -1,5 +1,5 @@
 import { extractMath, renderKatex } from './markdownMath';
-import { fileLinkHtml, isMarkedFileRef, linkInlineFilePaths, parseCodeRef } from './fileLinks';
+import { fileLinkHtml, linkInlineFilePaths, parseExplicitCodeRef } from './fileLinks';
 
 export function escapeHtml(value: string): string {
   return String(value ?? '')
@@ -411,7 +411,7 @@ export function inlineMarkdown(src: string): string {
     return `\u0000${slots.length - 1}\u0000`;
   };
   let text = src.replace(/`([^`]+)`/g, (_all, code: string) => {
-    const ref = isMarkedFileRef(code) ? parseCodeRef(code) : undefined;
+    const ref = parseExplicitCodeRef(code);
     return ref
       ? stash(fileLinkHtml(ref))
       : stash(`<code>${escapeHtml(code)}</code>`);
@@ -424,7 +424,7 @@ export function inlineMarkdown(src: string): string {
       : alt;
   });
   text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_all, label: string, url: string) => {
-    const ref = parseCodeRef(url);
+    const ref = parseExplicitCodeRef(url);
     if (ref) {
       return stash(fileLinkHtml(ref, label));
     }

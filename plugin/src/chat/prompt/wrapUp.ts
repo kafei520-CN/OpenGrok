@@ -5,18 +5,31 @@ import type { ChatMessage } from '../../core/types';
 export const WRAP_UP_RULE_FILE = 'opengrok-wrap-up.md';
 export const BROWSER_RULE_FILE = 'opengrok-browser.md';
 
-/** Drop builtin rule files so the CLI does not attach them to a chat. */
+/** Drop the browser rule. Keep the wrap-up file in sync so the CLI loads the current wording. */
 export async function retireBuiltinRules(): Promise<void> {
   const dir = path.join(plat().homeDir(), '.grok', 'rules');
-  for (const name of [BROWSER_RULE_FILE, WRAP_UP_RULE_FILE]) {
-    for (const fileName of [name, `${name}.disabled`]) {
-      try {
-        await plat().deleteFile(path.join(dir, fileName), true);
-      } catch {
-        // Already gone.
-      }
+  for (const fileName of [BROWSER_RULE_FILE, `${BROWSER_RULE_FILE}.disabled`, `${WRAP_UP_RULE_FILE}.disabled`]) {
+    try {
+      await plat().deleteFile(path.join(dir, fileName), true);
+    } catch {
+      // Already gone.
     }
   }
+  await ensureWrapUpRule();
+}
+
+export async function ensureWrapUpRule(): Promise<void> {
+  const file = wrapUpRulePath(plat().homeDir());
+  const next = Buffer.from(WRAP_UP_NOTE, 'utf8');
+  try {
+    const current = Buffer.from(await plat().readFile(file));
+    if (current.equals(next)) {
+      return;
+    }
+  } catch {
+    // Missing.
+  }
+  await plat().writeFile(file, next);
 }
 
 const WRAP_UP_MARK = '# OpenGrok wrap-up';
@@ -30,17 +43,19 @@ export const WRAP_UP_NOTE = `${WRAP_UP_MARK}
 
 Write like Codex. Do not glue the whole answer into one paragraph.
 
-- As soon as you know the cause, say it. Do not wait until every edit is done.
+- The cause belongs in the assistant reply, never in thinking or reasoning.
+- Do not state a cause, a finished fix, or a recap until you have actually found it in the code or in tool output.
+- Once it is found, write it in the conversation. Do not wait until every edit is done, and do not leave it only in thinking.
 - Use short paragraphs and indented bullets. Break lines after each point.
-- Mark files/folders with a leading @ so they become chips: \`@Foo.java\` or \`@plugin/src/foo.ts\`.
-- Methods/variables: \`@name (line 12)\`. Ordinary code stays in backticks without @.
-- Do not mark fractions, versions, or prose (1/5, 正确率, v0.5.3 stay as text).
+- Mark a file or folder only as @File:"path", for example @File:"plugin/src/foo.ts".
+- Mark a method only as @Line:"name(line 12)", for example @Line:"updateTarget(line 12)".
+- Do not use a bare @path. Fractions, versions, and ordinary words stay plain text.
 - Skip this recap for greetings or simple Q&A.
 
-After real work, end with:
-1. What changed and why (cause first).
+After real work, end the reply with:
+1. What changed and why (the cause you found).
 2. Bullets of concrete effects.
-3. Real file paths prefixed with @, one per line, e.g. \`@path/to/artifact.jar\`.
+3. Real file chips, one per line, e.g. @File:"path/to/artifact.jar".
 `;
 
 export function wrapUpRulePath(homeDir: string): string {

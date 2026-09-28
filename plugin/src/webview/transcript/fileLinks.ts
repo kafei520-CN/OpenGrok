@@ -142,8 +142,8 @@ export function fileLinkHtml(pathOrRef: string | CodeRef, label?: string): strin
 }
 
 export function linkInlineFilePaths(text: string, stash: (html: string) => string): string {
-  return text.replace(MARKED_RE, (full, prefix: string, token: string) => {
-    const ref = parseCodeRef(token);
+  return text.replace(MARKED_RE, (full, prefix: string, kind: string, body: string) => {
+    const ref = kind.toLowerCase() === 'line' ? parseQuotedLine(body) : parseQuotedFile(body);
     if (!ref) {
       return full;
     }
@@ -151,9 +151,60 @@ export function linkInlineFilePaths(text: string, stash: (html: string) => strin
   });
 }
 
-/** True when the token was explicitly marked with a leading @. */
+/** True only for `@File:"path"` or `@Line:"name(line 12)"`. */
 export function isMarkedFileRef(raw: string): boolean {
-  return raw.trim().startsWith('@');
+  return parseExplicitCodeRef(raw) !== undefined;
+}
+
+/** Conversation chips. Bare `@path` and `@name (line N)` stay text. */
+export function parseExplicitCodeRef(raw: string): CodeRef | undefined {
+  const match = raw.trim().match(/^@(File|Line):"([^"]*)"$/i);
+  if (!match) {
+    return undefined;
+  }
+  return match[1].toLowerCase() === 'line' ? parseQuotedLine(match[2]) : parseQuotedFile(match[2]);
+}
+
+function parseQuotedFile(body: string): CodeRef | undefined {
+  let text = body.trim();
+  if (!text || text.length > 320 || /^(https?:|mailto:|data:)/i.test(text)) {
+    return undefined;
+  }
+  let line: number | undefined;
+  const lined = text.match(LINE_TAIL);
+  if (lined && lined.index !== undefined) {
+    line = Number(lined[1]);
+    text = text.slice(0, lined.index).trim();
+  }
+  if (!text) {
+    return undefined;
+  }
+  const norm = text.replace(/\\/g, '/');
+  if (isNumericPath(norm)) {
+    return undefined;
+  }
+  if (hasFileExt(text) || /^[A-Za-z]:[\\/]/.test(text) || /[/\\]/.test(text) || /^\.\.?[\\/]/.test(text)) {
+    if (!hasFileExt(text) && /[/\\]/.test(text)) {
+      const folder = text.replace(/[/\\]+$/, '').replace(/\\/g, '/');
+      return { kind: 'folder', name: fileName(folder), path: `${folder}/` };
+    }
+    if (hasFileExt(text) || /^[A-Za-z]:[\\/]/.test(text)) {
+      return { kind: 'file', name: fileName(text), path: text, line };
+    }
+  }
+  return undefined;
+}
+
+function parseQuotedLine(body: string): CodeRef | undefined {
+  const lined = body.trim().match(/^(.+?)\s*\(\s*line\s+(\d+)\s*\)$/i);
+  if (!lined) {
+    return undefined;
+  }
+  const name = lined[1].trim();
+  if (!name || !/^[\p{L}_$][\p{L}\p{N}_$.]*$/u.test(name)) {
+    return undefined;
+  }
+  return { kind: 'symbol', name, line: Number(lined[2]) };
 }
 
 function looksLikeFolderToken(text: string): boolean {
@@ -235,6 +286,5 @@ function extOf(path: string): string {
   return base.slice(dot + 1).toLowerCase();
 }
 
-/** Only `@path`, `@name.ext`, and `@name (line N)` become chips in prose. */
-const MARKED_RE =
-  /(^|[\s([{（【])@([^\s<>"'`()]+(?:\s*\(\s*line\s+\d+\s*\))?)/g;
+/** Only `@File:"path"` and `@Line:"name(line 12)"` become chips in prose. */
+const MARKED_RE = /(^|[\s([{（【])@(File|Line):"([^"]*)"/gi;

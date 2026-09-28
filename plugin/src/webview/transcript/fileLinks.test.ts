@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { fileLinkHtml, linkInlineFilePaths, looksLikeInlinePath, parseCodeRef } from './fileLinks';
+import {
+  fileLinkHtml,
+  linkInlineFilePaths,
+  looksLikeInlinePath,
+  parseCodeRef,
+  parseExplicitCodeRef,
+} from './fileLinks';
 
 describe('inline file links', () => {
   it('accepts windows, unix, and repo-relative paths', () => {
@@ -58,15 +64,19 @@ describe('inline file links', () => {
     assert.match(html, /file-icons/);
   });
 
-  it('stashes only @-marked paths and leaves surrounding text', () => {
+  it('stashes only quoted @File and @Line markers', () => {
     const slots: string[] = [];
     const stash = (html: string) => {
       slots.push(html);
       return `\u0000${slots.length - 1}\u0000`;
     };
-    const next = linkInlineFilePaths('see @plugin/src/foo.ts please', stash);
+    const next = linkInlineFilePaths('see @File:"plugin/src/foo.ts" please', stash);
     assert.equal(next, `see \u00000\u0000 please`);
     assert.match(slots[0] ?? '', /foo\.ts/);
+    const line = linkInlineFilePaths('call @Line:"updateTarget(line 12)" now', stash);
+    assert.match(line, /1/);
+    assert.match(slots[1] ?? '', /data-line="12"/);
+    assert.equal(linkInlineFilePaths('see @plugin/src/foo.ts and 1/5 and @File:"1/5"', stash), 'see @plugin/src/foo.ts and 1/5 and @File:"1/5"');
   });
 
   it('does not treat fractions or unmarked paths as files', () => {
@@ -82,12 +92,15 @@ describe('inline file links', () => {
     assert.equal(looksLikeInlinePath('1/5'), false);
   });
 
-  it('parses a leading @ marker then strips it from the chip path', () => {
-    const ref = parseCodeRef('@plugin/src/foo.ts');
+  it('parses quoted markers and leaves bare @ paths as text', () => {
+    const ref = parseExplicitCodeRef('@File:"plugin/src/foo.ts"');
     assert.equal(ref?.kind, 'file');
     assert.equal(ref?.path, 'plugin/src/foo.ts');
-    const html = fileLinkHtml('@RopePhysics.java (line 268)');
-    assert.match(html, /data-path="RopePhysics.java"/);
-    assert.doesNotMatch(html, /@RopePhysics/);
+    const line = parseExplicitCodeRef('@Line:"tightenShortenedSegments(line 228)"');
+    assert.equal(line?.kind, 'symbol');
+    assert.equal(line?.line, 228);
+    assert.equal(parseExplicitCodeRef('@plugin/src/foo.ts'), undefined);
+    assert.equal(parseExplicitCodeRef('@Line:"DAMPING = 0.965"'), undefined);
+    assert.equal(parseExplicitCodeRef('@File:"hello"'), undefined);
   });
 });
