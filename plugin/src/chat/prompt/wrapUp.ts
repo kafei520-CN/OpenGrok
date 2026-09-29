@@ -43,9 +43,10 @@ export const WRAP_UP_NOTE = `${WRAP_UP_MARK}
 
 Write like Codex. Do not glue the whole answer into one paragraph.
 
-- The cause belongs in the assistant reply, never in thinking or reasoning.
+- Keep the reasoning process in thinking. The panel shows that text.
+- The cause, the result, and file chips belong in the assistant reply. Do not leave them only in thinking.
 - Do not state a cause, a finished fix, or a recap until you have actually found it in the code or in tool output.
-- Once it is found, write it in the conversation. Do not wait until every edit is done, and do not leave it only in thinking.
+- Once it is found, write it in the conversation as well. Do not wait until every edit is done.
 - Use short paragraphs and indented bullets. Break lines after each point.
 - Mark a file or folder only as @File:"path", for example @File:"plugin/src/foo.ts".
 - Mark a method only as @Line:"name(line 12)", for example @Line:"updateTarget(line 12)".

@@ -917,6 +917,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.setStatus('streaming');
     try {
       await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) }, sid);
+      if (this.runBelongs(sid, run)) {
+        await this.drainInbound(sid, () => this.runBelongs(sid, run));
+      }
     } catch (error) {
       if (!this.runBelongs(sid, run) || this.settledRuns.has(run)) {
         return;
@@ -1401,6 +1404,30 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.emit();
     } catch (error) {
       logWarn(`adopt sessions: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+
+  /** prompt 的 RPC 返回后，stdout 里可能还有一截没喂进来。先等它落地再结束回合。 */
+  private async drainInbound(sid: string | undefined, still: () => boolean): Promise<void> {
+    const quietMs = 120;
+    const capMs = 800;
+    const start = Date.now();
+    let quietFrom = start;
+    while (Date.now() - start < capMs) {
+      if (!still()) {
+        return;
+      }
+      await sleep(40);
+      const seen = sid ? (this.lastSessionActivityAt.get(sid) ?? 0) : 0;
+      if (seen > quietFrom) {
+        quietFrom = seen;
+      }
+      if (Date.now() - quietFrom >= quietMs) {
+        break;
+      }
+    }
+    if (still() && this.status === 'streaming') {
+      this.emit();
     }
   }
 
@@ -3004,6 +3031,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (run !== this.runGen) {
       return;
     }
+    await this.drainInbound(this.currentSessionId, () => run === this.runGen);
+    if (run !== this.runGen) {
+      return;
+    }
     this.endStreaming('done');
   }
 
@@ -3113,7 +3144,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!isReplay) {
       const settledRun = this.settledRunBySession.get(id);
       const claim = this.promptRuns.get(id);
-      if (settledRun !== undefined && (!claim || claim.run === settledRun)) {
+      const live =
+        (id === this.currentSessionId && this.status === 'streaming') ||
+        this.parked.get(id)?.status === 'streaming';
+      if (!live && settledRun !== undefined && (!claim || claim.run === settledRun)) {
         return;
       }
       this.lastSessionActivityAt.set(id, Date.now());

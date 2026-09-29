@@ -92,6 +92,8 @@ export class GrokAgent {
       env: {
         ...process.env,
         GROK_NO_AUTO_UPDATE: '1',
+        // 1.0.44 的标准档是 256k。锁住本次进程，远程目录不能把它降回 256k。
+        GROK_DEBUG_CONTEXT_WINDOW: process.env.GROK_DEBUG_CONTEXT_WINDOW?.trim() || '500000',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,

@@ -89,7 +89,7 @@ function endpointForm(): HTMLElement {
   urlWarn.hidden = true;
   url.append(urlHint, urlPreview, urlWarn);
   const windowRow = field(tr('settingsApisWindow'), 'text', 'api-window');
-  windowRow.querySelector('input')!.placeholder = '128k';
+  windowRow.querySelector('input')!.placeholder = '500k';
   const windowHint = document.createElement('div');
   windowHint.className = 'settings-hint';
   windowHint.textContent = tr('settingsApisWindowHint');

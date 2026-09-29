@@ -293,7 +293,7 @@ export function upsertStoredEndpoint(
       input.apiKey?.trim() ||
       (input.apiKey === '' ? undefined : existing?.apiKey),
     enabled: input.enabled ?? existing?.enabled ?? true,
-    contextWindow: input.contextWindow,
+    contextWindow: input.contextWindow ?? existing?.contextWindow ?? 500_000,
   };
   if (!existing) {
     return { rows: [...rows, saved], saved };
@@ -656,10 +656,10 @@ function serializeTable(id: string, input: ApiEndpointInput, existing?: ModelTab
     `reasoning_efforts = ${efforts}`,
   ];
   const window =
-    input.contextWindow ?? parseStoredWindow(existing?.values['context_window']);
-  if (window) {
-    rows.push(`context_window = ${window}`);
-  }
+    input.contextWindow ??
+    parseStoredWindow(existing?.values['context_window']) ??
+    500_000;
+  rows.push(`context_window = ${window}`);
   if (key) {
     rows.push(`api_key = ${tomlString(key)}`);
   }

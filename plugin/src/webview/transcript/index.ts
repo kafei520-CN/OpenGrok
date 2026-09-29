@@ -548,14 +548,28 @@ function patchWorkBody(body: HTMLElement | null, message: ChatMessage): void {
     return;
   }
   const streaming = Boolean(message.streaming);
-  // 思考原文会在动手前写成「已经改完」。面板只留计划和工具。
-  body.querySelector('.md.thinking')?.remove();
+  if (message.thinking) {
+    let think = body.querySelector('.md.thinking') as HTMLElement | null;
+    if (!think) {
+      think = document.createElement('div');
+      think.className = 'md thinking';
+      body.prepend(think);
+    }
+    setMarkdown(think, message.thinking, streaming);
+  } else {
+    body.querySelector('.md.thinking')?.remove();
+  }
   if (message.plan) {
     let plan = body.querySelector('.md.plan') as HTMLElement | null;
     if (!plan) {
       plan = document.createElement('div');
       plan.className = 'md plan';
-      body.prepend(plan);
+      const think = body.querySelector('.md.thinking');
+      if (think) {
+        think.after(plan);
+      } else {
+        body.prepend(plan);
+      }
     }
     setMarkdown(plan, message.plan, streaming);
   }
@@ -626,7 +640,7 @@ function setMarkdown(el: HTMLElement, src: string, streaming: boolean): void {
     timer: setTimeout(() => {
       const next = pendingMarkdown.get(el);
       pendingMarkdown.delete(el);
-      if (next) {
+      if (next && el.dataset.md !== 'd') {
         flush(next.src, 's');
       }
     }, delay),
@@ -1341,9 +1355,12 @@ function hasWork(message: ChatMessage): boolean {
   return Boolean(message.thinking || message.plan || message.tools.length);
 }
 
-/** 只有出现计划或工具才展开。光有思考原文时保持收起。 */
+/** 生成中有思考原文、计划或工具时展开，让思考原文留在面板里。 */
 function workShouldOpen(message: ChatMessage): boolean {
-  return Boolean(message.streaming && (message.tools.length > 0 || visibleSteps(message).length > 0));
+  return Boolean(
+    message.streaming &&
+      (message.thinking || message.plan || message.tools.length > 0 || visibleSteps(message).length > 0),
+  );
 }
 
 function thinkingWork(root: ParentNode): HTMLDetailsElement | null {

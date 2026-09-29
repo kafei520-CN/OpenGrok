@@ -8,7 +8,8 @@ describe('wrap-up instruction', () => {
     assert.match(WRAP_UP_NOTE, /Write like Codex/);
     assert.match(WRAP_UP_NOTE, /@File:"path\/to\/artifact\.jar"/);
     assert.match(WRAP_UP_NOTE, /@Line:"updateTarget\(line 12\)"/);
-    assert.match(WRAP_UP_NOTE, /never in thinking/);
+    assert.match(WRAP_UP_NOTE, /only in thinking/);
+    assert.match(WRAP_UP_NOTE, /panel shows that text/);
     assert.match(WRAP_UP_NOTE, /actually found it/);
     assert.doesNotMatch(WRAP_UP_NOTE, /As soon as you know the cause/);
     assert.equal(

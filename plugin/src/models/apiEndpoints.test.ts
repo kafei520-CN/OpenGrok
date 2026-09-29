@@ -328,6 +328,23 @@ describe('api endpoint store', () => {
     assert.match(toml, /context_window = 128000/);
   });
 
+  it('defaults a blank context window to 500k', () => {
+    const toml = upsertModelEndpoint('', {
+      name: 'Local',
+      model: 'llama',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      backend: 'chat_completions',
+    });
+    assert.match(toml, /context_window = 500000/);
+    const saved = upsertStoredEndpoint([], {
+      name: 'Local',
+      model: 'llama',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      backend: 'chat_completions',
+    });
+    assert.equal(saved.saved.contextWindow, 500_000);
+  });
+
   it('keeps every saved endpoint in the plugin list', () => {
     const first = upsertStoredEndpoint([], {
       name: '[La]GPT-5.6-Terra',
