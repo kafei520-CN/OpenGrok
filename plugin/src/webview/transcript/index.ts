@@ -11,10 +11,10 @@ import type {
   PermissionPrompt,
   PlanStep,
 } from '../../core/types';
-import { copyText, loc, post, render, tr, ui } from '../app';
+import { copyText, isDesktop, loc, post, render, tr, ui } from '../app';
 import { bindHoverPin } from '../chrome/popover';
 import { patchJumpBottom } from '../chrome/composer';
-import { onUserScroll, shouldPinToBottom, type TranscriptScroll } from '../chrome/scroll';
+import { shouldPinToBottom, stickFromScroll, type TranscriptScroll } from '../chrome/scroll';
 import { bootStar, errorCard, home, loginCard, panel, setupCard } from '../chrome';
 import { superGrokKind } from '../shell/superGrokMark';
 import { button, iconButton } from '../dom';
@@ -29,6 +29,7 @@ import {
   iconFork,
   iconRewind,
   iconStar,
+  grokBootMark,
   toolIcon,
 } from '../icons';
 import {
@@ -48,6 +49,10 @@ import {
 } from './historyPaint';
 import { fireOgPatch } from '../ogPlugins';
 import { post } from '../app';
+import { openInDockBrowser, revealSteps } from '../shell/toolsDock';
+import { traceBeats, type TurnBeat } from '../../session/traceBeats';
+import { fileIconSvg } from './fileIcons';
+import { takeHeroFiles } from './fileLinks';
 
 type Turn = { user?: ChatMessage; assistant?: ChatMessage };
 
@@ -184,6 +189,7 @@ function fillBody(el: HTMLElement): void {
       transcript.append(askBar());
     }
     el.append(transcript);
+    revealSteps(ui.state.messages);
   }
   if (ui.state.error && status === 'error') {
     el.append(errorBanner(ui.state.error));
@@ -201,12 +207,14 @@ function patchTranscript(): void {
     transcript.dataset.sid === (ui.state.currentSessionId ?? '') &&
     patchLastStreamingTurn(transcript)
   ) {
+    revealSteps(ui.state.messages);
     scrollTranscript();
     syncWorkClock();
     return;
   }
   syncTranscript(transcript);
   dockPrompts(transcript);
+  revealSteps(ui.state.messages);
   scrollTranscript();
   syncWorkClock();
 }
@@ -327,19 +335,19 @@ function syncTurnNode(node: HTMLElement, turn: Turn, split: boolean): void {
     patchStreamingTurn(node, turn);
     return;
   }
-  if (turn.assistant && thinkingWork(node)?.classList.contains('live')) {
-    ui.workOpen.set(turn.assistant.id, false);
+  if (turn.assistant && !turn.assistant.streaming) {
+    node.querySelector('.trace.live')?.classList.remove('live');
   }
   const sig = turnSig(turn, split);
   if (node.dataset.sig !== sig) {
     node.replaceWith(turnEl(turn, split));
-  } else if (turn.assistant && visibleSteps(turn.assistant).length && !node.querySelector('.steps-card')) {
+  } else if (
+    !isDesktop() &&
+    turn.assistant &&
+    visibleSteps(turn.assistant).length &&
+    !node.querySelector('.steps-card')
+  ) {
     node.replaceWith(turnEl(turn, split));
-  } else if (turn.assistant && ui.workOpen.get(turn.assistant.id) === false) {
-    const work = thinkingWork(node);
-    if (work?.open) {
-      work.open = false;
-    }
   }
 }
 
@@ -380,7 +388,7 @@ function prependOlder(transcript: HTMLElement, limit: number): boolean {
   } else {
     transcript.append(frag);
   }
-  transcript.scrollTop = Math.max(0, transcript.scrollHeight - fromBottom);
+  assignScrollTop(transcript, transcript.scrollHeight - fromBottom);
   fireOgPatch();
   return true;
 }
@@ -403,9 +411,7 @@ function queueViewportFill(transcript: HTMLElement): void {
       return;
     }
     if (transcript.scrollHeight > transcript.clientHeight + 8) {
-      if (ui.stickToBottom) {
-        pinTranscript(transcript);
-      }
+      schedulePin();
       return;
     }
     if (!prependOlder(transcript, HISTORY_SLICE_TURNS)) {
@@ -413,9 +419,7 @@ function queueViewportFill(transcript: HTMLElement): void {
         requestHostOlder();
         return;
       }
-      if (ui.stickToBottom) {
-        pinTranscript(transcript);
-      }
+      schedulePin();
       return;
     }
     historyPaintRaf = requestAnimationFrame(run);
@@ -497,31 +501,19 @@ function patchStreamingTurn(node: HTMLElement, turn: Turn): void {
     node.replaceWith(turnEl(turn, false));
     return;
   }
-  if (visibleSteps(assistant).length && !col.querySelector('.steps-card')) {
-    patchStepsCard(col, assistant);
-  }
   if (hasWork(assistant)) {
-    let work = thinkingWork(col);
-    if (!work) {
-      work = workBlock(assistant);
-      col.prepend(work);
+    let trace = col.querySelector('.trace');
+    if (!(trace instanceof HTMLElement)) {
+      trace = traceBlock(assistant);
+      col.prepend(trace);
     } else {
-      work.className = assistant.streaming ? 'work live' : 'work';
-      const mark = work.querySelector('summary .mark');
-      if (mark) {
-        mark.className = assistant.streaming ? 'mark pulse' : 'mark';
+      const nextClass = assistant.streaming ? 'trace live' : 'trace';
+      if (trace.className !== nextClass) {
+        trace.className = nextClass;
       }
-      const label = work.querySelector('summary .work-label');
-      if (label) {
-        label.textContent = workLabel(assistant);
-      }
-      if (!ui.workOpen.has(assistant.id) && workShouldOpen(assistant)) {
-        work.open = true;
-      }
-      if (work.open) {
-        patchWorkBody(work.querySelector('.work-body') as HTMLElement | null, assistant);
-      }
+      patchTrace(trace, assistant);
     }
+    col.querySelector('details.work')?.remove();
     col.querySelector('.pulse')?.remove();
   }
   if (assistant.text) {
@@ -529,68 +521,390 @@ function patchStreamingTurn(node: HTMLElement, turn: Turn): void {
     if (!answer) {
       answer = document.createElement('div');
       answer.className = 'md answer';
-      const work = thinkingWork(col);
-      if (work) {
-        work.after(answer);
+      const trace = col.querySelector('.trace');
+      if (trace) {
+        trace.after(answer);
       } else {
         col.prepend(answer);
       }
     }
-    setMarkdown(answer, assistant.text, Boolean(assistant.streaming));
+    paintAnswer(answer, assistant);
     col.querySelector('.pulse')?.remove();
   }
+  const liveTrace = col.querySelector('.trace');
+  if (liveTrace instanceof HTMLElement) {
+    syncElapsed(liveTrace, assistant);
+  }
   patchErrorCard(col, assistant);
-  patchStepsCard(col, assistant);
+  placeSteps(col, assistant);
 }
 
-function patchWorkBody(body: HTMLElement | null, message: ChatMessage): void {
-  if (!body) {
-    return;
-  }
-  const streaming = Boolean(message.streaming);
-  if (message.thinking) {
-    let think = body.querySelector('.md.thinking') as HTMLElement | null;
-    if (!think) {
-      think = document.createElement('div');
-      think.className = 'md thinking';
-      body.prepend(think);
+function traceBlock(message: ChatMessage): HTMLElement {
+  const el = document.createElement('div');
+  el.className = message.streaming ? 'trace live' : 'trace';
+  el.dataset.mid = message.id;
+  const beats = document.createElement('div');
+  beats.className = 'trace-beats';
+  el.append(beats);
+  patchTrace(el, message);
+  return el;
+}
+
+function finishedWork(message: ChatMessage, trace: HTMLElement): HTMLElement {
+  const details = document.createElement('details');
+  details.className = 'work';
+  details.open = ui.workOpen.get(message.id) ?? false;
+  details.addEventListener('toggle', (event) => {
+    if (!event.isTrusted) {
+      return;
     }
-    setMarkdown(think, message.thinking, streaming);
-  } else {
-    body.querySelector('.md.thinking')?.remove();
+    ui.workOpen.set(message.id, details.open);
+  });
+  const summary = document.createElement('summary');
+  const label = document.createElement('span');
+  label.className = 'work-label';
+  const time = turnElapsed(message);
+  label.textContent = time ? tr('elapsed', { time }) : tr('thinking');
+  summary.append(label);
+  details.append(summary, trace);
+  return details;
+}
+
+function liveFoot(): HTMLElement {
+  const foot = document.createElement('div');
+  foot.className = 'trace-live-foot';
+  foot.hidden = true;
+  const mark = document.createElement('span');
+  mark.className = 'trace-live-mark';
+  mark.innerHTML = grokBootMark();
+  const time = document.createElement('span');
+  time.className = 'trace-live-time';
+  foot.append(mark, time);
+  return foot;
+}
+
+function beatHost(trace: HTMLElement): HTMLElement {
+  const found = trace.querySelector(':scope > .trace-beats');
+  if (found instanceof HTMLElement) {
+    return found;
   }
-  if (message.plan) {
-    let plan = body.querySelector('.md.plan') as HTMLElement | null;
-    if (!plan) {
-      plan = document.createElement('div');
-      plan.className = 'md plan';
-      const think = body.querySelector('.md.thinking');
-      if (think) {
-        think.after(plan);
-      } else {
-        body.prepend(plan);
+  const host = document.createElement('div');
+  host.className = 'trace-beats';
+  trace.append(host);
+  return host;
+}
+
+function patchTrace(trace: HTMLElement, message: ChatMessage): void {
+  const host = beatHost(trace);
+  const beats = traceBeats(message);
+  const plan = message.plan?.trim() ?? '';
+  const keys = beats.map((beat, index) => beatKey(beat, index));
+  if (plan) {
+    keys.push('plan');
+  }
+  const children = [...host.children] as HTMLElement[];
+  const same =
+    children.length === keys.length && children.every((node, index) => node.dataset.beat === keys[index]);
+  if (!same) {
+    const pool = new Map(children.map((node) => [node.dataset.beat ?? '', node]));
+    const frag = document.createDocumentFragment();
+    beats.forEach((beat, index) => {
+      const key = beatKey(beat, index);
+      const node = pool.get(key) ?? createBeat(beat, message);
+      node.dataset.beat = key;
+      updateBeat(node, beat, message);
+      frag.append(node);
+    });
+    if (plan) {
+      const node = pool.get('plan') ?? createPlanBeat();
+      node.dataset.beat = 'plan';
+      const copy = node.querySelector('.trace-copy');
+      if (copy instanceof HTMLElement) {
+        setMarkdown(copy, plan, Boolean(message.streaming));
+      }
+      frag.append(node);
+    }
+    host.replaceChildren(frag);
+  } else {
+    beats.forEach((beat, index) => {
+      const node = children[index];
+      if (node) {
+        updateBeat(node, beat, message);
+      }
+    });
+    if (plan) {
+      const copy = children[beats.length]?.querySelector('.trace-copy');
+      if (copy instanceof HTMLElement) {
+        setMarkdown(copy, plan, Boolean(message.streaming));
       }
     }
-    setMarkdown(plan, message.plan, streaming);
   }
-  const rows = new Map<string, HTMLElement>();
-  for (const node of body.querySelectorAll('.tool-row')) {
-    if (node instanceof HTMLElement && node.dataset.id) {
-      rows.set(node.dataset.id, node);
+  syncElapsed(trace, message);
+}
+
+function turnElapsed(message: ChatMessage): string {
+  if (!message.createdAt) {
+    return '';
+  }
+  const start = Date.parse(message.createdAt);
+  if (Number.isNaN(start)) {
+    return '';
+  }
+  const end = message.endedAt ? Date.parse(message.endedAt) : Date.now();
+  if (Number.isNaN(end)) {
+    return '';
+  }
+  const ms = Math.max(0, end - start);
+  if (message.streaming && ms < 1000) {
+    return '';
+  }
+  return formatDuration(ms);
+}
+
+function syncElapsed(trace: HTMLElement, message: ChatMessage): void {
+  const time = turnElapsed(message);
+  const live = Boolean(message.streaming);
+  const foot = placeLiveFoot(trace, live);
+  if (foot instanceof HTMLElement) {
+    foot.hidden = !live;
+    const label = foot.querySelector('.trace-live-time');
+    if (label) {
+      label.textContent = time ? tr('elapsedLive', { time }) : tr('thinkingNow');
     }
   }
-  for (const tool of message.tools) {
-    let row = rows.get(tool.id);
-    if (!row) {
-      body.append(toolRow(tool));
-      continue;
+}
+
+function placeLiveFoot(trace: HTMLElement, live: boolean): HTMLElement | null {
+  const col = trace.closest('.msg.assistant');
+  if (!(col instanceof HTMLElement)) {
+    return null;
+  }
+  trace.querySelector(':scope > .trace-live-foot')?.remove();
+  let foot = col.querySelector(':scope > .trace-live-foot');
+  if (!live) {
+    foot?.remove();
+    return null;
+  }
+  if (!(foot instanceof HTMLElement)) {
+    foot = liveFoot();
+  }
+  if (foot.parentElement !== col || col.lastElementChild !== foot) {
+    col.append(foot);
+  }
+  return foot;
+}
+
+function beatKey(beat: TurnBeat, index: number): string {
+  if (beat.kind === 'tool') {
+    return `tool:${beat.id}`;
+  }
+  if (beat.kind === 'task') {
+    return `task:${index}:${beat.phase}:${beat.id}`;
+  }
+  return `think:${index}`;
+}
+
+function createBeat(beat: TurnBeat, message: ChatMessage): HTMLElement {
+  if (beat.kind === 'task') {
+    return createTaskBeat();
+  }
+  if (beat.kind === 'tool') {
+    const tool = message.tools.find((item) => item.id === beat.id);
+    return tool ? createToolBeat(tool) : createThinkBeat();
+  }
+  return createThinkBeat();
+}
+
+function createTaskBeat(): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'trace-item trace-task';
+  const mark = document.createElement('span');
+  mark.className = 'trace-mark';
+  mark.innerHTML =
+    '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3.2 4.6h1.1M6.2 4.6h6.4M3.2 8h1.1M6.2 8h6.4M3.2 11.4h1.1M6.2 11.4h6.4"/></svg>';
+  const label = document.createElement('span');
+  label.className = 'trace-task-label';
+  row.append(mark, label);
+  return row;
+}
+
+function taskLabel(beat: Extract<TurnBeat, { kind: 'task' }>): string {
+  const name = beat.phase === 'completed' ? tr('taskCompleted') : tr('taskStarted');
+  return `${name} ${beat.text}`;
+}
+
+function createThinkBeat(): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'trace-item trace-think';
+  const mark = document.createElement('span');
+  mark.className = 'trace-mark';
+  mark.innerHTML = iconClock();
+  const copy = document.createElement('div');
+  copy.className = 'trace-copy md thinking';
+  row.append(mark, copy);
+  return row;
+}
+
+function createPlanBeat(): HTMLElement {
+  const row = createThinkBeat();
+  row.classList.add('trace-plan');
+  return row;
+}
+
+function createToolBeat(tool: ChatMessage['tools'][number]): HTMLElement {
+  const row = document.createElement('div');
+  row.className = `trace-item trace-tool tool-row ${tool.status}`;
+  row.dataset.id = tool.id;
+  if (tool.kind) {
+    row.dataset.kind = tool.kind;
+  }
+  const mark = document.createElement('span');
+  mark.className = 'trace-mark';
+  paintToolMark(mark, tool);
+  const main = document.createElement('div');
+  main.className = 'trace-main';
+  const head = document.createElement('button');
+  head.type = 'button';
+  head.className = 'trace-tool-head';
+  const name = document.createElement('span');
+  name.className = 'trace-tool-name';
+  const chevron = document.createElement('span');
+  chevron.className = 'trace-chevron';
+  chevron.innerHTML = iconChevron();
+  head.append(name, chevron);
+  head.addEventListener('click', () => {
+    const next = !row.classList.contains('open');
+    ui.termOpen.set(tool.id, next);
+    row.classList.toggle('open', next);
+    const body = row.querySelector('.trace-tool-body');
+    if (body instanceof HTMLElement) {
+      body.hidden = !next;
+      if (next) {
+        const live = ui.state.messages.flatMap((item) => item.tools).find((item) => item.id === tool.id);
+        if (live) {
+          fillToolBody(body, live);
+          row.dataset.sig = toolRowSig(live);
+        }
+      }
     }
-    const sig = toolRowSig(tool);
-    if (row.dataset.sig === sig) {
-      paintTermElapsed(row, tool);
-      continue;
+  });
+  const body = document.createElement('div');
+  body.className = 'trace-tool-body';
+  main.append(head, body);
+  row.append(mark, main);
+  return row;
+}
+
+function updateBeat(node: HTMLElement, beat: TurnBeat, message: ChatMessage): void {
+  if (beat.kind === 'think') {
+    const copy = node.querySelector('.trace-copy');
+    if (copy instanceof HTMLElement) {
+      setMarkdown(copy, beat.text, Boolean(message.streaming));
     }
-    row.replaceWith(toolRow(tool));
+    return;
+  }
+  if (beat.kind === 'task') {
+    const label = node.querySelector('.trace-task-label');
+    if (label) {
+      label.textContent = taskLabel(beat);
+    }
+    return;
+  }
+  const tool = message.tools.find((item) => item.id === beat.id);
+  if (!tool) {
+    return;
+  }
+  node.className = `trace-item trace-tool tool-row ${tool.status}${toolHasBody(tool) ? '' : ' bare'}`;
+  node.dataset.id = tool.id;
+  if (tool.kind) {
+    node.dataset.kind = tool.kind;
+  }
+  const mark = node.querySelector('.trace-mark');
+  if (mark instanceof HTMLElement) {
+    paintToolMark(mark, tool);
+  }
+  const name = node.querySelector('.trace-tool-name');
+  if (name) {
+    name.textContent = toolHead(tool);
+  }
+  const open = toolOpen(tool) && toolHasBody(tool);
+  node.classList.toggle('open', open);
+  const body = node.querySelector('.trace-tool-body');
+  if (!(body instanceof HTMLElement)) {
+    return;
+  }
+  body.hidden = !open;
+  const sig = toolRowSig(tool);
+  if (node.dataset.sig !== sig) {
+    node.dataset.sig = sig;
+    if (open) {
+      fillToolBody(body, tool);
+    }
+  } else if (open) {
+    paintTermElapsed(node, tool);
+  }
+}
+
+function paintToolMark(mark: HTMLElement, tool: ChatMessage['tools'][number]): void {
+  const key = `${tool.status}|${tool.kind ?? ''}`;
+  if (mark.dataset.sig === key) {
+    return;
+  }
+  mark.dataset.sig = key;
+  if (tool.status === 'completed') {
+    mark.innerHTML = iconCheck();
+    mark.title = tr('toolOk');
+    return;
+  }
+  if (tool.status === 'failed') {
+    mark.innerHTML = iconClose();
+    mark.title = tr('toolFailed');
+    return;
+  }
+  mark.title = tr('toolRunning');
+  const glyph = toolIcon(tool.kind);
+  if (glyph.startsWith('<svg')) {
+    mark.innerHTML = glyph;
+    return;
+  }
+  mark.textContent = glyph;
+}
+
+function toolOpen(tool: ChatMessage['tools'][number]): boolean {
+  const saved = ui.termOpen.get(tool.id);
+  if (saved !== undefined) {
+    return saved;
+  }
+  return tool.status === 'in_progress' || tool.status === 'pending';
+}
+
+function toolHasBody(tool: ChatMessage['tools'][number]): boolean {
+  return isTermTool(tool) || Boolean(tool.detail) || Boolean(tool.output) || Boolean(tool.command);
+}
+
+function toolHead(tool: ChatMessage['tools'][number]): string {
+  const kind = toolKindLabel(loc(), tool.kind);
+  if (isTermTool(tool) || tool.kind === 'compact') {
+    return kind;
+  }
+  if (tool.detail) {
+    return `${kind} · ${fileName(tool.detail)}`;
+  }
+  return tool.title || kind;
+}
+
+function fillToolBody(body: HTMLElement, tool: ChatMessage['tools'][number]): void {
+  body.replaceChildren();
+  if (tool.detail && !isTermTool(tool)) {
+    const detail = document.createElement('button');
+    detail.className = 'tool-detail';
+    detail.type = 'button';
+    detail.textContent = tool.detail;
+    detail.addEventListener('click', () => post({ type: 'openFile', path: tool.detail! }));
+    body.append(detail);
+  }
+  if (isTermTool(tool)) {
+    body.append(termPreview(tool));
   }
 }
 
@@ -860,6 +1174,11 @@ const scrollState: TranscriptScroll = {
   pinLock: false,
 };
 
+let pinFrame = 0;
+let pinDepth = 0;
+let contentObserver: ResizeObserver | null = null;
+let childObserver: MutationObserver | null = null;
+
 function pinChatIfNeeded(): void {
   if (bodyKind(ui.state) !== 'chat') {
     return;
@@ -883,7 +1202,6 @@ export function scrollTranscript(force = false): void {
     scrollState.lastUserScroll = 0;
   }
   scrollState.stickToBottom = ui.stickToBottom;
-  scrollState.transcriptScroll = ui.transcriptScroll;
   if (
     !shouldPinToBottom({
       stickToBottom: ui.stickToBottom,
@@ -895,29 +1213,66 @@ export function scrollTranscript(force = false): void {
   ) {
     return;
   }
-  pinTranscript(el);
-  if (force) {
-    requestAnimationFrame(() => {
-      if (!ui.stickToBottom) {
-        return;
-      }
-      const node = document.getElementById('transcript');
-      if (node) {
-        pinTranscript(node);
-      }
-    });
+  schedulePin();
+}
+
+function holdPinLock(): void {
+  pinDepth += 1;
+  scrollState.pinLock = true;
+}
+
+function releasePinLock(): void {
+  requestAnimationFrame(() => {
+    pinDepth = Math.max(0, pinDepth - 1);
+    scrollState.pinLock = pinDepth > 0;
+  });
+}
+
+function assignScrollTop(el: HTMLElement, top: number): void {
+  const next = Math.max(0, top);
+  if (Math.abs(el.scrollTop - next) < 1) {
+    ui.transcriptScroll = el.scrollTop;
+    scrollState.transcriptScroll = el.scrollTop;
+    return;
   }
-  patchJumpBottom();
+  holdPinLock();
+  el.scrollTop = next;
+  ui.transcriptScroll = el.scrollTop;
+  scrollState.transcriptScroll = el.scrollTop;
+  releasePinLock();
 }
 
 function pinTranscript(el: HTMLElement): void {
-  scrollState.pinLock = true;
-  el.scrollTop = el.scrollHeight;
-  ui.transcriptScroll = el.scrollTop;
-  scrollState.transcriptScroll = el.scrollTop;
-  requestAnimationFrame(() => {
-    scrollState.pinLock = false;
+  assignScrollTop(el, el.scrollHeight);
+}
+
+function schedulePin(): void {
+  if (pinFrame) {
+    return;
+  }
+  pinFrame = requestAnimationFrame(() => {
+    pinFrame = 0;
+    const node = document.getElementById('transcript');
+    if (!node || node.classList.contains('catching-up')) {
+      return;
+    }
+    if (
+      !shouldPinToBottom({
+        stickToBottom: ui.stickToBottom,
+        lightbox: Boolean(ui.lightboxSrc),
+        now: Date.now(),
+        lastUserScroll: scrollState.lastUserScroll,
+      })
+    ) {
+      return;
+    }
+    pinTranscript(node);
+    patchJumpBottom();
   });
+}
+
+function noteHold(): void {
+  scrollState.lastUserScroll = Date.now();
 }
 
 function bindTranscriptScroll(el?: HTMLElement | null): void {
@@ -926,13 +1281,30 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
     return;
   }
   node.dataset.scrollBound = '1';
-  const markUser = () => {
-    scrollState.lastUserScroll = Date.now();
-    scrollState.stickToBottom = false;
-    ui.stickToBottom = false;
-  };
-  node.addEventListener('pointerdown', markUser, { passive: true });
-  node.addEventListener('wheel', markUser, { passive: true });
+  node.addEventListener(
+    'pointerdown',
+    () => {
+      let moved = false;
+      noteHold();
+      const move = () => {
+        moved = true;
+        noteHold();
+      };
+      const up = () => {
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        document.removeEventListener('pointercancel', up);
+        if (!moved) {
+          scrollState.lastUserScroll = 0;
+        }
+      };
+      document.addEventListener('pointermove', move);
+      document.addEventListener('pointerup', up);
+      document.addEventListener('pointercancel', up);
+    },
+    { passive: true },
+  );
+  node.addEventListener('wheel', noteHold, { passive: true });
   node.addEventListener(
     'keydown',
     (event) => {
@@ -945,7 +1317,7 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
         event.key === 'ArrowDown' ||
         event.key === ' '
       ) {
-        markUser();
+        noteHold();
       }
     },
     { passive: true },
@@ -953,10 +1325,7 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
   node.addEventListener(
     'scroll',
     () => {
-      if (scrollState.pinLock) {
-        return;
-      }
-      const next = onUserScroll(scrollState, Date.now(), {
+      const next = stickFromScroll(scrollState, {
         scrollTop: node.scrollTop,
         scrollHeight: node.scrollHeight,
         clientHeight: node.clientHeight,
@@ -964,7 +1333,6 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
       if (next === scrollState) {
         return;
       }
-      scrollState.lastUserScroll = next.lastUserScroll;
       scrollState.stickToBottom = next.stickToBottom;
       scrollState.transcriptScroll = next.transcriptScroll;
       ui.stickToBottom = next.stickToBottom;
@@ -987,6 +1355,39 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
     },
     { passive: true },
   );
+  watchTranscriptSize(node);
+}
+
+function watchTranscriptSize(node: HTMLElement): void {
+  contentObserver?.disconnect();
+  childObserver?.disconnect();
+  contentObserver = new ResizeObserver(() => {
+    schedulePin();
+  });
+  contentObserver.observe(node);
+  for (const child of node.children) {
+    if (child instanceof HTMLElement) {
+      contentObserver.observe(child);
+    }
+  }
+  childObserver = new MutationObserver((records) => {
+    if (!contentObserver) {
+      return;
+    }
+    for (const record of records) {
+      for (const removed of record.removedNodes) {
+        if (removed instanceof HTMLElement) {
+          contentObserver.unobserve(removed);
+        }
+      }
+      for (const added of record.addedNodes) {
+        if (added instanceof HTMLElement) {
+          contentObserver.observe(added);
+        }
+      }
+    }
+  });
+  childObserver.observe(node, { childList: true });
 }
 
 function turnId(turn: Turn): string {
@@ -1221,17 +1622,283 @@ function submitUserEdit(message: ChatMessage): void {
   scrollTranscript(true);
 }
 
+function paintAnswer(body: HTMLElement, message: ChatMessage): void {
+  const split = takeHeroFiles(message.text);
+  setMarkdown(body, split.body, Boolean(message.streaming));
+  const parent = body.parentElement;
+  if (!parent) {
+    return;
+  }
+  let cards = parent.querySelector(':scope > .hero-files');
+  if (!split.paths.length) {
+    cards?.remove();
+    return;
+  }
+  if (!(cards instanceof HTMLElement)) {
+    cards = document.createElement('div');
+    cards.className = 'hero-files';
+    body.after(cards);
+  }
+  const key = split.paths.join('\n');
+  if (cards.dataset.files === key) {
+    return;
+  }
+  cards.dataset.files = key;
+  cards.replaceChildren(...split.paths.map((path) => heroCard(path)));
+  const missing = split.paths.filter((path) => !heroAppNames.get(path)?.absolute && !/^https?:\/\//i.test(path));
+  if (missing.length) {
+    post({ type: 'heroApps', paths: missing });
+  }
+}
+
+const heroAppNames = new Map<string, { absolute: string; name: string }>();
+
+export function applyHeroApps(apps: Array<{ path?: string; absolute?: string; name?: string }>): void {
+  for (const app of apps) {
+    if (!app.path) {
+      continue;
+    }
+    heroAppNames.set(app.path, { absolute: app.absolute ?? '', name: app.name ?? '' });
+  }
+  for (const card of document.querySelectorAll<HTMLElement>('.hero-file')) {
+    const known = heroAppNames.get(card.dataset.path ?? '');
+    const label = card.querySelector('.hero-file-open-label');
+    const menuOpen = card.querySelector('.hero-file-menu-item');
+    const text = known?.name ? tr('heroOpenIn', { name: known.name }) : '';
+    if (label && text) {
+      label.textContent = text;
+    }
+    if (menuOpen && text) {
+      menuOpen.textContent = text;
+    }
+  }
+}
+
+function heroCard(path: string): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'hero-file';
+  card.dataset.path = path;
+  const icon = document.createElement('span');
+  icon.className = 'hero-deck';
+  const ext = extOfPath(path);
+  icon.append(deckSheet(), deckFace(fileIconSvg(heroIconExt(path, ext))));
+  const copy = document.createElement('div');
+  copy.className = 'hero-file-copy';
+  const filePath = document.createElement('div');
+  filePath.className = 'hero-file-path';
+  filePath.title = path;
+  filePath.textContent = shortPath(path);
+  const kind = document.createElement('div');
+  kind.className = 'hero-file-kind';
+  kind.textContent = heroKindLabel(heroKindOf(path));
+  copy.append(filePath, kind);
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'hero-file-open';
+  const openLabel = document.createElement('span');
+  openLabel.className = 'hero-file-open-label';
+  const known = heroAppNames.get(path);
+  openLabel.textContent = known?.name ? tr('heroOpenIn', { name: known.name }) : heroOpenLabel(ext);
+  open.append(openLabel);
+  open.addEventListener('click', (event) => {
+    event.stopPropagation();
+    post({ type: 'openFile', path });
+  });
+  const menuBtn = document.createElement('button');
+  menuBtn.type = 'button';
+  menuBtn.className = 'hero-file-menu-btn';
+  menuBtn.innerHTML = iconChevron();
+  const menu = document.createElement('div');
+  menu.className = 'hero-file-menu';
+  menu.hidden = true;
+  const openItem = document.createElement('button');
+  openItem.type = 'button';
+  openItem.className = 'hero-file-menu-item';
+  openItem.textContent = openLabel.textContent;
+  openItem.addEventListener('click', (event) => {
+    event.stopPropagation();
+    menu.hidden = true;
+    post({ type: 'openFile', path });
+  });
+  const revealItem = document.createElement('button');
+  revealItem.type = 'button';
+  revealItem.className = 'hero-file-menu-item';
+  revealItem.textContent = tr('heroReveal');
+  revealItem.addEventListener('click', (event) => {
+    event.stopPropagation();
+    menu.hidden = true;
+    post({ type: 'revealFile', path });
+  });
+  menu.append(openItem, revealItem);
+  menuBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const next = menu.hidden;
+    closeHeroMenus();
+    menu.hidden = !next;
+  });
+  const actions = document.createElement('div');
+  actions.className = 'hero-file-actions';
+  actions.append(open, menuBtn, menu);
+  ensureHeroMenuCloser();
+  card.addEventListener('click', () => openHero(path));
+  card.append(icon, copy, actions);
+  return card;
+}
+
+let heroMenuBound = false;
+
+function closeHeroMenus(): void {
+  for (const menu of document.querySelectorAll<HTMLElement>('.hero-file-menu')) {
+    menu.hidden = true;
+  }
+}
+
+function ensureHeroMenuCloser(): void {
+  if (heroMenuBound) {
+    return;
+  }
+  heroMenuBound = true;
+  document.addEventListener('click', () => closeHeroMenus());
+}
+
+function deckExpand(): HTMLElement {
+  const mark = document.createElement('span');
+  mark.className = 'hero-expand';
+  mark.innerHTML =
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 6V2.6H6M10 2.6h3.4V6M13.4 10v3.4H10M6 13.4H2.6V10"/></svg>';
+  return mark;
+}
+
+function deckSheet(): HTMLElement {
+  const sheet = document.createElement('span');
+  sheet.className = 'hero-sheet';
+  sheet.append(deckExpand());
+  return sheet;
+}
+
+function deckFace(svg: string): HTMLElement {
+  const face = document.createElement('span');
+  face.className = 'hero-face';
+  face.innerHTML = svg;
+  return face;
+}
+
+function openHero(path: string): void {
+  const kind = heroKindOf(path);
+  const absolute = heroAppNames.get(path)?.absolute || '';
+  const local = absolute || (/^[A-Za-z]:[\\/]/.test(path) || path.startsWith('/') ? path : '');
+  if (kind === 'web') {
+    const href = /^https?:\/\//i.test(path) ? path : local ? fileHref(local) : '';
+    if (!href) {
+      post({ type: 'openFile', path });
+      return;
+    }
+    void openInDockBrowser(href).catch(() => post({ type: 'openFile', path }));
+    return;
+  }
+  if (kind === 'image' && local) {
+    ui.lightboxSrc = fileHref(local);
+    render();
+    return;
+  }
+  post({ type: 'openFile', path });
+}
+
+function fileHref(path: string): string {
+  const slash = path.replace(/\\/g, '/');
+  if (/^[A-Za-z]:\//.test(slash)) {
+    return `file:///${slash}`;
+  }
+  if (slash.startsWith('/')) {
+    return `file://${slash}`;
+  }
+  return `file:///${slash}`;
+}
+
+type HeroKind = 'web' | 'image' | 'folder' | 'app' | 'file';
+
+function heroKindOf(path: string): HeroKind {
+  if (/^https?:\/\//i.test(path)) {
+    return 'web';
+  }
+  const ext = extOfPath(path);
+  if (ext === 'html' || ext === 'htm') {
+    return 'web';
+  }
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
+    return 'image';
+  }
+  if (['exe', 'msi', 'bat', 'cmd', 'lnk', 'app'].includes(ext)) {
+    return 'app';
+  }
+  if (!ext || /[/\\]$/.test(path)) {
+    return 'folder';
+  }
+  return 'file';
+}
+
+function heroIconExt(path: string, ext: string): string {
+  const kind = heroKindOf(path);
+  if (kind === 'web') {
+    return 'html';
+  }
+  if (kind === 'folder') {
+    return 'folder';
+  }
+  return ext || 'default';
+}
+
+function extOfPath(path: string): string {
+  const base = path.replace(/\\/g, '/').split('/').pop() ?? '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
+function shortPath(path: string): string {
+  if (path.length <= 32) {
+    return path;
+  }
+  return `${path.slice(0, 18)}…${path.slice(-10)}`;
+}
+
+function heroKindLabel(kind: HeroKind): string {
+  if (kind === 'web') {
+    return tr('heroKindWeb');
+  }
+  if (kind === 'image') {
+    return tr('heroKindImage');
+  }
+  if (kind === 'folder') {
+    return tr('heroKindFolder');
+  }
+  if (kind === 'app') {
+    return tr('heroKindApp');
+  }
+  return tr('heroKindFile');
+}
+
+function heroOpenLabel(ext: string): string {
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)) {
+    return tr('heroOpenImage');
+  }
+  if (['html', 'htm'].includes(ext)) {
+    return tr('heroOpenBrowser');
+  }
+  return tr('heroOpen');
+}
+
 function assistantColumn(message: ChatMessage): HTMLElement {
   const el = document.createElement('article');
   el.className = 'msg assistant';
   if (hasWork(message)) {
-    el.append(workBlock(message));
+    const trace = traceBlock(message);
+    el.append(message.streaming ? trace : finishedWork(message, trace));
   }
   if (message.text) {
     const body = document.createElement('div');
     body.className = 'md answer';
-    setMarkdown(body, message.text, Boolean(message.streaming));
     el.append(body);
+    paintAnswer(body, message);
   } else if (message.error?.retrying) {
     el.append(turnErrorCard(message));
   } else if (message.streaming && !hasWork(message) && !message.error) {
@@ -1239,7 +1906,7 @@ function assistantColumn(message: ChatMessage): HTMLElement {
     pulse.className = 'pulse';
     const star = document.createElement('span');
     star.className = 'mark pulse';
-    star.innerHTML = iconStar();
+    star.innerHTML = grokBootMark();
     pulse.append(star, document.createTextNode(tr('working')));
     el.append(pulse);
   }
@@ -1249,7 +1916,7 @@ function assistantColumn(message: ChatMessage): HTMLElement {
   if (message.error && !message.error.retrying) {
     el.append(turnErrorCard(message));
   }
-  if (visibleSteps(message).length) {
+  if (!isDesktop() && visibleSteps(message).length) {
     el.append(stepsBlock(message));
   }
   if (!message.streaming) {
@@ -1257,6 +1924,10 @@ function assistantColumn(message: ChatMessage): HTMLElement {
     if (message.edits?.length) {
       el.append(changesBlock(message.id, message.edits));
     }
+  }
+  const trace = el.querySelector('.trace');
+  if (trace instanceof HTMLElement) {
+    syncElapsed(trace, message);
   }
   return el;
 }
@@ -1281,9 +1952,9 @@ function patchErrorCard(col: HTMLElement, message: ChatMessage): void {
     answer.after(next);
     return;
   }
-  const work = thinkingWork(col);
-  if (work) {
-    work.after(next);
+  const trace = col.querySelector('.trace');
+  if (trace) {
+    trace.after(next);
     return;
   }
   const later = col.querySelector('.steps-card, .turn-meta, .changes');
@@ -1352,19 +2023,7 @@ function isCustomEndpointAuthError(error: { code?: string; message: string }): b
 }
 
 function hasWork(message: ChatMessage): boolean {
-  return Boolean(message.thinking || message.plan || message.tools.length);
-}
-
-/** 生成中有思考原文、计划或工具时展开，让思考原文留在面板里。 */
-function workShouldOpen(message: ChatMessage): boolean {
-  return Boolean(
-    message.streaming &&
-      (message.thinking || message.plan || message.tools.length > 0 || visibleSteps(message).length > 0),
-  );
-}
-
-function thinkingWork(root: ParentNode): HTMLDetailsElement | null {
-  return root.querySelector('details.work');
+  return Boolean(message.thinking || message.plan || message.tools.length || message.beats?.length);
 }
 
 function visibleSteps(message: ChatMessage): PlanStep[] {
@@ -1441,6 +2100,14 @@ function toggleStepsOpen(el: HTMLElement, messageId: string): void {
   el.classList.toggle('open', next);
   el.dataset.open = next ? '1' : '0';
   el.querySelector('.ask-head-tools .icon-btn')?.classList.toggle('open', next);
+}
+
+function placeSteps(col: HTMLElement, message: ChatMessage): void {
+  if (isDesktop()) {
+    col.querySelector('.steps-card')?.remove();
+    return;
+  }
+  patchStepsCard(col, message);
 }
 
 function patchStepsCard(col: HTMLElement, message: ChatMessage): void {
@@ -1558,39 +2225,6 @@ function stepsPreview(steps: PlanStep[]): string {
   return count;
 }
 
-function workBlock(message: ChatMessage): HTMLDetailsElement {
-  const el = document.createElement('details');
-  el.className = message.streaming ? 'work live' : 'work';
-  el.dataset.mid = message.id;
-  const open = ui.workOpen.get(message.id) ?? workShouldOpen(message);
-  el.open = open;
-  el.addEventListener('toggle', (event) => {
-    if (!event.isTrusted) {
-      return;
-    }
-    ui.workOpen.set(message.id, el.open);
-    if (el.open) {
-      const live = ui.state.messages.find((item) => item.id === message.id) ?? message;
-      patchWorkBody(el.querySelector('.work-body'), live);
-    }
-  });
-  const summary = document.createElement('summary');
-  const mark = document.createElement('span');
-  mark.className = message.streaming ? 'mark pulse' : 'mark';
-  mark.innerHTML = iconStar();
-  const label = document.createElement('span');
-  label.className = 'work-label';
-  paintWorkLabel(label, message);
-  summary.append(mark, label);
-  const body = document.createElement('div');
-  body.className = 'work-body';
-  if (open) {
-    patchWorkBody(body, message);
-  }
-  el.append(summary, body);
-  return el;
-}
-
 let workClock: ReturnType<typeof setInterval> | undefined;
 
 export function syncWorkClock(): void {
@@ -1615,17 +2249,13 @@ function paintWorkLabels(): void {
   if (!live || live.role !== 'assistant' || !live.streaming) {
     return;
   }
-  for (const node of document.querySelectorAll('details.work.live[data-mid]')) {
-    if (!(node instanceof HTMLElement) || node.dataset.mid !== live.id) {
-      continue;
-    }
-    const label = node.querySelector('.work-label');
-    if (label instanceof HTMLElement) {
-      paintWorkLabel(label, live);
+  for (const node of document.querySelectorAll('.trace.live')) {
+    if (node instanceof HTMLElement && node.dataset.mid === live.id) {
+      syncElapsed(node, live);
     }
   }
   const tools = new Map(live.tools.map((tool) => [tool.id, tool]));
-  for (const node of document.querySelectorAll('.work.live .tool-row[data-id]')) {
+  for (const node of document.querySelectorAll('.trace.live .trace-tool[data-id]')) {
     if (!(node instanceof HTMLElement) || !node.dataset.id) {
       continue;
     }
@@ -1634,68 +2264,6 @@ function paintWorkLabels(): void {
       paintTermElapsed(node, tool);
     }
   }
-}
-
-function paintWorkLabel(el: HTMLElement, message: ChatMessage): void {
-  const text = workLabel(message);
-  el.textContent = text;
-  el.classList.toggle('shiny-text', Boolean(message.streaming && durationText(message)));
-}
-
-function workLabel(message: ChatMessage): string {
-  const time = durationText(message);
-  if (message.streaming) {
-    return time ? tr('elapsedLive', { time }) : tr('thinkingNow');
-  }
-  if (time) {
-    return tr('elapsed', { time });
-  }
-  return tr('thinking');
-}
-
-function durationText(message: ChatMessage): string {
-  if (!message.createdAt) {
-    return '';
-  }
-  const start = Date.parse(message.createdAt);
-  if (Number.isNaN(start)) {
-    return '';
-  }
-  const end = message.endedAt ? Date.parse(message.endedAt) : Date.now();
-  if (Number.isNaN(end)) {
-    return '';
-  }
-  const ms = Math.max(0, end - start);
-  if (message.streaming && ms < 1000) {
-    return '';
-  }
-  return formatDuration(ms);
-}
-
-function toolRow(tool: ChatMessage['tools'][number]): HTMLElement {
-  const el = document.createElement('div');
-  el.className = `tool-row ${tool.status}`;
-  el.dataset.id = tool.id;
-  el.dataset.sig = toolRowSig(tool);
-  if (tool.kind) {
-    el.dataset.kind = tool.kind;
-  }
-  const title = document.createElement('div');
-  title.className = 'tool-title';
-  fillToolTitle(title, tool);
-  el.append(title);
-  if (tool.detail && !isTermTool(tool)) {
-    const detail = document.createElement('button');
-    detail.className = 'tool-detail';
-    detail.type = 'button';
-    detail.textContent = tool.detail;
-    detail.addEventListener('click', () => post({ type: 'openFile', path: tool.detail! }));
-    el.append(detail);
-  }
-  if (isTermTool(tool)) {
-    el.append(termPreview(tool));
-  }
-  return el;
 }
 
 function toolRowSig(tool: ChatMessage['tools'][number]): string {
@@ -1812,32 +2380,6 @@ function termElapsedText(tool: ChatMessage['tools'][number]): string {
   return formatDuration(ms);
 }
 
-function fillToolTitle(title: HTMLElement, tool: ChatMessage['tools'][number]): void {
-  const kind = toolKindLabel(loc(), tool.kind);
-  const hint = isTermTool(tool)
-    ? ''
-    : tool.kind === 'compact'
-      ? tool.title
-      : tool.detail
-        ? fileName(tool.detail)
-        : tool.title;
-  const icon = document.createElement('span');
-  icon.className = 'tool-icon';
-  if (tool.kind) {
-    icon.dataset.kind = tool.kind;
-  }
-  const glyph = toolIcon(tool.kind);
-  if (glyph.startsWith('<svg')) {
-    icon.innerHTML = glyph;
-  } else {
-    icon.textContent = glyph;
-  }
-  const copy = document.createElement('span');
-  copy.className = 'tool-copy';
-  copy.textContent = `${kind}${hint ? ` · ${hint}` : ''}`;
-  title.replaceChildren(icon, copy);
-}
-
 function imageGallery(images: ChatMessage['images']): HTMLElement {
   const gallery = document.createElement('div');
   gallery.className = 'gallery';
@@ -1944,9 +2486,7 @@ function changesBlock(messageId: string, edits: FileEdit[]): HTMLElement {
       stat.innerHTML = `<span class="add">+${edit.added}</span> <span class="del">−${edit.removed}</span>`;
       chip.append(stat);
     }
-    chip.addEventListener('click', () =>
-      post({ type: 'openEdit', path: edit.path, messageId }),
-    );
+    chip.addEventListener('click', () => post({ type: 'openEdit', path: edit.path, messageId }));
     chips.append(chip);
   }
   if (hidden > 0) {

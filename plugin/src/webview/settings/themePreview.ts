@@ -1,7 +1,6 @@
 import { applyThemeTo, normalizeTheme, themeMessage } from '../../settings/theme';
 import type { ThemeColors } from '../../core/types';
 import {
-  DEFAULT_WALLPAPER_OPACITY,
   DEFAULT_WALLPAPER_SCALE,
   MAX_WALLPAPER_SCALE,
   MIN_WALLPAPER_SCALE,
@@ -34,7 +33,7 @@ export function mountThemePreview(): HTMLElement {
   }
   const layer = document.createElement('div');
   layer.className = 'wp-editor-layer';
-  layer.style.opacity = String((theme.wallpaperOpacity ?? DEFAULT_WALLPAPER_OPACITY) / 100);
+  layer.style.opacity = '1';
   const cross = document.createElement('div');
   cross.id = 'og-wp-cross';
   cross.className = 'wp-editor-cross';

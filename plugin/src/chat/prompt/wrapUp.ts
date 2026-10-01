@@ -49,7 +49,8 @@ Write like Codex. Do not glue the whole answer into one paragraph.
 - Once it is found, write it in the conversation as well. Do not wait until every edit is done.
 - Use short paragraphs and indented bullets. Break lines after each point.
 - Mark a file or folder only as @File:"path", for example @File:"plugin/src/foo.ts".
-- Mark a method only as @Line:"name(line 12)", for example @Line:"updateTarget(line 12)".
+- Mark a method with its file and line as @Line:"path/name(line 12)", for example @Line:"plugin/src/foo.ts/updateTarget(line 12)". A bare line is @Line:"plugin/src/foo.ts:12". The chip shows path:line.
+- Mark a hero file chip (英雄文件芯) only as @HeroFlie:"path", for example @HeroFlie:"plugin/dist/webview.js". It opens from a card at the bottom of the reply.
 - Do not use a bare @path. Fractions, versions, and ordinary words stay plain text.
 - Skip this recap for greetings or simple Q&A.
 

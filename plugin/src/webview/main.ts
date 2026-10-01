@@ -17,7 +17,7 @@ import { closeSettingsPicker, patchSettings, settingsBackMessage } from './setti
 import { bindFileDrop, syncDropHint } from './chrome/drop';
 import { bindQuoteMenu } from './chrome/quoteMenu';
 import { bindFileLinkMenu } from './chrome/fileLinkMenu';
-import { patchBody, scrollTranscript, syncWorkClock } from './transcript';
+import { applyHeroApps, patchBody, scrollTranscript, syncWorkClock } from './transcript';
 import { chromeKeepers, overlayKind, syncSurface, syncThemeFontFace, syncWallpaper } from './chrome/wallpaper';
 import { syncBorderGlow } from './chrome/borderGlow';
 import { playNotify } from './chrome/notify';
@@ -79,6 +79,7 @@ type HostMsg = {
   done?: boolean;
   sessionId?: string;
   items?: EditStatsItem[];
+  apps?: Array<{ path?: string; absolute?: string; name?: string }>;
   config?: {
     enabled?: boolean;
     size?: number;
@@ -317,6 +318,10 @@ function onHostMessage(data: HostMsg | null | undefined): void {
   }
   if (data.type === 'workspaceMoved') {
     applyWorkspaceMoved(data as Parameters<typeof applyWorkspaceMoved>[0]);
+    return;
+  }
+  if (data.type === 'heroApps' && Array.isArray(data.apps)) {
+    applyHeroApps(data.apps);
     return;
   }
   if (data.type === 'workspaceGone') {

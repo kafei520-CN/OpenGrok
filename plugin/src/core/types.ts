@@ -389,6 +389,12 @@ export interface ToolCard {
   endedAt?: string;
 }
 
+/** One slice of a turn, in the order the host emitted it. */
+export type TurnBeat =
+  | { kind: 'think'; text: string }
+  | { kind: 'tool'; id: string }
+  | { kind: 'task'; phase: 'started' | 'completed'; text: string; id: string };
+
 export interface TurnError {
   message: string;
   code?: string;
@@ -424,6 +430,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   thinking?: string;
+  /** Thought and tool slices in arrival order. Missing on older turns. */
+  beats?: TurnBeat[];
   tools: ToolCard[];
   images?: MediaItem[];
   files?: MessageFile[];
@@ -760,6 +768,8 @@ export type WebviewToHost =
   | { type: 'cancelAsk' }
   | { type: 'removeAttachment'; id: string }
   | { type: 'openFile'; path: string; line?: number }
+  | { type: 'openShell'; path: string }
+  | { type: 'heroApps'; paths: string[] }
   | { type: 'revealFile'; path: string }
   | { type: 'openUrl'; url: string }
   | { type: 'setModel'; modelId: string }

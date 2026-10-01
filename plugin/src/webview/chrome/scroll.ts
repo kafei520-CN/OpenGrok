@@ -51,19 +51,25 @@ export function shouldPinToBottom(opts: {
   return true;
 }
 
-/** Ignore programmatic pin; otherwise record the user thumb/wheel. */
-export function onUserScroll(
+/**
+ * Apply a scroll event to the stick flag.
+ * Programmatic writes set pinLock and are ignored.
+ * The event does not start a gesture hold: a layout clamp must not block the next pin.
+ */
+export function stickFromScroll(
   state: TranscriptScroll,
-  now: number,
   metrics: TranscriptMetrics,
 ): TranscriptScroll {
   if (state.pinLock) {
     return state;
   }
+  const stickToBottom = nearBottom(metrics);
+  if (stickToBottom === state.stickToBottom && metrics.scrollTop === state.transcriptScroll) {
+    return state;
+  }
   return {
     ...state,
-    lastUserScroll: now,
-    stickToBottom: nearBottom(metrics),
+    stickToBottom,
     transcriptScroll: metrics.scrollTop,
   };
 }

@@ -1011,7 +1011,7 @@ function extensionBody(page?: SettingsPage): HTMLElement {
 function aboutPane(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'og-set-stack';
-  const version = document.documentElement.dataset.version || '0.5.9';
+  const version = document.documentElement.dataset.version || '0.5.10';
   const hero = document.createElement('div');
   hero.className = 'og-about-hero';
   const logo = document.createElement('img');

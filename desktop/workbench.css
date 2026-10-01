@@ -280,8 +280,10 @@ html.opengrok.maximized #app[data-surface='glass'] #grok-frost {
 }
 
 html.opengrok #app[data-surface='glass'] #grok-wallpaper {
-  z-index: 0;
+  z-index: 1;
+  opacity: 1 !important;
   overflow: hidden;
+  pointer-events: none;
 }
 
 html.opengrok #app[data-surface='glass'] #grok-frost {
@@ -1402,9 +1404,9 @@ html.opengrok .og-dock-pick p {
 
 html.opengrok .og-dock-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  width: min(100%, 280px);
+  width: min(100%, 360px);
 }
 
 html.opengrok .og-dock-card {
@@ -1424,6 +1426,350 @@ html.opengrok .og-dock-card {
 
 html.opengrok .og-dock-card:hover {
   background: var(--hover);
+}
+
+html.opengrok .og-dock-card span {
+  font-size: 12px;
+}
+
+html.opengrok .og-steps-head {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+html.opengrok .og-steps-head[hidden],
+html.opengrok .og-steps-scroll[hidden],
+html.opengrok .og-steps-empty[hidden] {
+  display: none !important;
+}
+
+html.opengrok .og-steps:not(.open) .og-steps-scroll {
+  display: none !important;
+}
+
+html.opengrok .og-steps-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 14px 16px 12px;
+  cursor: pointer;
+}
+
+html.opengrok .og-steps-chevron {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+html.opengrok .og-steps-chevron svg {
+  width: 12px;
+  height: 12px;
+}
+
+html.opengrok .og-steps:not(.open) .og-steps-chevron {
+  transform: rotate(-90deg);
+}
+
+html.opengrok .og-steps-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 16px 18px;
+}
+
+html.opengrok .og-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+}
+
+html.opengrok .og-step {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding: 7px 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+html.opengrok .og-step-badge {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: color-mix(in srgb, var(--fg) 42%, transparent);
+}
+
+html.opengrok .og-step-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+html.opengrok .og-step-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+html.opengrok .og-step[data-status='completed'] .og-step-badge {
+  background: #3b6cff;
+  color: #fff;
+}
+
+html.opengrok .og-step[data-status='completed'] .og-step-text {
+  color: color-mix(in srgb, var(--fg) 58%, var(--muted));
+}
+
+html.opengrok .og-step[data-status='in_progress'] .og-step-badge {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px #3b6cff;
+  color: #3b6cff;
+}
+
+html.opengrok .og-step[data-status='in_progress'] .og-step-text {
+  color: var(--fg);
+}
+
+html.opengrok .og-step[data-status='failed'] .og-step-badge {
+  background: var(--error);
+  color: #fff;
+}
+
+html.opengrok .og-step[data-status='failed'] .og-step-text {
+  color: var(--error);
+}
+
+html.opengrok .og-steps.stopped .og-step-text,
+html.opengrok .og-steps.stopped .og-step-badge {
+  color: var(--muted);
+}
+
+html.opengrok .og-steps.stopped .og-step[data-status='completed'] .og-step-badge {
+  background: #3b6cff;
+  color: #fff;
+}
+
+html.opengrok .og-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+html.opengrok .og-side-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+html.opengrok .og-side-block[data-block='progress'] {
+  flex: 1.15 1 0;
+}
+
+html.opengrok .og-side-block[data-block='context'] {
+  flex: 0.7 1 0;
+}
+
+html.opengrok .og-side-block:not(.open) {
+  flex: 0 0 auto;
+}
+
+html.opengrok .og-side-block .og-steps-list,
+html.opengrok .og-side-files,
+html.opengrok .og-side-context {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 12px;
+}
+
+html.opengrok .og-side-project-head,
+html.opengrok .og-side-block > .og-side-toggle {
+  flex: 0 0 auto;
+  padding-right: 14px;
+  padding-left: 14px;
+}
+
+html.opengrok .og-side-project-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+html.opengrok .og-side-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+html.opengrok .og-side-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.opengrok .og-side-chevron {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+html.opengrok .og-side-chevron svg {
+  width: 12px;
+  height: 12px;
+}
+
+html.opengrok .og-side-block:not(.open) > .og-side-toggle .og-side-chevron,
+html.opengrok .og-side-block:not(.open) > .og-side-project-head .og-side-chevron,
+html.opengrok .og-side-sub:not(.open) > .og-side-toggle .og-side-chevron {
+  transform: rotate(-90deg);
+}
+
+html.opengrok .og-side-block:not(.open) .og-side-files,
+html.opengrok .og-side-block:not(.open) .og-steps-list,
+html.opengrok .og-side-block:not(.open) .og-side-note,
+html.opengrok .og-side-block:not(.open) .og-side-context,
+html.opengrok .og-side-sub:not(.open) .og-side-out {
+  display: none;
+}
+
+html.opengrok .og-side-note {
+  margin: 0 0 8px 22px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+html.opengrok .og-side-note[hidden] {
+  display: none !important;
+}
+
+html.opengrok .og-side-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+html.opengrok .og-side-file:hover {
+  color: var(--fg);
+}
+
+html.opengrok .og-side-file-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+html.opengrok .og-side-file-icon .md-file-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+html.opengrok .og-side-out {
+  padding-left: 18px;
+}
+
+html.opengrok .og-side-copy {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+html.opengrok .og-side-copy:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+html.opengrok .og-side-kicker {
+  margin: 12px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+html.opengrok .og-side-connectors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+html.opengrok .og-side-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+html.opengrok .og-side-skills {
+  display: flex;
+  flex-direction: column;
+}
+
+html.opengrok #app .msg.assistant > .md.answer,
+html.opengrok #app[data-surface='glass'] .msg.assistant > .md.answer,
+html.opengrok #app[data-surface='glass'][data-wp-kind='image'] .msg.assistant > .md.answer,
+html.opengrok #app[data-surface='glass'][data-wp-kind='video'] .msg.assistant > .md.answer,
+html.opengrok #app[data-surface='endfield'] .msg.assistant > .md.answer {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+html.opengrok #app .msg.assistant > .md.answer::before {
+  display: none !important;
 }
 
 html.opengrok .og-dock-frame {
@@ -2116,7 +2462,7 @@ html.opengrok #og-review .og-review-head {
 
 html.opengrok #og-review .og-review-head strong {
   font-size: 16px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2553,7 +2899,7 @@ html.opengrok #app[data-surface='solid'] .og-set-card {
 .og-set-card h3 {
   margin: 0 0 12px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .pet-look__toolbar {
@@ -2754,7 +3100,7 @@ html.opengrok .settings-seg button {
 html.opengrok .settings-seg button.on {
   background: var(--bg);
   color: var(--fg);
-  font-weight: 650;
+  font-weight: 600;
   box-shadow: 0 1px 3px color-mix(in srgb, #000 12%, transparent);
 }
 
@@ -3049,7 +3395,7 @@ html.opengrok .jump-bottom:hover {
 html.opengrok .og-kicker {
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-weight: 650;
+  font-weight: 600;
   font-size: 10.5px;
 }
 
@@ -3308,22 +3654,6 @@ html.opengrok #app[data-surface='glass'] .composer-wrap > * {
 html.opengrok #app[data-surface='glass'] .transcript,
 html.opengrok #app[data-surface='glass'] .home {
   padding-bottom: 168px;
-}
-
-html.opengrok #app[data-surface='glass']:has(.jump-bottom:not([hidden])) .transcript,
-html.opengrok #app[data-surface='glass']:has(.jump-bottom:not([hidden])) .home {
-  padding-bottom: 212px;
-}
-
-html.opengrok .composer-wrap > .jump-bottom,
-html.opengrok #app[data-surface='glass'] .jump-bottom {
-  position: relative;
-  left: auto;
-  bottom: auto;
-  width: 36px;
-  max-width: 36px;
-  margin: 0 0 8px;
-  overflow: visible;
 }
 
 html.opengrok #app.ws-on[data-surface='glass'] #composer-wrap,

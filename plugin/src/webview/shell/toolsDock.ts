@@ -19,7 +19,11 @@ import {
   shouldClearBeforeType,
   stampScript,
 } from '../../core/runtime/browserSnap';
+import type { ChatMessage } from '../../core/types';
 import { copyText, isDesktop, persistUi, post, tr, ui } from '../app';
+import { iconTerminal } from '../icons';
+import { stepsPane, syncStepsPane } from './stepsDock';
+import { latestStepMessage, stepTurnToOpen } from './stepsReveal';
 
 type LabShell = { id: string; label: string };
 
@@ -32,7 +36,7 @@ type HostApi = {
   onTerm?: (handler: (data: string) => void) => void;
 };
 
-type PageKind = 'terminal' | 'browser';
+type PageKind = 'terminal' | 'browser' | 'steps';
 
 type PageTab = {
   id: string;
@@ -69,6 +73,8 @@ let pages: PageTab[] = [];
 let closedTabs: ClosedTab[] = [];
 let activePage = '';
 let pageSeq = 0;
+const seenStepTurns = new Set<string>();
+let seenStepSession = '';
 
 function hostApi(): HostApi | undefined {
   return (window as unknown as { opengrok?: HostApi }).opengrok;
@@ -185,7 +191,7 @@ function menuButton(label: string, icon: string, onClick: () => void): HTMLButto
 }
 
 function kindItems(): Array<{ label: string; icon: string; run: () => void }> {
-  const kinds: PageKind[] = ['terminal', 'browser'];
+  const kinds: PageKind[] = ['terminal', 'browser', 'steps'];
   return kinds.map((kind) => ({
     label: kindLabel(kind),
     icon: pageIcon(kind),
@@ -194,17 +200,20 @@ function kindItems(): Array<{ label: string; icon: string; run: () => void }> {
 }
 
 function kindLabel(kind: PageKind): string {
-  return kind === 'terminal' ? tr('dockTerminal') : tr('dockBrowser');
+  switch (kind) {
+    case 'terminal':
+      return tr('dockTerminal');
+    case 'browser':
+      return tr('dockBrowser');
+    case 'steps':
+      return tr('stepsProgress');
+  }
 }
 
 function workspaceName(): string {
   const path = ui.state.workspacePath?.replace(/[\\/]+$/, '') ?? '';
   const name = path.split(/[\\/]/).pop()?.trim();
   return name || tr('dockTerminal');
-}
-
-function terminalIcon(): string {
-  return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.6"/><path d="M4.5 6.2 6.6 8 4.5 9.8M8 10.2h3.2"/></svg>';
 }
 
 function browserIcon(): string {
@@ -217,9 +226,31 @@ function ensureKindPage(kind: Exclude<PageKind, 'browser'>): string {
     return existing.id;
   }
   const id = `page-${++pageSeq}`;
-  const title = workspaceName();
+  const title = kind === 'terminal' ? workspaceName() : tr('stepsProgress');
   pages.push({ id, kind, title, url: '', openedAt: Date.now() });
   return id;
+}
+
+/** Open the steps tool the first time a live turn grows a plan. Later ticks only refresh the rail. */
+export function revealSteps(messages: ChatMessage[]): void {
+  if (!isDesktop()) {
+    return;
+  }
+  const sid = ui.state.currentSessionId ?? '';
+  if (sid !== seenStepSession) {
+    if (seenStepSession) {
+      seenStepTurns.clear();
+    }
+    seenStepSession = sid;
+  }
+  if (!ui.state.restoringSession) {
+    const openId = stepTurnToOpen(messages, seenStepTurns);
+    if (openId) {
+      seenStepTurns.add(openId);
+      openDock('steps');
+    }
+  }
+  syncStepsPane(latestStepMessage(messages));
 }
 
 function addBrowserPage(): string {
@@ -443,7 +474,7 @@ function renderDock(): HTMLElement {
   head.append(chevron, tabs, add);
   const frames = document.createElement('div');
   frames.className = 'og-dock-frames';
-  frames.append(pickerPane(), terminalPane());
+  frames.append(pickerPane(), terminalPane(), stepsPane());
   dock.append(dockSash(), head, frames);
   hookTerm();
   return dock;
@@ -472,7 +503,7 @@ function syncDock(dock: HTMLElement): void {
   if (picker) {
     picker.hidden = pages.length > 0;
   }
-  frames.querySelectorAll<HTMLElement>('[data-page], [data-pane="terminal"]').forEach((node) => {
+  frames.querySelectorAll<HTMLElement>('[data-page], [data-pane="terminal"], [data-pane="steps"]').forEach((node) => {
     const id = node.dataset.page;
     const pane = node.dataset.pane;
     if (id) {
@@ -481,6 +512,7 @@ function syncDock(dock: HTMLElement): void {
     }
     node.hidden = !active || pane !== active.kind;
   });
+  syncStepsPane(latestStepMessage(ui.state.messages));
 }
 
 function tabButton(page: PageTab): HTMLButtonElement {
@@ -490,7 +522,7 @@ function tabButton(page: PageTab): HTMLButtonElement {
   btn.className = `og-dock-tab${page.id === activePage ? ' on' : ''}`;
   btn.innerHTML = pageIcon(page.kind);
   const label = document.createElement('span');
-  label.textContent = page.kind === 'terminal' ? workspaceName() : page.title;
+  label.textContent = pageLabel(page);
   const close = document.createElement('span');
   close.className = 'og-dock-tab-x';
   close.textContent = '×';
@@ -591,7 +623,13 @@ function closePage(id: string, sync = true): void {
 }
 
 function pageLabel(page: PageTab): string {
-  return page.kind === 'terminal' ? workspaceName() : page.title;
+  if (page.kind === 'terminal') {
+    return workspaceName();
+  }
+  if (page.kind === 'steps') {
+    return tr('stepsProgress');
+  }
+  return page.title;
 }
 
 function rememberClosed(page: PageTab): void {
@@ -742,8 +780,8 @@ function closedTabRow(item: ClosedTab): HTMLButtonElement {
 function reopenClosed(item: ClosedTab): void {
   closedTabs = closedTabs.filter((tab) => tab !== item);
   closeToolsMenu();
-  if (item.kind === 'terminal') {
-    openDock('terminal');
+  if (item.kind === 'terminal' || item.kind === 'steps') {
+    openDock(item.kind);
     return;
   }
   const id = addBrowserPage();
@@ -776,7 +814,7 @@ function pickerPane(): HTMLElement {
   hint.textContent = tr('dockOpenTabHint');
   const cards = document.createElement('div');
   cards.className = 'og-dock-cards';
-  const items: PageKind[] = ['terminal', 'browser'];
+  const items: PageKind[] = ['terminal', 'browser', 'steps'];
   for (const kind of items) {
     const card = document.createElement('button');
     card.type = 'button';
@@ -794,7 +832,18 @@ function pickerPane(): HTMLElement {
 }
 
 function pageIcon(kind: PageKind): string {
-  return kind === 'terminal' ? terminalIcon() : browserIcon();
+  switch (kind) {
+    case 'terminal':
+      return iconTerminal();
+    case 'browser':
+      return browserIcon();
+    case 'steps':
+      return stepsIcon();
+  }
+}
+
+function stepsIcon(): string {
+  return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="3.5" cy="4.3" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="11.7" r="1" fill="currentColor" stroke="none"/><path d="M6.3 4.3h6.5M6.3 8h6.5M6.3 11.7h6.5"/></svg>';
 }
 
 function panelIcon(): string {
@@ -1160,6 +1209,23 @@ function showBrowserPage(): string {
   }
   openDock('browser');
   return activePage;
+}
+
+export async function openInDockBrowser(href: string): Promise<void> {
+  showBrowserPage();
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const view = viewFor(activePage);
+    if (view) {
+      const page = pages.find((item) => item.id === activePage);
+      if (page) {
+        page.url = href;
+      }
+      await loadView(view, href);
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 40));
+  }
+  throw new Error('浏览器还没准备好');
 }
 
 async function openAndGo(href: string): Promise<WebViewEl> {

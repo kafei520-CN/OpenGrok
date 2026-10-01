@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:path';
 import { plat } from '../core/platform';
 import { dispatchOgPlugins } from '../ogPlugins/hostRuntime';
 import type { GrokController } from './controller';
@@ -129,6 +130,14 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
       }
       return;
     }
+    case 'openShell': {
+      const filePath = await controller.resolveUserPath(message.path);
+      await plat().openExternal(pathToFileURL(filePath).href);
+      return;
+    }
+    case 'heroApps':
+      controller.noteHeroApps(message.paths ?? []);
+      return;
     case 'revealFile': {
       const filePath = await controller.resolveUserPath(message.path);
       if (plat().revealFile) {

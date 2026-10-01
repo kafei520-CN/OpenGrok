@@ -288,6 +288,14 @@ describe('plan steps', () => {
     });
     assert.equal(session.messages[0]?.steps?.[0]?.status, 'completed');
     assert.equal(session.messages[0]?.steps?.[1]?.status, 'in_progress');
+    assert.deepEqual(
+      session.messages[0]?.beats?.filter((beat) => beat.kind === 'task'),
+      [
+        { kind: 'task', phase: 'started', text: 'One', id: '0' },
+        { kind: 'task', phase: 'completed', text: 'One', id: '0' },
+        { kind: 'task', phase: 'started', text: 'Two', id: '1' },
+      ],
+    );
   });
 
   it('applies merge:true todo patches that only send id and status', () => {
@@ -493,6 +501,41 @@ describe('terminal tool cards', () => {
     assert.match(tool?.output ?? '', /2 passed/);
     assert.ok(tool?.startedAt);
     assert.ok(tool?.endedAt);
+  });
+
+  it('interleaves thinking and tools in arrival order', () => {
+    const session = view({ replaying: false, messages: [] });
+    applySessionUpdate(session, {
+      sessionUpdate: 'agent_thought_chunk',
+      content: { type: 'text', text: '先看结构' },
+    });
+    applySessionUpdate(session, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't1',
+      kind: 'execute',
+      status: 'in_progress',
+      title: 'bash',
+    });
+    applySessionUpdate(session, {
+      sessionUpdate: 'agent_thought_chunk',
+      content: { type: 'text', text: '再改一版' },
+    });
+    applySessionUpdate(session, {
+      sessionUpdate: 'agent_thought_chunk',
+      content: { type: 'text', text: '。' },
+    });
+    applySessionUpdate(session, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't1',
+      kind: 'execute',
+      status: 'completed',
+    });
+    assert.deepEqual(session.messages[0]?.beats, [
+      { kind: 'think', text: '先看结构' },
+      { kind: 'tool', id: 't1' },
+      { kind: 'think', text: '再改一版。' },
+    ]);
+    assert.equal(session.messages[0]?.thinking, '先看结构再改一版。');
   });
 
   it('appends bash output_delta onto the live buffer', () => {

@@ -109,7 +109,7 @@ export function fillWallpaperLayer(
   opts?: { playing?: boolean },
 ): void {
   const url = theme?.wallpaperUrl;
-  layer.style.opacity = String((theme?.wallpaperOpacity ?? DEFAULT_WALLPAPER_OPACITY) / 100);
+  layer.style.opacity = '1';
   layer.style.backgroundImage = 'none';
   if (!url) {
     releaseWallpaperLayer(layer);

@@ -7,7 +7,8 @@ describe('wrap-up instruction', () => {
   it('lives in a CLI rule file, not a user prompt block', () => {
     assert.match(WRAP_UP_NOTE, /Write like Codex/);
     assert.match(WRAP_UP_NOTE, /@File:"path\/to\/artifact\.jar"/);
-    assert.match(WRAP_UP_NOTE, /@Line:"updateTarget\(line 12\)"/);
+    assert.match(WRAP_UP_NOTE, /@Line:"plugin\/src\/foo\.ts\/updateTarget\(line 12\)"/);
+    assert.match(WRAP_UP_NOTE, /@HeroFlie:"plugin\/dist\/webview\.js"/);
     assert.match(WRAP_UP_NOTE, /only in thinking/);
     assert.match(WRAP_UP_NOTE, /panel shows that text/);
     assert.match(WRAP_UP_NOTE, /actually found it/);

@@ -7,6 +7,7 @@ import {
 } from '../billing/authMethods';
 import { AUTH_METHODS } from '../core/constants';
 import { GrokAgent } from '../agent/agent';
+import { defaultAppName } from '../agent/heroApp';
 import {
   addActiveFile,
   addSelection,
@@ -2283,6 +2284,27 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.attachments = prior ? attachmentsFromMessage(prior) : [];
     this.emit();
     await this.send(trimmed);
+  }
+
+  noteHeroApps(paths: string[]): void {
+    const unique = [...new Set(paths.map((item) => item.trim()).filter(Boolean))];
+    if (!unique.length) {
+      return;
+    }
+    void this.publishHeroApps(unique);
+  }
+
+  private async publishHeroApps(paths: string[]): Promise<void> {
+    const apps: Array<{ path: string; absolute: string; name: string }> = [];
+    for (const raw of paths) {
+      try {
+        const filePath = await this.resolveUserPath(raw);
+        apps.push({ path: raw, absolute: filePath, name: await defaultAppName(filePath) });
+      } catch {
+        apps.push({ path: raw, absolute: '', name: '' });
+      }
+    }
+    this.remote?.broadcast({ type: 'heroApps', apps });
   }
 
   async reviewEdits(messageId?: string, onlyPath?: string): Promise<void> {

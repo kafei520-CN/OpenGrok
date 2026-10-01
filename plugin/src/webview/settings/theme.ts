@@ -18,7 +18,6 @@ import {
   DEFAULT_CHROME_BLUR,
   DEFAULT_GLASS_BLUR,
   DEFAULT_GLASS_OPACITY,
-  DEFAULT_WALLPAPER_OPACITY,
   MAX_GLASS_BLUR,
 } from '../../settings/wallpaper';
 import { isDesktop, isRemoteWeb, post, tr, ui } from '../app';
@@ -381,18 +380,7 @@ function wallpaperCard(initial: ThemeColors): HTMLElement {
   preview.disabled = !initial.wallpaper;
   preview.addEventListener('click', () => post({ type: 'openThemePreview' }));
   actions.append(pick, clear, preview);
-  card.append(
-    hint,
-    actions,
-    sliderRow('opacity', tr('themeWallpaperOpacity'), 0, 100, initial.wallpaperOpacity ?? DEFAULT_WALLPAPER_OPACITY, !initial.wallpaper, (n, persist) => {
-      live = { ...live, wallpaperOpacity: n };
-      if (persist) {
-        commit(live, true);
-      } else {
-        applyLive();
-      }
-    }),
-  );
+  card.append(hint, actions);
   return card;
 }
 

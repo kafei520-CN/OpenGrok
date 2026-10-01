@@ -6,6 +6,7 @@ import {
   looksLikeInlinePath,
   parseCodeRef,
   parseExplicitCodeRef,
+  takeHeroFiles,
 } from './fileLinks';
 
 describe('inline file links', () => {
@@ -51,7 +52,7 @@ describe('inline file links', () => {
   it('renders a line suffix and a language file icon', () => {
     const html = fileLinkHtml('RopePhysics.java (line 268)');
     assert.match(html, /data-line="268"/);
-    assert.match(html, /\(line 268\)/);
+    assert.match(html, /RopePhysics\.java:268/);
     assert.match(html, /class="md-file-icon"/);
   });
 
@@ -99,8 +100,21 @@ describe('inline file links', () => {
     const line = parseExplicitCodeRef('@Line:"tightenShortenedSegments(line 228)"');
     assert.equal(line?.kind, 'symbol');
     assert.equal(line?.line, 228);
+    const located = parseExplicitCodeRef('@Line:"plugin/src/foo.ts/updateTarget(line 12)"');
+    assert.equal(located?.path, 'plugin/src/foo.ts');
+    assert.equal(located?.line, 12);
+    assert.equal(located?.name, 'updateTarget');
+    const bare = parseExplicitCodeRef('@Line:"plugin/src/foo.ts:48"');
+    assert.equal(bare?.path, 'plugin/src/foo.ts');
+    assert.equal(bare?.line, 48);
     assert.equal(parseExplicitCodeRef('@plugin/src/foo.ts'), undefined);
     assert.equal(parseExplicitCodeRef('@Line:"DAMPING = 0.965"'), undefined);
     assert.equal(parseExplicitCodeRef('@File:"hello"'), undefined);
+  });
+
+  it('lifts hero files out of the prose', () => {
+    const split = takeHeroFiles('done\n@HeroFile:"plugin/dist/webview.js"\n@HeroFlie:"a.png"');
+    assert.deepEqual(split.paths, ['plugin/dist/webview.js', 'a.png']);
+    assert.doesNotMatch(split.body, /HeroF/);
   });
 });

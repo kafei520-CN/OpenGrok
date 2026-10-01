@@ -231,8 +231,7 @@ textarea:focus-visible {
 }
 
 .brand .mark.pulse,
-.work.live > summary .mark,
-.pulse .mark {
+.work.live > summary .mark {
   animation: star-pulse 1.2s ease-in-out infinite;
 }
 
@@ -756,6 +755,10 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
+.work > .trace {
+  margin-top: 8px;
+}
+
 .work-body {
   margin-top: 8px;
   padding: 8px 10px 8px 12px;
@@ -780,6 +783,199 @@ textarea:focus-visible {
 
 .md.answer {
   white-space: pre-wrap;
+}
+
+.hero-files {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  max-width: 560px;
+}
+
+.hero-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg) 94%, #fff);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 8%, transparent);
+  cursor: pointer;
+}
+
+.hero-deck {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+}
+
+.hero-sheet,
+.hero-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: #efedfe;
+  border: 1px solid #bfbaf3;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 85%),
+    0 1px 2px rgb(73 61 164 / 12%),
+    0 4px 12px rgb(73 61 164 / 10%);
+}
+
+.hero-face {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  transition: transform 180ms ease;
+}
+
+.hero-file:hover .hero-face,
+.hero-file:focus-within .hero-face {
+  transform: translate(6px, -6px);
+}
+
+.hero-face .md-file-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hero-sheet {
+  z-index: 1;
+  opacity: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.hero-file:hover .hero-sheet,
+.hero-file:focus-within .hero-sheet {
+  opacity: 1;
+  transform: translate(-8px, 8px);
+}
+
+.hero-expand {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  z-index: 3;
+  width: 12px;
+  height: 12px;
+  color: #8b90b8;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.hero-file-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.hero-file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.hero-file-kind {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hero-file-open {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px 7px 12px;
+  cursor: pointer;
+}
+
+.hero-file-actions {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.hero-file-open {
+  border: 0;
+  border-radius: 999px 0 0 999px;
+  background: transparent;
+  padding-right: 8px;
+}
+
+.hero-file-menu-btn {
+  width: 28px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.hero-file-menu-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.hero-file-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 12%);
+}
+
+.hero-file-menu[hidden] {
+  display: none !important;
+}
+
+.hero-file-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hero-file-menu-item:hover {
+  background: var(--hover);
+}
+
+.hero-file-menu-item .md-file-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .tool-row {
@@ -1077,6 +1273,11 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: 11px;
   margin-top: 2px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .meta-btn {
@@ -1483,7 +1684,12 @@ textarea:focus-visible {
 .pulse .mark {
   width: 12px;
   height: 12px;
-  color: var(--ice);
+  color: var(--fg);
+}
+
+.pulse .mark .boot-logo {
+  width: 12px;
+  height: 11px;
 }
 
 .boot {
@@ -4198,7 +4404,6 @@ html.opengrok .settings.wp-editor {
 #app[data-surface='glass'] .tool-term,
 #app[data-surface='glass'] .gallery .thumb,
 #app[data-surface='glass'] .turn-error,
-#app[data-surface='glass'] .turn-meta,
 #app[data-surface='glass'] .changes-line {
   --glass-pane-blur: var(--glass-2-blur, 23px);
   position: relative;
@@ -4429,7 +4634,6 @@ html.opengrok .settings.wp-editor {
 #app[data-surface='glass'][data-wp-kind='image'] .chip::before,
 #app[data-surface='glass'][data-wp-kind='image'] .live-edits::before,
 #app[data-surface='glass'][data-wp-kind='image'] .attach-tile::before,
-#app[data-surface='glass'][data-wp-kind='image'] .turn-meta::before,
 #app[data-surface='glass'][data-wp-kind='image'] .changes-line::before,
 #app[data-surface='glass'][data-wp-kind='image'] .md th::before,
 #app[data-surface='glass'][data-wp-kind='image'] .md td::before,
@@ -4486,7 +4690,6 @@ html.opengrok .settings.wp-editor {
 #app[data-surface='glass'][data-wp-kind='image'] .chip,
 #app[data-surface='glass'][data-wp-kind='image'] .live-edits,
 #app[data-surface='glass'][data-wp-kind='image'] .attach-tile,
-#app[data-surface='glass'][data-wp-kind='image'] .turn-meta,
 #app[data-surface='glass'][data-wp-kind='image'] .changes-line,
 #app[data-surface='glass'][data-wp-kind='image'] .md th,
 #app[data-surface='glass'][data-wp-kind='image'] .md td,
@@ -5405,4 +5608,243 @@ html.ws-dragging .ws-chat {
 .cron-job-tools {
   display: flex;
   gap: 8px;
+}
+
+.trace {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 8px;
+  color: color-mix(in srgb, var(--fg) 62%, transparent);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.trace-elapsed {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.trace-elapsed[hidden],
+.trace-live-foot[hidden] {
+  display: none !important;
+}
+
+.trace-live-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.trace-live-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--fg);
+}
+
+.trace-live-mark .boot-logo {
+  width: 32px;
+  height: 30px;
+}
+
+.trace-beats {
+  display: flex;
+  flex-direction: column;
+}
+
+.trace .trace-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 0 0 12px;
+}
+
+.trace .trace-item::after {
+  content: '';
+  position: absolute;
+  left: 11.5px;
+  top: 24px;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--fg) 28%, transparent);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.trace .trace-item:last-child {
+  padding-bottom: 0;
+}
+
+.trace .trace-item:last-child::after {
+  display: none;
+}
+
+.trace-mark {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  position: relative;
+  z-index: 1;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.trace-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.trace-tool.completed .trace-mark,
+.trace-tool.failed .trace-mark {
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.trace-tool.completed .trace-mark {
+  background: var(--ok);
+}
+
+.trace-tool.failed .trace-mark {
+  background: var(--error);
+}
+
+.trace-tool.completed .trace-mark svg,
+.trace-tool.failed .trace-mark svg {
+  width: 11px;
+  height: 11px;
+}
+
+.trace-tool.in_progress .trace-mark,
+.trace-tool.pending .trace-mark {
+  color: var(--warn, #f59e0b);
+}
+
+.trace-tool.in_progress .trace-mark::after,
+.trace-tool.pending .trace-mark::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent);
+  border-top-color: var(--warn, #f59e0b);
+  animation: tool-mark-spin 0.7s linear infinite;
+}
+
+@keyframes tool-mark-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.trace-tool.failed .trace-tool-name {
+  color: var(--error);
+}
+
+.trace-copy {
+  min-width: 0;
+  padding-top: 0;
+}
+
+.trace-task-label {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  padding-top: 1px;
+  overflow-wrap: anywhere;
+}
+
+.trace-think .trace-copy,
+.trace .md.thinking,
+.trace .md.plan {
+  color: color-mix(in srgb, var(--fg) 58%, transparent);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.trace-tool-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.trace-tool.bare .trace-chevron {
+  display: none;
+}
+
+.trace-chevron {
+  display: inline-flex;
+  color: var(--muted);
+  opacity: 0;
+  transform: rotate(-90deg);
+}
+
+.trace-tool:hover .trace-chevron,
+.trace-tool-head:focus-visible .trace-chevron {
+  opacity: 1;
+}
+
+.trace-tool.open .trace-chevron {
+  transform: none;
+}
+
+.trace-tool-body {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.trace-tool-body[hidden] {
+  display: none !important;
+}
+
+.trace .tool-detail {
+  display: inline-flex;
+  margin-top: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.trace .tool-row,
+#app[data-surface='glass'] .trace .tool-row,
+#app[data-surface='glass'] .trace .tool-row[data-kind],
+#app[data-surface='glass'] .trace .tool-row.completed,
+#app[data-surface='glass'] .trace .tool-row.failed,
+#app[data-surface='glass'] .trace .tool-row.in_progress,
+#app[data-surface='glass'] .trace .tool-row.pending,
+#app[data-surface='endfield'] .trace .tool-row {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.trace .tool-term {
+  margin-top: 0;
+  border-radius: 12px;
 }

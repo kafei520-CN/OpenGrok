@@ -167,6 +167,10 @@ export function iconInfo(): string {
   return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/><path d="M8 7.2V11" stroke-linecap="round"/><circle cx="8" cy="5.2" r="0.7" fill="currentColor" stroke="none"/></svg>';
 }
 
+export function iconTerminal(): string {
+  return '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.3 5.2 6.5 8 3.3 10.8"/><path d="M8.2 11.1h4.5"/></svg>';
+}
+
 export function toolIcon(kind?: string): string {
   switch (kind) {
     case 'edit':
@@ -176,7 +180,7 @@ export function toolIcon(kind?: string): string {
       return iconBook();
     case 'execute':
     case 'terminal':
-      return '▷';
+      return iconTerminal();
     case 'search':
       return iconSearch();
     case 'delete':

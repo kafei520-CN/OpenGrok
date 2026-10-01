@@ -122,7 +122,14 @@ export function fileLinkHtml(pathOrRef: string | CodeRef, label?: string): strin
   if (!ref) {
     return escapeHtml(String(pathOrRef));
   }
-  const name = label?.trim() || ref.name;
+  const located = Boolean(ref.path && ref.line);
+  const name =
+    label?.trim() ||
+    (located
+      ? ref.name && ref.name !== fileName(ref.path ?? '')
+        ? `${ref.path}:${ref.line} ${ref.name}`
+        : `${ref.path}:${ref.line}`
+      : ref.name);
   const icon =
     ref.kind === 'symbol'
       ? METHOD_ICON
@@ -135,9 +142,8 @@ export function fileLinkHtml(pathOrRef: string | CodeRef, label?: string): strin
   const lineAttr = ref.line ? ` data-line="${ref.line}"` : '';
   const kindAttr = ` data-kind="${ref.kind}"`;
   const title = [ref.path ?? ref.name, ref.line ? `line ${ref.line}` : ''].filter(Boolean).join(' · ');
-  const lineHtml = ref.line
-    ? `<span class="md-file-line">(line ${ref.line})</span>`
-    : '';
+  const lineHtml =
+    ref.line && !located ? `<span class="md-file-line">(line ${ref.line})</span>` : '';
   return `<button type="button" class="${cls}"${pathAttr}${lineAttr}${kindAttr} title="${escapeHtml(title)}">${icon}<span class="md-file-name">${escapeHtml(name)}</span>${lineHtml}</button>`;
 }
 
@@ -196,15 +202,50 @@ function parseQuotedFile(body: string): CodeRef | undefined {
 }
 
 function parseQuotedLine(body: string): CodeRef | undefined {
-  const lined = body.trim().match(/^(.+?)\s*\(\s*line\s+(\d+)\s*\)$/i);
+  const trimmed = body.trim();
+  const colon = trimmed.match(/^(.*?):(\d+)$/);
+  if (colon?.[1] && looksLikeFileToken(colon[1].trim())) {
+    const path = colon[1].trim();
+    return { kind: 'file', name: fileName(path), path, line: Number(colon[2]) };
+  }
+  const lined = trimmed.match(/^(.+?)\s*\(\s*line\s+(\d+)\s*\)$/i);
   if (!lined) {
     return undefined;
   }
-  const name = lined[1].trim();
-  if (!name || !/^[\p{L}_$][\p{L}\p{N}_$.]*$/u.test(name)) {
+  const head = lined[1].trim();
+  const line = Number(lined[2]);
+  const slash = Math.max(head.lastIndexOf('/'), head.lastIndexOf('\\'));
+  if (slash > 0) {
+    const path = head.slice(0, slash).trim();
+    const method = head.slice(slash + 1).trim();
+    if (path && (hasFileExt(path) || /[/\\]/.test(path) || /^[A-Za-z]:/.test(path))) {
+      return {
+        kind: 'file',
+        name: method || fileName(path),
+        path,
+        line,
+      };
+    }
+  }
+  if (!head || !/^[\p{L}_$][\p{L}\p{N}_$.]*$/u.test(head)) {
     return undefined;
   }
-  return { kind: 'symbol', name, line: Number(lined[2]) };
+  return { kind: 'symbol', name: head, line };
+}
+
+const HERO_RE = /@HeroF(?:ile|lie):"([^"]*)"/gi;
+
+/** Pull key open-cards out of the prose. Accepts the HeroFlie spelling too. */
+export function takeHeroFiles(text: string): { body: string; paths: string[] } {
+  const paths: string[] = [];
+  const body = text.replace(HERO_RE, (_full, raw: string) => {
+    const path = raw.trim();
+    if (path) {
+      paths.push(path);
+    }
+    return '';
+  });
+  return { body: body.replace(/\n{3,}/g, '\n\n').trim(), paths };
 }
 
 function looksLikeFolderToken(text: string): boolean {
