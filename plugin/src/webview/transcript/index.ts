@@ -14,7 +14,13 @@ import type {
 import { copyText, isDesktop, loc, post, render, tr, ui } from '../app';
 import { bindHoverPin } from '../chrome/popover';
 import { patchJumpBottom } from '../chrome/composer';
-import { shouldPinToBottom, stickFromScroll, type TranscriptScroll } from '../chrome/scroll';
+import {
+  nearBottom,
+  shouldPinToBottom,
+  stickFromScroll,
+  userHeldScroll,
+  type TranscriptScroll,
+} from '../chrome/scroll';
 import { bootStar, errorCard, home, loginCard, panel, setupCard } from '../chrome';
 import { superGrokKind } from '../shell/superGrokMark';
 import { button, iconButton } from '../dom';
@@ -712,8 +718,7 @@ function syncElapsed(trace: HTMLElement, message: ChatMessage): void {
   const live = Boolean(message.streaming);
   const tool = compactTool(message);
   const compacting = tool?.status === 'in_progress' || tool?.status === 'pending';
-  const keep = isCompactOnly(message) && !message.error;
-  const foot = placeLiveFoot(trace, live || keep);
+  const foot = placeLiveFoot(trace, live);
   if (!(foot instanceof HTMLElement)) {
     return;
   }
@@ -1251,6 +1256,7 @@ const scrollState: TranscriptScroll = {
 
 let pinFrame = 0;
 let pinDepth = 0;
+let lastPinAt = 0;
 let contentObserver: ResizeObserver | null = null;
 let childObserver: MutationObserver | null = null;
 
@@ -1298,8 +1304,10 @@ function holdPinLock(): void {
 
 function releasePinLock(): void {
   requestAnimationFrame(() => {
-    pinDepth = Math.max(0, pinDepth - 1);
-    scrollState.pinLock = pinDepth > 0;
+    requestAnimationFrame(() => {
+      pinDepth = Math.max(0, pinDepth - 1);
+      scrollState.pinLock = pinDepth > 0;
+    });
   });
 }
 
@@ -1318,7 +1326,12 @@ function assignScrollTop(el: HTMLElement, top: number): void {
 }
 
 function pinTranscript(el: HTMLElement): void {
-  assignScrollTop(el, el.scrollHeight);
+  const top = Math.max(0, el.scrollHeight - el.clientHeight);
+  if (Math.abs(el.scrollTop - top) < 1) {
+    return;
+  }
+  lastPinAt = Date.now();
+  assignScrollTop(el, top);
 }
 
 function schedulePin(): void {
@@ -1400,11 +1413,24 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
   node.addEventListener(
     'scroll',
     () => {
-      const next = stickFromScroll(scrollState, {
+      if (scrollState.pinLock) {
+        return;
+      }
+      const metrics = {
         scrollTop: node.scrollTop,
         scrollHeight: node.scrollHeight,
         clientHeight: node.clientHeight,
-      });
+      };
+      // Layout growth and our own pin must not count as the user leaving the bottom.
+      if (!userHeldScroll(Date.now(), scrollState.lastUserScroll)) {
+        scrollState.transcriptScroll = metrics.scrollTop;
+        ui.transcriptScroll = metrics.scrollTop;
+        if (ui.stickToBottom && !nearBottom(metrics) && Date.now() - lastPinAt > 80) {
+          schedulePin();
+        }
+        return;
+      }
+      const next = stickFromScroll(scrollState, metrics);
       if (next === scrollState) {
         return;
       }
@@ -1502,6 +1528,9 @@ function turnSig(turn: Turn, split: boolean): string {
 function groupTurns(messages: ChatMessage[]): Turn[] {
   const turns: Turn[] = [];
   for (const message of messages) {
+    if (message.role === 'assistant' && isCompactOnly(message) && !message.streaming) {
+      continue;
+    }
     if (message.role === 'user') {
       turns.push({ user: message });
     } else {
@@ -1519,6 +1548,9 @@ function groupTurns(messages: ChatMessage[]): Turn[] {
 function turnEl(turn: Turn, split: boolean): HTMLElement {
   const el = document.createElement('section');
   el.className = 'turn';
+  if (turn.assistant && isCompactOnly(turn.assistant)) {
+    el.classList.add('compact-live');
+  }
   el.dataset.turnId = turnId(turn);
   el.dataset.sig = turnSig(turn, split);
   if (turn.user) {

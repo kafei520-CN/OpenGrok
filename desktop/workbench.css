@@ -2272,13 +2272,17 @@ html.opengrok .ghost-btn:hover {
   transform: translateY(-1px);
 }
 
-html.opengrok button:active:not(:disabled):not(.switch),
+html.opengrok button:active:not(:disabled):not(.switch):not(.jump-bottom),
 html.opengrok .og-nav-item:active,
 html.opengrok .og-project:active,
 html.opengrok .session-row:active,
 html.opengrok .pet-settings-grid__btn:active,
 html.opengrok .og-theme-tile:active {
   transform: scale(0.97);
+}
+
+html.opengrok .jump-bottom:active:not(:disabled) {
+  transform: translateX(-50%) scale(0.97);
 }
 
 html.opengrok .og-set-seg button,

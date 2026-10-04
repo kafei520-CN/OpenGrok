@@ -5638,6 +5638,25 @@ html.ws-dragging .ws-chat {
   display: none !important;
 }
 
+.turn.compact-live {
+  gap: 0;
+  margin-top: -6px;
+  padding: 0;
+}
+
+.turn.compact-live .msg.assistant,
+.turn.compact-live .trace,
+.turn.compact-live .trace-live-foot {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.turn.compact-live .trace-live-foot {
+  margin: 2px 0 0;
+}
+
 .trace-live-foot {
   display: flex;
   align-items: center;

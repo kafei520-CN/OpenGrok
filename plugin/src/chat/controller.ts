@@ -1876,9 +1876,21 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
   }
 
+  /** `/compact` 没有 promptRuns，名单空闲时不能把它当成挂死的流式。 */
+  private compactStillRunning(id: string): boolean {
+    if (id !== this.currentSessionId) {
+      return false;
+    }
+    return this.messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        message.tools.some((tool) => tool.kind === 'compact' && tool.status === 'in_progress'),
+    );
+  }
+
   /** 没有对应 prompt 的 streaming 标记。当前会话会顺手解开输入框。 */
   private clearStaleStreaming(id: string): boolean {
-    if (this.promptRuns.has(id)) {
+    if (this.promptRuns.has(id) || this.compactStillRunning(id)) {
       return false;
     }
     const row = this.parked.get(id);
@@ -2167,6 +2179,19 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     const now = new Date().toISOString();
     const auto = Boolean(opts?.auto);
+    if (!auto) {
+      const command = note ? `/compact ${note}` : '/compact';
+      this.messages = [
+        ...this.messages,
+        {
+          id: `user-compact-${++this.turn}`,
+          role: 'user',
+          text: command,
+          tools: [],
+          createdAt: now,
+        },
+      ];
+    }
     const tool: ChatMessage['tools'][number] = {
       id: `compact-${++this.turn}`,
       title: auto ? tr('compactAutoLive') : tr('compacting'),
@@ -2201,12 +2226,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       tool.status = 'completed';
       tool.title = auto ? tr('compactAutoDone') : tr('compactDone');
       tool.endedAt = ended;
+      if (!auto) {
+        card.text = tr('compactDone');
+      }
       card.streaming = false;
       card.endedAt = ended;
+      await this.meter.refresh();
       this.notify = 'done';
       this.setStatus('ready');
       this.notify = undefined;
-      void this.meter.refresh();
     } catch (error) {
       this.compactGate = markCompacted(this.compactGate);
       tool.status = 'failed';
