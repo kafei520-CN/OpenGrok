@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 import { isImagePath, looksLikeImage, mimeFromImagePath } from '../../agent/clientHandlers';
+import { prepareVisionImage } from '../../chat/prompt/visionPrep';
 import { plat } from '../platform';
-import { asObject, asString } from '../wire';
+import { asNum, asObject, asString } from '../wire';
 
 /** session/new `_meta["x.ai/mcp/servers"]` 里的工具命名空间。 */
 export const IMAGE_MCP_SERVER_NAME = 'images';
@@ -69,7 +70,7 @@ function imageToolDescriptor(): Record<string, unknown> {
     name: IMAGE_TOOL_NAME,
     title: '图片工具',
     description:
-      '图片工具. Read a workspace image (PNG, JPEG, GIF, WebP, BMP, ICO, AVIF, TIFF) as visual content the model can see. Always use this instead of read_file for image files. Do not call read_file on images: that path treats them as binary text and fails.',
+      '图片工具. Read a workspace image as visual content. Screenshots are resized, red marks are cropped into a second close-up, and recognized text is included. For a UI screenshot, read the full image first, then call again with x, y, width, height to inspect one region. Always use this instead of read_file for images.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -78,6 +79,10 @@ function imageToolDescriptor(): Record<string, unknown> {
           description:
             'The path of the image to read. Relative to the workspace or an absolute path.',
         },
+        x: { type: 'number', description: 'Optional crop left, in pixels of the original file.' },
+        y: { type: 'number', description: 'Optional crop top, in pixels of the original file.' },
+        width: { type: 'number', description: 'Optional crop width in pixels.' },
+        height: { type: 'number', description: 'Optional crop height in pixels.' },
       },
       required: ['path'],
     },
@@ -105,20 +110,30 @@ async function callImageTool(
   const filePath = resolveImagePath(requested);
   try {
     const image = await readImageBytes(filePath);
-    remember?.(filePath, image.data);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Read image: ${path.basename(filePath)} (${image.mimeType})`,
-        },
-        {
-          type: 'image',
-          data: image.data,
-          mimeType: image.mimeType,
-        },
-      ],
-    };
+    const x = asNum(args['x']);
+    const y = asNum(args['y']);
+    const width = asNum(args['width']);
+    const height = asNum(args['height']);
+    const region =
+      width !== undefined && height !== undefined
+        ? { x: x ?? 0, y: y ?? 0, width, height }
+        : undefined;
+    const prepared = await prepareVisionImage({
+      mimeType: image.mimeType,
+      data: image.data,
+      region,
+    });
+    remember?.(filePath, prepared.images[0]?.data ?? image.data);
+    const content: Array<Record<string, string>> = [
+      { type: 'text', text: `Read image: ${path.basename(filePath)} (${image.mimeType})` },
+    ];
+    for (const part of prepared.images) {
+      content.push({ type: 'image', data: part.data, mimeType: part.mimeType });
+    }
+    if (prepared.note) {
+      content.push({ type: 'text', text: prepared.note });
+    }
+    return { content };
   } catch (error) {
     return toolError(error instanceof Error ? error.message : String(error));
   }

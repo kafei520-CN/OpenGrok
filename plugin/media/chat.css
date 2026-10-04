@@ -5886,13 +5886,17 @@ html.ws-dragging .ws-chat {
 }
 
 .trace .tool-row,
+.trace .tool-row[data-kind],
+.trace .tool-row.completed:not(.failed),
+.trace .tool-row.failed,
+.trace .tool-row.in_progress,
+.trace .tool-row.pending,
 #app[data-surface='glass'] .trace .tool-row,
 #app[data-surface='glass'] .trace .tool-row[data-kind],
-#app[data-surface='glass'] .trace .tool-row.completed,
+#app[data-surface='glass'] .trace .tool-row.completed:not(.failed),
 #app[data-surface='glass'] .trace .tool-row.failed,
-#app[data-surface='glass'] .trace .tool-row.in_progress,
-#app[data-surface='glass'] .trace .tool-row.pending,
-#app[data-surface='endfield'] .trace .tool-row {
+#app[data-surface='endfield'] .trace .tool-row,
+#app[data-surface='endfield'] .trace .tool-row.completed:not(.failed) {
   border: none;
   background: transparent;
   box-shadow: none;

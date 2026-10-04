@@ -3785,17 +3785,21 @@ html.opengrok #app[data-surface='glass'] .og-set-card {
   border-radius: var(--og-card-r);
 }
 
-html.opengrok #app[data-surface='glass'] {
+html.opengrok #app[data-surface='glass'],
+html.opengrok #app[data-surface='solid'] {
   grid-template-rows: var(--og-title) minmax(0, 1fr);
 }
 
-html.opengrok #app[data-surface='glass'] #grok-body {
+html.opengrok #app[data-surface='glass'] #grok-body,
+html.opengrok #app[data-surface='solid'] #grok-body {
   grid-column: 2;
   grid-row: 2;
 }
 
 html.opengrok #app[data-surface='glass'] #composer-wrap,
-html.opengrok #app[data-surface='glass'] .composer-wrap {
+html.opengrok #app[data-surface='glass'] .composer-wrap,
+html.opengrok #app[data-surface='solid'] #composer-wrap,
+html.opengrok #app[data-surface='solid'] .composer-wrap {
   grid-column: 2;
   grid-row: 2;
   align-self: end;
@@ -3805,25 +3809,39 @@ html.opengrok #app[data-surface='glass'] .composer-wrap {
 }
 
 html.opengrok #app[data-surface='glass'] #composer-wrap > *,
-html.opengrok #app[data-surface='glass'] .composer-wrap > * {
+html.opengrok #app[data-surface='glass'] .composer-wrap > *,
+html.opengrok #app[data-surface='solid'] #composer-wrap > *,
+html.opengrok #app[data-surface='solid'] .composer-wrap > * {
   pointer-events: auto;
 }
 
 html.opengrok #app[data-surface='glass'] .transcript,
-html.opengrok #app[data-surface='glass'] .home {
+html.opengrok #app[data-surface='glass'] .home,
+html.opengrok #app[data-surface='solid'] .transcript,
+html.opengrok #app[data-surface='solid'] .home {
   padding-bottom: 168px;
 }
 
 html.opengrok #app.ws-on[data-surface='glass'] #composer-wrap,
 html.opengrok #app.ws-on[data-surface='glass'] .composer-wrap,
-html.opengrok #app.ws-on[data-surface='glass'] #grok-body {
+html.opengrok #app.ws-on[data-surface='glass'] #grok-body,
+html.opengrok #app.ws-on[data-surface='solid'] #composer-wrap,
+html.opengrok #app.ws-on[data-surface='solid'] .composer-wrap,
+html.opengrok #app.ws-on[data-surface='solid'] #grok-body {
   grid-column: 3;
   grid-row: 2;
 }
 
+html.opengrok #app.ws-on[data-surface='solid'] {
+  grid-template-rows: var(--og-title) minmax(0, 1fr);
+}
+
 html.opengrok #app.og-dash-on[data-surface='glass'] #composer-wrap,
 html.opengrok #app.og-dash-on[data-surface='glass'] .composer-wrap,
-html.opengrok #app:has(#og-dash)[data-surface='glass'] #composer-wrap {
+html.opengrok #app:has(#og-dash)[data-surface='glass'] #composer-wrap,
+html.opengrok #app.og-dash-on[data-surface='solid'] #composer-wrap,
+html.opengrok #app.og-dash-on[data-surface='solid'] .composer-wrap,
+html.opengrok #app:has(#og-dash)[data-surface='solid'] #composer-wrap {
   grid-column: 2;
   grid-row: 2;
 }

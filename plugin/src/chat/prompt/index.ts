@@ -1,11 +1,14 @@
 import { plat } from '../../core/platform';
 import type { Attachment, ContentBlock } from '../../core/types';
+import { prepareVisionImage, VISION_HINT } from './visionPrep';
 
 export async function buildPromptBlocks(
   text: string,
   attachments: Attachment[],
 ): Promise<ContentBlock[]> {
   const blocks: ContentBlock[] = [];
+  const notes: string[] = [];
+  let sawImage = false;
   if (text.trim()) {
     blocks.push({ type: 'text', text });
   }
@@ -22,11 +25,17 @@ export async function buildPromptBlocks(
   }
   for (const attachment of attachments) {
     if (attachment.mimeType?.startsWith('image/') && attachment.data) {
-      blocks.push({
-        type: 'image',
+      sawImage = true;
+      const prepared = await prepareVisionImage({
         mimeType: attachment.mimeType,
         data: attachment.data,
       });
+      for (const image of prepared.images) {
+        blocks.push({ type: 'image', mimeType: image.mimeType, data: image.data });
+      }
+      if (prepared.note) {
+        notes.push(prepared.note);
+      }
       continue;
     }
     const mime = attachment.mimeType ?? (attachment.path ? undefined : 'text/plain');
@@ -42,6 +51,12 @@ export async function buildPromptBlocks(
         text: attachment.text ?? attachment.label,
       },
     });
+  }
+  if (notes.length) {
+    blocks.push({ type: 'text', text: notes.join('\n\n') });
+  }
+  if (!text.trim() && sawImage) {
+    blocks.unshift({ type: 'text', text: VISION_HINT });
   }
   if (blocks.length === 0) {
     blocks.push({ type: 'text', text: text || '(attachment)' });
