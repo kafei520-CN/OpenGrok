@@ -44,6 +44,12 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
     case 'logout':
       await controller.logout();
       return;
+    case 'addSavedAccount':
+      await controller.addSavedAccount();
+      return;
+    case 'switchSavedAccount':
+      await controller.switchSavedAccount(message.id);
+      return;
     case 'send':
       await controller.send(message.text);
       return;

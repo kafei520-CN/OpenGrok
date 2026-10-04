@@ -37,6 +37,18 @@ export interface BillingQuota {
   products: BillingProduct[];
 }
 
+/** A Grok login kept so the account page can switch back to it. */
+export interface SavedAccount {
+  id: string;
+  email?: string;
+  name: string;
+  avatarUrl?: string;
+  tier?: string;
+  usagePercent?: number;
+  periodEnd?: string;
+  current: boolean;
+}
+
 export interface ModelOption {
   id: string;
   name: string;
@@ -542,6 +554,7 @@ export interface ChatState {
   heatmapLongestSecs?: number;
   heatmapLoading?: boolean;
   login?: LoginView;
+  savedAccounts?: SavedAccount[];
   models?: { currentId: string; available: ModelOption[] };
   modeId?: string;
   messages: ChatMessage[];
@@ -576,6 +589,8 @@ export interface ChatState {
   mergeTranscript?: boolean;
   hideSessionPreview?: boolean;
   workspacePath?: string;
+  /** New chat has not chosen a folder yet. Sending stays blocked. */
+  needsWorkspace?: boolean;
   /** Folder bound to the current chat only; used to classify history. */
   sessionCwd?: string;
   locale?: 'en' | 'zh-CN';
@@ -737,6 +752,8 @@ export type WebviewToHost =
   | { type: 'cancelLogin' }
   | { type: 'setApiKey'; key: string }
   | { type: 'logout' }
+  | { type: 'addSavedAccount' }
+  | { type: 'switchSavedAccount'; id: string }
   | { type: 'send'; text: string }
   | { type: 'dropQueue'; index: number }
   | { type: 'sendNow'; index?: number }

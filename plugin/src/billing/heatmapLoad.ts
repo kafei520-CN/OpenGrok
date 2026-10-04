@@ -1,7 +1,9 @@
+import { createReadStream } from 'node:fs';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { emptyHeatmap, ymd, type HeatmapDay } from './heatmapStats';
+import * as readline from 'node:readline';
+import { emptyHeatmap, parseTurnUsage, ymd, type HeatmapDay } from './heatmapStats';
 
 export interface HeatmapBundle {
   days: HeatmapDay[];
@@ -14,13 +16,14 @@ interface DayAgg {
   duration: number;
 }
 
-export function loadLocalHeatmap(days = 371): HeatmapBundle {
+/** Per-turn totals from `updates.jsonl`, dated by the turn itself. Same rule CC Switch uses for Grok. */
+export async function loadLocalHeatmap(days = 371): Promise<HeatmapBundle> {
   const padded = emptyHeatmap(days);
   const root = path.join(os.homedir(), '.grok', 'sessions');
   const aggs = new Map<string, DayAgg>();
-  let longest = 0;
   const seen = new Set<string>();
-  walk(root, 0, seen, aggs, (secs) => {
+  let longest = 0;
+  await walk(root, 0, seen, aggs, (secs) => {
     if (secs > longest) {
       longest = secs;
     }
@@ -35,13 +38,13 @@ export function loadLocalHeatmap(days = 371): HeatmapBundle {
   return { days: padded, longestSecs: longest };
 }
 
-function walk(
+async function walk(
   dir: string,
   depth: number,
   seen: Set<string>,
   aggs: Map<string, DayAgg>,
   onDuration: (secs: number) => void,
-): void {
+): Promise<void> {
   if (depth > 6) {
     return;
   }
@@ -52,132 +55,44 @@ function walk(
     return;
   }
   for (const entry of entries) {
-    if (!entry.isDirectory()) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walk(full, depth + 1, seen, aggs, onDuration);
       continue;
     }
-    const folder = path.join(dir, entry.name);
-    const signals = path.join(folder, 'signals.json');
-    if (fs.existsSync(signals)) {
-      if (!seen.add(entry.name)) {
-        continue;
-      }
-      ingest(folder, signals, aggs, onDuration);
-    } else {
-      walk(folder, depth + 1, seen, aggs, onDuration);
+    if (entry.name === 'updates.jsonl') {
+      await ingest(full, seen, aggs, onDuration);
     }
   }
 }
 
-function ingest(
-  folder: string,
-  signalsPath: string,
+async function ingest(
+  file: string,
+  seen: Set<string>,
   aggs: Map<string, DayAgg>,
   onDuration: (secs: number) => void,
-): void {
-  let raw: string;
+): Promise<void> {
+  const input = createReadStream(file, { encoding: 'utf8' });
+  const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
-    raw = fs.readFileSync(signalsPath, 'utf8');
-  } catch {
-    return;
-  }
-  let data: Record<string, unknown>;
-  try {
-    data = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return;
-  }
-  const duration = num(data['sessionDurationSeconds']);
-  if (duration > 0) {
-    onDuration(duration);
-  }
-  const tokens = Math.max(tokenSum(folder), signalsTokens(data));
-  const day = dayKey(folder, signalsPath);
-  const row = aggs.get(day) ?? { requests: 0, tokens: 0, duration: 0 };
-  row.requests += 1;
-  row.tokens += tokens;
-  row.duration = Math.max(row.duration, duration);
-  aggs.set(day, row);
-}
-
-function signalsTokens(data: Record<string, unknown>): number {
-  const context = num(data['contextTokensUsed']);
-  const before = num(data['totalTokensBeforeCompaction']);
-  return before > 0 ? before + context : context;
-}
-
-function tokenSum(folder: string): number {
-  const file = path.join(folder, 'updates.jsonl');
-  let stat: fs.Stats;
-  try {
-    stat = fs.statSync(file);
-  } catch {
-    return 0;
-  }
-  if (!stat.isFile() || stat.size > 2 * 1024 * 1024) {
-    return 0;
-  }
-  let text: string;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    return 0;
-  }
-  let sum = 0;
-  for (const line of text.split('\n')) {
-    if (
-      !line.includes('turn_completed') ||
-      (!line.includes('totalTokens') && !line.includes('total_tokens'))
-    ) {
-      continue;
-    }
-    try {
-      const row = JSON.parse(line) as Record<string, unknown>;
-      const update = asObj(row['update'] ?? asObj(row['params'])['update']);
-      const kind = String(update['sessionUpdate'] ?? update['session_update'] ?? '');
-      if (kind !== 'turn_completed') {
+    for await (const line of lines) {
+      const turn = parseTurnUsage(line);
+      if (!turn || seen.has(turn.id)) {
         continue;
       }
-      const usage = asObj(update['usage']);
-      const tokens = num(usage['totalTokens'] ?? usage['total_tokens']);
-      if (tokens > 0) {
-        sum += tokens;
+      seen.add(turn.id);
+      if (turn.secs > 0) {
+        onDuration(turn.secs);
       }
-    } catch {
-      /* skip bad line */
+      const day = ymd(new Date(turn.at));
+      const row = aggs.get(day) ?? { requests: 0, tokens: 0, duration: 0 };
+      row.requests += 1;
+      row.tokens += turn.tokens;
+      row.duration = Math.max(row.duration, turn.secs);
+      aggs.set(day, row);
     }
+  } finally {
+    lines.close();
+    input.destroy();
   }
-  return sum;
-}
-
-function dayKey(folder: string, signalsPath: string): string {
-  const summary = path.join(folder, 'summary.json');
-  try {
-    const info = JSON.parse(fs.readFileSync(summary, 'utf8')) as Record<string, unknown>;
-    const stamp = String(info['last_active_at'] ?? info['updated_at'] ?? info['created_at'] ?? '');
-    if (stamp) {
-      const date = new Date(stamp);
-      if (!Number.isNaN(date.getTime())) {
-        return ymd(date);
-      }
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const mtime = fs.statSync(signalsPath).mtime;
-    return ymd(mtime);
-  } catch {
-    return ymd(new Date());
-  }
-}
-
-function num(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-}
-
-function asObj(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
 }

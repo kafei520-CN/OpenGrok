@@ -343,6 +343,43 @@ export function renderDrawer(): HTMLElement {
   return layer;
 }
 
+export function renderWorkspaceDialog(): HTMLElement {
+  const layer = document.createElement('div');
+  layer.className = 'og-dialog';
+  layer.addEventListener('click', () => {
+    ui.workspacePrompt = false;
+    render();
+  });
+  const card = document.createElement('div');
+  card.className = 'og-dialog-card';
+  card.addEventListener('click', (event) => event.stopPropagation());
+  const title = document.createElement('h2');
+  title.textContent = tr('workspaceRequiredTitle');
+  const copy = document.createElement('p');
+  copy.textContent = tr('workspaceRequiredBody');
+  const actions = document.createElement('div');
+  actions.className = 'og-dialog-actions';
+  const close = () => {
+    ui.workspacePrompt = false;
+    render();
+  };
+  actions.append(
+    button(tr('cancel'), close),
+    button(
+      tr('workspaceRequiredPick'),
+      () => {
+        ui.workspacePrompt = false;
+        render();
+        post({ type: 'pickSessionProject' });
+      },
+      true,
+    ),
+  );
+  card.append(title, copy, actions);
+  layer.append(card);
+  return layer;
+}
+
 export function renderRenameDialog(): HTMLElement {
   const draft = ui.renameSession;
   const layer = document.createElement('div');

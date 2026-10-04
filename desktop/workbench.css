@@ -2821,6 +2821,164 @@ html.opengrok #app[data-surface='glass'] .og-set-pane {
   color: var(--fg);
 }
 
+.og-acct {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.og-acct-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.og-acct-strip .og-profile-copy {
+  flex: 0 1 200px;
+}
+
+.og-acct-quota {
+  flex: 1 1 auto;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.og-acct-quota-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.og-acct-card .og-profile-copy {
+  flex: 0 0 176px;
+  width: 176px;
+  max-width: 176px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.og-acct-card .og-profile-copy strong,
+.og-acct-card .og-profile-copy span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.og-acct-quota-head strong {
+  flex: 0 0 148px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.og-acct-quota-head span {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.og-acct-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.og-acct-plan {
+  flex: 0 0 auto;
+  font-weight: 650;
+}
+
+.og-acct-reset {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.og-acct-tools {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.og-acct-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.og-acct-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.og-acct-who span,
+.og-acct-remain {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.og-acct-card .og-acct-remain {
+  flex: 0 0 76px;
+  width: 76px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.og-acct-card .og-acct-action {
+  flex: 0 0 76px;
+  width: 76px;
+  box-sizing: border-box;
+  text-align: center;
+  justify-content: center;
+}
+
+.og-acct-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.og-acct-badge {
+  color: #2563eb;
+  font-size: 12px;
+}
+
+.og-acct-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.og-acct-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.og-acct-card.on {
+  border-color: color-mix(in srgb, #2563eb 50%, var(--line));
+}
+
+.og-acct-quota .og-quota-bar {
+  flex: none;
+  height: 8px;
+}
+
+.og-acct-add {
+  align-self: flex-start;
+}
+
 .og-quota-links {
   display: flex;
   flex-wrap: wrap;

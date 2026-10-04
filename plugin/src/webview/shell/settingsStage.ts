@@ -3,7 +3,7 @@ import {
   formatCompactCount,
   formatDurationLong,
   groupHeatmapWeeks,
-  heatmapLevel,
+  heatmapScale,
   parseYmd,
   summarizeHeatmap,
   type HeatmapDay,
@@ -126,6 +126,10 @@ function stageKey(tab: DeskTab): string {
     ui.state.settingsPage ?? 'main',
     ui.state.status ?? '',
     ui.state.account?.email ?? '',
+    ui.accountDeck ? 'deck' : '',
+    (ui.state.savedAccounts ?? [])
+      .map((row) => `${row.id}:${row.current ? 1 : 0}:${row.usagePercent ?? ''}`)
+      .join('|'),
     String(ui.state.billing?.usagePercent ?? ''),
     ui.state.billing?.subscriptionTier ?? '',
     ui.state.billing?.periodEnd ?? '',
@@ -391,6 +395,9 @@ function officialAccountBody(): HTMLElement {
   if (quota) {
     el.append(quota);
   }
+  if (ui.accountDeck) {
+    el.append(card('', [accountDeck(ui.state.savedAccounts ?? [])]));
+  }
   el.append(heatmapCard());
   return el;
 }
@@ -487,7 +494,7 @@ function heatCells(days: HeatmapDay[], mode: 'day' | 'week' | 'cumul'): HeatCell
 }
 
 function heatGrid(cells: HeatCell[], zh: boolean): HTMLElement {
-  const max = Math.max(1, ...cells.map((row) => row.value));
+  const level = heatmapScale(cells.map((row) => row.value));
   const box = document.createElement('div');
   box.className = 'og-heat-board';
   const months = document.createElement('div');
@@ -513,7 +520,7 @@ function heatGrid(cells: HeatCell[], zh: boolean): HTMLElement {
       lastMonth = month;
     }
     const btn = document.createElement('span');
-    btn.className = `og-heat-cell lv${heatmapLevel(cell.value, max)}`;
+    btn.className = `og-heat-cell lv${level(cell.value)}`;
     btn.title = tr('heatTip', {
       date: cell.label,
       tokens: formatCompactCount(cell.value, zh),
@@ -561,7 +568,10 @@ function profileCard(): HTMLElement {
   tools.className = 'og-profile-actions';
   if (email) {
     tools.append(
-      button(tr('setSwitchAccount'), () => post({ type: 'login' })),
+      button(tr('setSwitchAccount'), () => {
+        ui.accountDeck = !ui.accountDeck;
+        render();
+      }),
       button(tr('settingsLogout'), () => post({ type: 'logout' })),
     );
   } else {
@@ -632,6 +642,124 @@ function quotaCard(): HTMLElement | undefined {
   return card('', [box]);
 }
 
+function accountDeck(saved: NonNullable<typeof ui.state.savedAccounts>): HTMLElement {
+  const deck = document.createElement('div');
+  deck.className = 'og-acct-deck';
+  for (const account of saved) {
+    deck.append(accountCard(account));
+  }
+  const add = button(`+ ${tr('acctAdd')}`, () => post({ type: 'addSavedAccount' }));
+  add.classList.add('og-acct-add');
+  deck.append(add);
+  return deck;
+}
+
+function accountCard(account: NonNullable<typeof ui.state.savedAccounts>[number]): HTMLElement {
+  const cardRow = document.createElement('article');
+  cardRow.className = account.current ? 'og-acct-card on' : 'og-acct-card';
+  const avatar = document.createElement('img');
+  avatar.className = 'og-avatar';
+  avatar.alt = '';
+  applyAvatar(avatar, account.avatarUrl);
+  const copy = document.createElement('div');
+  copy.className = 'og-profile-copy';
+  const who = document.createElement('strong');
+  who.textContent = account.name;
+  copy.append(who);
+  if (account.email) {
+    const mail = document.createElement('span');
+    mail.textContent = account.email;
+    mail.title = account.email;
+    copy.append(mail);
+  }
+  cardRow.append(avatar, copy, savedQuotaColumn(account), remainLabel(account.usagePercent));
+  if (account.current) {
+    const badge = document.createElement('span');
+    badge.className = 'og-acct-badge og-acct-action';
+    badge.textContent = tr('acctCurrent');
+    cardRow.append(badge);
+  } else {
+    const use = button(tr('acctUse'), () => post({ type: 'switchSavedAccount', id: account.id }), true);
+    use.classList.add('og-acct-action');
+    cardRow.append(use);
+  }
+  return cardRow;
+}
+
+function savedQuotaColumn(account: NonNullable<typeof ui.state.savedAccounts>[number]): HTMLElement {
+  const used =
+    typeof account.usagePercent === 'number' && Number.isFinite(account.usagePercent)
+      ? displayUsagePercent(account.usagePercent)
+      : undefined;
+  const col = document.createElement('div');
+  col.className = 'og-acct-quota';
+  const head = document.createElement('div');
+  head.className = 'og-acct-quota-head';
+  const title = document.createElement('strong');
+  title.textContent = account.tier?.trim() || tr('setQuota');
+  head.append(title);
+  if (used !== undefined) {
+    const meta = document.createElement('span');
+    const bits = [tr('setQuotaUsed', { n: used })];
+    const when = shortReset(account.periodEnd);
+    if (when) {
+      bits.push(tr('setQuotaReset', { when }));
+    }
+    meta.textContent = bits.join(' · ');
+    head.append(meta);
+  }
+  col.append(head, usageBar(account.usagePercent));
+  const foot = document.createElement('div');
+  foot.className = 'og-quota-meta';
+  const links = document.createElement('div');
+  links.className = 'og-quota-links';
+  links.append(
+    linkBtn(tr('setQuotaWeb'), 'https://grok.com/?_s=usage'),
+    linkBtn(tr('setQuotaManage'), 'https://grok.com/supergrok'),
+  );
+  foot.append(links);
+  if (account.tier && used !== undefined) {
+    const chip = document.createElement('span');
+    chip.className = 'og-quota-chip';
+    chip.textContent = `${account.tier} ${used}%`;
+    foot.append(chip);
+  }
+  col.append(foot);
+  return col;
+}
+
+function remainLabel(used?: number): HTMLElement {
+  const label = document.createElement('span');
+  label.className = 'og-acct-remain';
+  if (typeof used !== 'number' || !Number.isFinite(used)) {
+    label.textContent = tr('acctUsageUnknown');
+    return label;
+  }
+  const left = Math.max(0, 100 - displayUsagePercent(used));
+  label.textContent = tr('setQuotaLeft', { n: left });
+  return label;
+}
+
+function usageBar(used?: number): HTMLElement {
+  const bar = document.createElement('div');
+  bar.className = 'og-quota-bar og-acct-bar';
+  const fill = document.createElement('i');
+  if (typeof used === 'number' && Number.isFinite(used)) {
+    fill.style.width = `${displayUsagePercent(used)}%`;
+  }
+  bar.append(fill);
+  return bar;
+}
+
+function linkBtn(label: string, url: string): HTMLElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'og-text-link';
+  btn.textContent = label;
+  btn.addEventListener('click', () => post({ type: 'openUrl', url }));
+  return btn;
+}
+
 function shortReset(iso?: string): string {
   if (!iso) {
     return '';
@@ -642,15 +770,6 @@ function shortReset(iso?: string): string {
   }
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function linkBtn(label: string, url: string): HTMLElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'og-text-link';
-  btn.textContent = label;
-  btn.addEventListener('click', () => post({ type: 'openUrl', url }));
-  return btn;
 }
 
 function appearancePane(): HTMLElement {

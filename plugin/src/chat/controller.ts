@@ -93,6 +93,16 @@ import {
 import { browserMcpServersMeta } from '../core/runtime/browserTool';
 import { imageMcpServersMeta } from '../core/runtime/imageTool';
 import { isOfficialGrokAccount, parseBilling, type BillingQuota } from '../billing/billing';
+import {
+  accountFromLive,
+  markCurrent,
+  readAccountBook,
+  restoreAuth,
+  snapshotAuth,
+  upsertAccount,
+  writeAccountBook,
+  type SavedAccount,
+} from '../billing/accountBook';
 import { withCachedSubscription } from '../billing/billingCache';
 import { loadLocalHeatmap } from '../billing/heatmapLoad';
 import type { HeatmapDay } from '../billing/heatmapStats';
@@ -294,6 +304,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private error?: string;
   private account?: AccountInfo;
   billing?: BillingQuota;
+  savedAccounts: SavedAccount[] = [];
+  private accountsLoaded = false;
   billingLoading = false;
   private billingSeq = 0;
   private billingTimer?: ReturnType<typeof setInterval>;
@@ -341,6 +353,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private rosterTimer?: ReturnType<typeof setTimeout>;
   private rosterInflight?: Promise<void>;
   private sessionCwd?: string;
+  /** Welcome page and a new chat have no folder until the user picks one. */
+  private needsWorkspace = true;
   private restoringSession = false;
   private replaying = false;
   private authSeq = 0;
@@ -515,6 +529,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       account: this.account,
       billing: this.billing,
       billingLoading: this.billingLoading,
+      savedAccounts: this.savedAccounts,
       heatmap: this.heatmap,
       heatmapLongestSecs: this.heatmapLongestSecs,
       heatmapLoading: this.heatmapLoading,
@@ -553,7 +568,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       restoringSession: this.restoringSession,
       hideSessionPreview: this.hideSessionPreview,
       workspacePath: this.cwd(),
-      sessionCwd: this.sessionCwd ?? this.cwd(),
+      needsWorkspace: this.needsWorkspace,
+      sessionCwd: this.needsWorkspace ? undefined : (this.sessionCwd ?? this.cwd()),
       alwaysApprove: settings.alwaysApprove,
       notify: this.notify,
       locale: uiLocale(),
@@ -589,6 +605,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   async start(): Promise<void> {
     this.wantAgent = true;
+    void this.ensureAccountBook();
     if (this.agent) {
       this.emit();
       return;
@@ -661,6 +678,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.viewStamp = '';
     this.currentSessionId = undefined;
     this.sessionCwd = undefined;
+    this.needsWorkspace = true;
     this.permission = undefined;
     this.ask = undefined;
     this.attachments = [];
@@ -669,7 +687,72 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.setStatus('ready');
   }
 
+  async addSavedAccount(): Promise<void> {
+    await this.keepCurrentAuth();
+    await this.login();
+  }
+
+  async switchSavedAccount(id: string): Promise<void> {
+    const target = this.savedAccounts.find((row) => row.id === id);
+    if (!target || target.current) {
+      return;
+    }
+    await this.ensureAccountBook();
+    const home = plat().homeDir();
+    await this.keepCurrentAuth();
+    const restored = await restoreAuth(home, id);
+    if (!restored) {
+      plat().warn(tr('acctSwitchMissing'));
+      return;
+    }
+    this.savedAccounts = markCurrent(this.savedAccounts, id);
+    await writeAccountBook(home, this.savedAccounts);
+    this.account = {
+      email: target.email,
+      firstName: target.name,
+      avatarUrl: target.avatarUrl,
+    };
+    this.billing = undefined;
+    this.emit();
+    this.respawnAgent();
+  }
+
+  private async ensureAccountBook(): Promise<void> {
+    if (this.accountsLoaded) {
+      return;
+    }
+    this.accountsLoaded = true;
+    this.savedAccounts = await readAccountBook(plat().homeDir());
+    this.emit();
+  }
+
+  private async keepCurrentAuth(): Promise<void> {
+    const current = this.savedAccounts.find((row) => row.current);
+    const id = current?.id ?? (this.account ? accountFromLive(this.account, this.billing).id : undefined);
+    if (!id) {
+      return;
+    }
+    await snapshotAuth(plat().homeDir(), id);
+  }
+
+  private async rememberLiveAccount(): Promise<void> {
+    const account = this.account;
+    if (!account || (!account.email && !account.methodId)) {
+      return;
+    }
+    const home = plat().homeDir();
+    const next = accountFromLive(account, this.billing);
+    const saved = await snapshotAuth(home, next.id);
+    if (!saved && !this.savedAccounts.some((row) => row.id === next.id)) {
+      return;
+    }
+    this.savedAccounts = upsertAccount(this.savedAccounts, next);
+    await writeAccountBook(home, this.savedAccounts);
+    this.emit();
+  }
+
   async login(): Promise<void> {
+    await this.keepCurrentAuth();
     if (!this.agent) {
       await this.start();
     }
@@ -695,6 +778,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     try {
       await authPromise;
       this.account = await agent.authInfo().catch(() => undefined);
+      await this.rememberLiveAccount();
       this.sessionAuthMethodId =
         this.account?.methodId && isSessionAuthMethod(this.account.methodId)
           ? this.account.methodId
@@ -820,6 +904,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const sessionOp = this.sessionOp;
     const trimmed = text.trim();
     if (!trimmed && this.attachments.length === 0 && !opts?.queued?.attachments.length) {
+      return;
+    }
+    if (this.needsWorkspace) {
       return;
     }
     await this.ensureAgent();
@@ -2320,6 +2407,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     this.sessionCwd = folder;
+    this.needsWorkspace = false;
     this.emit();
   }
 
@@ -2340,6 +2428,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     const op = ++this.sessionOp;
+    this.needsWorkspace = false;
     this.settleCurrentLane();
     const detached = this.detachBusyAgent();
     if (!detached) {
@@ -2799,6 +2888,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       this.billing = parsed;
       this.billingLoading = false;
       this.emit();
+      void this.rememberLiveAccount();
     } catch (error) {
       if (seq !== this.billingSeq) {
         return;

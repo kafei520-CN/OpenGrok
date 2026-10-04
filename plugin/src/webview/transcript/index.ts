@@ -579,7 +579,23 @@ function liveFoot(): HTMLElement {
   mark.innerHTML = grokBootMark();
   const time = document.createElement('span');
   time.className = 'trace-live-time';
-  foot.append(mark, time);
+  const compact = document.createElement('div');
+  compact.className = 'trace-compact';
+  compact.hidden = true;
+  const copy = document.createElement('div');
+  copy.className = 'trace-compact-copy';
+  const meter = document.createElement('div');
+  meter.className = 'trace-compact-meter';
+  const track = document.createElement('div');
+  track.className = 'trace-compact-track';
+  const fill = document.createElement('div');
+  fill.className = 'trace-compact-fill';
+  track.append(fill);
+  const pct = document.createElement('span');
+  pct.className = 'trace-compact-pct';
+  meter.append(track, pct);
+  compact.append(copy, meter);
+  foot.append(mark, time, compact);
   return foot;
 }
 
@@ -596,7 +612,7 @@ function beatHost(trace: HTMLElement): HTMLElement {
 
 function patchTrace(trace: HTMLElement, message: ChatMessage): void {
   const host = beatHost(trace);
-  const beats = traceBeats(message);
+  const beats = traceBeats(message).filter((beat) => !isCompactBeat(beat, message));
   const plan = message.plan?.trim() ?? '';
   const keys = beats.map((beat, index) => beatKey(beat, index));
   if (plan) {
@@ -639,6 +655,7 @@ function patchTrace(trace: HTMLElement, message: ChatMessage): void {
       }
     }
   }
+  trace.classList.toggle('quiet', beats.length === 0 && !plan);
   syncElapsed(trace, message);
 }
 
@@ -661,27 +678,85 @@ function turnElapsed(message: ChatMessage): string {
   return formatDuration(ms);
 }
 
+function compactTool(message: ChatMessage): ChatMessage['tools'][number] | undefined {
+  return message.tools.find((tool) => tool.kind === 'compact');
+}
+
+function isCompactBeat(beat: TurnBeat, message: ChatMessage): boolean {
+  if (beat.kind !== 'tool') {
+    return false;
+  }
+  return message.tools.find((tool) => tool.id === beat.id)?.kind === 'compact';
+}
+
+function isCompactOnly(message: ChatMessage): boolean {
+  if (!compactTool(message)) {
+    return false;
+  }
+  if (message.text.trim() || message.thinking?.trim() || message.plan?.trim()) {
+    return false;
+  }
+  return message.tools.every((tool) => tool.kind === 'compact');
+}
+
+/** Climbs toward 92% while the compact call is still open. */
+function compactPercent(tool: ChatMessage['tools'][number], message: ChatMessage): number {
+  const start = Date.parse(tool.startedAt ?? message.createdAt ?? '');
+  const elapsed = Number.isNaN(start) ? 0 : Math.max(0, Date.now() - start);
+  const eased = 1 - Math.exp(-elapsed / 14_000);
+  return Math.max(8, Math.min(92, Math.round(8 + 84 * eased)));
+}
+
 function syncElapsed(trace: HTMLElement, message: ChatMessage): void {
   const time = turnElapsed(message);
   const live = Boolean(message.streaming);
-  const foot = placeLiveFoot(trace, live);
-  if (foot instanceof HTMLElement) {
-    foot.hidden = !live;
-    const label = foot.querySelector('.trace-live-time');
-    if (label) {
-      label.textContent = time ? tr('elapsedLive', { time }) : tr('thinkingNow');
+  const tool = compactTool(message);
+  const compacting = tool?.status === 'in_progress' || tool?.status === 'pending';
+  const keep = isCompactOnly(message) && !message.error;
+  const foot = placeLiveFoot(trace, live || keep);
+  if (!(foot instanceof HTMLElement)) {
+    return;
+  }
+  foot.hidden = false;
+  const label = foot.querySelector('.trace-live-time');
+  const compact = foot.querySelector('.trace-compact');
+  if (compacting && tool && compact instanceof HTMLElement) {
+    if (label instanceof HTMLElement) {
+      label.hidden = true;
     }
+    compact.hidden = false;
+    const copy = compact.querySelector('.trace-compact-copy');
+    if (copy) {
+      copy.textContent = tr('compactLive');
+    }
+    const percent = compactPercent(tool, message);
+    const fill = compact.querySelector('.trace-compact-fill');
+    if (fill instanceof HTMLElement) {
+      fill.style.width = `${percent}%`;
+    }
+    const pct = compact.querySelector('.trace-compact-pct');
+    if (pct) {
+      pct.textContent = `${percent}%`;
+    }
+    return;
+  }
+  if (compact instanceof HTMLElement) {
+    compact.hidden = true;
+  }
+  if (label instanceof HTMLElement) {
+    label.hidden = false;
+    label.textContent = time ? tr('elapsedLive', { time }) : tr('thinkingNow');
   }
 }
 
-function placeLiveFoot(trace: HTMLElement, live: boolean): HTMLElement | null {
+function placeLiveFoot(trace: HTMLElement, show: boolean): HTMLElement | null {
   const col = trace.closest('.msg.assistant');
   if (!(col instanceof HTMLElement)) {
     return null;
   }
   trace.querySelector(':scope > .trace-live-foot')?.remove();
   let foot = col.querySelector(':scope > .trace-live-foot');
-  if (!live) {
+  if (!show) {
     foot?.remove();
     return null;
   }
@@ -1413,6 +1488,7 @@ function turnSig(turn: Turn, split: boolean): string {
     a?.error?.retrying ? 'r' : '',
     a?.error?.attempt ?? 0,
     a?.compact ?? '',
+    a?.tools.find((tool) => tool.kind === 'compact')?.status ?? '',
     ui.copiedId === a?.id ? 'c' : '',
     stepsKey(a ? visibleSteps(a) : undefined),
     turn.user?.text.length ?? 0,
@@ -1892,7 +1968,12 @@ function assistantColumn(message: ChatMessage): HTMLElement {
   el.className = 'msg assistant';
   if (hasWork(message)) {
     const trace = traceBlock(message);
-    el.append(message.streaming ? trace : finishedWork(message, trace));
+    if (isCompactOnly(message)) {
+      trace.classList.add('quiet');
+      el.append(trace);
+    } else {
+      el.append(message.streaming ? trace : finishedWork(message, trace));
+    }
   }
   if (message.text) {
     const body = document.createElement('div');

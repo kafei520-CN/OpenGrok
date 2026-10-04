@@ -212,6 +212,24 @@ describe('controller send preparation', () => {
   });
 });
 
+describe('controller new chat workspace', () => {
+  it('clears the workspace until a folder is chosen', async () => {
+    bindPlatform(fakePlat());
+    const controller = new GrokController();
+    controller.status = 'ready';
+    const home = controller.snapshot();
+    assert.equal(home.needsWorkspace, true);
+    assert.equal(home.sessionCwd, undefined);
+    await controller.newSession();
+    const snap = controller.snapshot();
+    assert.equal(snap.needsWorkspace, true);
+    assert.equal(snap.sessionCwd, undefined);
+    await controller.send('hello');
+    assert.equal(controller.messages.length, 0);
+    controller.dispose();
+  });
+});
+
 describe('controller session clis', () => {
   function quietPlat(): Platform {
     return fakePlat({

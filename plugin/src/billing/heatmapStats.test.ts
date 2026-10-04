@@ -7,6 +7,8 @@ import {
   formatDurationLong,
   groupHeatmapWeeks,
   heatmapLevel,
+  heatmapScale,
+  parseTurnUsage,
   summarizeHeatmap,
 } from './heatmapStats';
 
@@ -49,6 +51,33 @@ describe('heatmapStats', () => {
     assert.equal(formatDurationLong(17 * 3600 + 50 * 60, true), '17小时50分钟');
     assert.equal(heatmapLevel(0, 10), 0);
     assert.equal(heatmapLevel(10, 10), 4);
+  });
+
+  it('reads one turn_completed usage row and ignores context-sized chunks', () => {
+    const line = JSON.stringify({
+      timestamp: 1789806112,
+      params: {
+        update: {
+          sessionUpdate: 'turn_completed',
+          prompt_id: 'prompt-1',
+          elapsed_ms: 4000,
+          usage: { totalTokens: 22774, numTurns: 1 },
+        },
+      },
+    });
+    const turn = parseTurnUsage(line);
+    assert.equal(turn?.id, 'prompt-1');
+    assert.equal(turn?.tokens, 22774);
+    assert.equal(turn?.secs, 4);
+    assert.equal(parseTurnUsage('{"params":{"update":{"sessionUpdate":"agent_thought_chunk"}}}'), undefined);
+  });
+
+  it('scales colors across the busy days instead of one peak', () => {
+    const level = heatmapScale([0, 10, 20, 30, 1000]);
+    assert.equal(level(0), 0);
+    assert.equal(level(10), 1);
+    assert.equal(level(1000), 4);
+    assert.equal(level(20) > 0, true);
   });
 
   it('groups days into Monday-start weeks', () => {

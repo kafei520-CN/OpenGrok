@@ -60,6 +60,7 @@ export const ui = {
   askDismissedId: '',
   lightboxSrc: undefined as string | undefined,
   renameSession: undefined as { id: string; draft: string } | undefined,
+  workspacePrompt: false,
   stickToBottom: true,
   transcriptScroll: 0,
   composer: undefined as HTMLTextAreaElement | undefined,
@@ -94,6 +95,7 @@ export const ui = {
   dockPx: readPx(vscode.getState(), 'dockPx', 460),
   deskTab: 'account' as DeskTab,
   heatGranularity: 'day' as 'day' | 'week' | 'cumul',
+  accountDeck: false,
   chosenModelId: undefined as string | undefined,
   chosenEffort: undefined as string | undefined,
   pet: {

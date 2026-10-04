@@ -288,7 +288,7 @@ function composerBarKey(): string {
     pendingEffortModel ?? '',
     ui.chosenModelId ?? '',
     ui.state.locale ?? '',
-    ui.state.sessionCwd ?? ui.state.workspacePath ?? '',
+    ui.state.needsWorkspace ? 'none' : (ui.state.sessionCwd ?? ui.state.workspacePath ?? ''),
     canType() ? '1' : '0',
     (model?.available.length ?? 0).toString(),
   ].join('|');
@@ -493,9 +493,13 @@ function projectPicker(): HTMLElement {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'picker-btn';
-  const folder = (ui.state.sessionCwd ?? ui.state.workspacePath)?.trim();
-  const name = workspaceFolderLabel(folder) || tr('railNoProject');
-  btn.title = folder || tr('railPickProject');
+  const folder = ui.state.needsWorkspace
+    ? ''
+    : (ui.state.sessionCwd ?? ui.state.workspacePath)?.trim();
+  const name = ui.state.needsWorkspace
+    ? tr('noWorkspace')
+    : workspaceFolderLabel(folder) || tr('railNoProject');
+  btn.title = folder || tr('workspaceRequiredTitle');
   btn.innerHTML = `${iconFolder()}<span class="picker-label">${escapeHtml(name)}</span>`;
   btn.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -989,6 +993,11 @@ function beginEditGoal(): void {
 function sendFrom(input: HTMLTextAreaElement): void {
   const text = input.value.trim();
   if ((!text && !ui.state.attachments?.length) || !canType()) {
+    return;
+  }
+  if (ui.state.needsWorkspace) {
+    ui.workspacePrompt = true;
+    render();
     return;
   }
   if (ui.editingGoal) {

@@ -1660,6 +1660,13 @@ textarea:focus-visible {
   font-weight: 650;
 }
 
+.og-dialog-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .og-dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -5652,6 +5659,54 @@ html.ws-dragging .ws-chat {
 .trace-live-mark .boot-logo {
   width: 32px;
   height: 30px;
+}
+
+.trace.quiet {
+  margin: 0;
+}
+
+.trace-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.trace-compact[hidden],
+.trace-live-time[hidden] {
+  display: none !important;
+}
+
+.trace-compact-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.trace-compact-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+  overflow: hidden;
+}
+
+.trace-compact-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--fg) 62%, transparent);
+}
+
+.trace-compact-pct {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
 .trace-beats {

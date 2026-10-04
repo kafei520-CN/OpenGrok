@@ -9,7 +9,7 @@ import { patchRail } from './shell/rail';
 import { patchDesktopDash } from './shell/dashboard';
 import { closeDesktopReview, openDesktopReview, patchReviewStage, reviewOpen } from './shell/reviewStage';
 import { patchSettingsStage } from './shell/settingsStage';
-import { patchHeader, renderDrawer, renderLightbox, renderRenameDialog } from './chrome';
+import { patchHeader, renderDrawer, renderLightbox, renderRenameDialog, renderWorkspaceDialog } from './chrome';
 import { bindDockBrowser, patchToolsDock, runInDockTerminal } from './shell/toolsDock';
 import { mountComposer, patchComposer } from './chrome/composer';
 import { removeSlot, replaceSlot } from './dom';
@@ -171,6 +171,9 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       hydrate: data.hydrate,
     });
     incoming.messages = resolved.messages;
+    if (!incoming.needsWorkspace) {
+      ui.workspacePrompt = false;
+    }
     if (resolved.skipHydrate !== undefined) {
       skipHydrate = resolved.skipHydrate;
     }
@@ -489,6 +492,15 @@ function render(): void {
       }
     } else {
       removeSlot('og-rename');
+    }
+    if (ui.workspacePrompt && ui.state.needsWorkspace) {
+      if (!document.getElementById('og-workspace')) {
+        const dialog = renderWorkspaceDialog();
+        dialog.id = 'og-workspace';
+        root.append(dialog);
+      }
+    } else {
+      removeSlot('og-workspace');
     }
     syncWallpaper(root, ui.state.theme);
     syncBorderGlow(root);

@@ -189,6 +189,37 @@ function startOfWeek(date: Date): Date {
   return next;
 }
 
+/** GitHub-style buckets over the non-zero days, so one huge day does not flatten the rest. */
+export function heatmapScale(values: number[]): (value: number) => 0 | 1 | 2 | 3 | 4 {
+  const positive = values.filter((value) => value > 0).sort((a, b) => a - b);
+  if (!positive.length) {
+    return () => 0;
+  }
+  if (positive[0] === positive[positive.length - 1]) {
+    return (value) => (value > 0 ? 2 : 0);
+  }
+  return (value) => {
+    if (value <= 0) {
+      return 0;
+    }
+    let idx = 0;
+    while (idx < positive.length && positive[idx]! < value) {
+      idx += 1;
+    }
+    const ratio = idx / (positive.length - 1);
+    if (ratio > 0.75) {
+      return 4;
+    }
+    if (ratio > 0.5) {
+      return 3;
+    }
+    if (ratio > 0.25) {
+      return 2;
+    }
+    return 1;
+  };
+}
+
 export function heatmapLevel(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
   if (value <= 0 || max <= 0) {
     return 0;
@@ -204,6 +235,69 @@ export function heatmapLevel(value: number, max: number): 0 | 1 | 2 | 3 | 4 {
     return 2;
   }
   return 1;
+}
+
+/** One Grok `turn_completed` usage row. Tokens are that turn's own total, not the context window. */
+export interface TurnUsage {
+  id: string;
+  at: number;
+  tokens: number;
+  secs: number;
+}
+
+export function parseTurnUsage(line: string): TurnUsage | undefined {
+  if (!line.includes('turn_completed') || !line.includes('usage')) {
+    return undefined;
+  }
+  let row: Record<string, unknown>;
+  try {
+    row = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  const params = asRecord(row['params']);
+  const update = asRecord(params['update'] ?? row['update']);
+  const kind = String(update['sessionUpdate'] ?? update['session_update'] ?? '');
+  if (kind !== 'turn_completed') {
+    return undefined;
+  }
+  const usage = asRecord(update['usage']);
+  const tokens =
+    positive(usage['totalTokens'] ?? usage['total_tokens']) ||
+    positive(usage['inputTokens']) +
+      positive(usage['outputTokens']) +
+      positive(usage['cachedReadTokens']) +
+      positive(usage['cacheCreationTokens']);
+  if (tokens <= 0) {
+    return undefined;
+  }
+  const meta = asRecord(row['_meta']);
+  const id = String(update['prompt_id'] ?? update['promptId'] ?? meta['eventId'] ?? '');
+  if (!id) {
+    return undefined;
+  }
+  const raw = Number(row['timestamp'] ?? meta['agentTimestampMs']);
+  const at = raw > 1e12 ? raw : raw > 1e9 ? raw * 1000 : 0;
+  if (!at) {
+    return undefined;
+  }
+  return {
+    id,
+    at,
+    tokens,
+    secs: positive(update['elapsed_ms']) / 1000,
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function positive(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
 function gapDays(a: string, b: string): number | undefined {
