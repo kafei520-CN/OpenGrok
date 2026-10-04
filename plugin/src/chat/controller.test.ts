@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { describe, it } from 'node:test';
 import { GrokController, rewindIndexFor } from './controller';
+import type { GrokAgent } from '../agent/agent';
 import { cancelledPermission } from '../core/permissions';
 import { bindPlatform, type Platform } from '../core/platform';
 
@@ -52,7 +53,7 @@ function fakePlat(over: Partial<Platform> = {}): Platform {
 
 const toolParams = {
   options: [{ optionId: 'yes', name: 'Allow', kind: 'allow_once' }],
-  toolCall: { title: 'run', kind: 'execute' },
+  toolCall: { title: 'run', kind: 'read' },
 };
 
 describe('controller agent lifecycle', () => {
@@ -163,11 +164,136 @@ describe('controller reverse requests', () => {
     const first = controller.requestToolPermission(toolParams);
     const second = controller.requestToolPermission({
       ...toolParams,
-      toolCall: { title: 'other', kind: 'execute' },
+      toolCall: { title: 'other', kind: 'read' },
     });
     assert.deepEqual(await first, cancelledPermission());
     controller.cancelTurn();
     assert.deepEqual(await second, cancelledPermission());
+    controller.dispose();
+  });
+});
+
+describe('controller send preparation', () => {
+  it('queues a second send while the first prompt is being prepared', async () => {
+    bindPlatform(fakePlat());
+    const controller = new GrokController();
+    let releasePrompt: (() => void) | undefined;
+    let promptStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      promptStarted = resolve;
+    });
+    const agent = {
+      sessionId: 'session-1',
+      prompt: async () => {
+        promptStarted?.();
+        await new Promise<void>((resolve) => {
+          releasePrompt = resolve;
+        });
+      },
+      cancelTurn: () => releasePrompt?.(),
+    } as unknown as GrokAgent;
+    controller.agent = agent;
+    controller.currentSessionId = 'session-1';
+    controller.status = 'ready';
+
+    const first = controller.send('first');
+    const second = controller.send('second');
+    await second;
+    await started;
+
+    assert.ok(releasePrompt);
+    assert.equal(controller.status, 'streaming');
+    assert.equal(controller.queue.length, 1);
+    assert.equal(controller.queue[0]?.text, 'second');
+
+    controller.cancelTurn();
+    await Promise.all([first, second]);
+    controller.dispose();
+  });
+});
+
+describe('controller session clis', () => {
+  function quietPlat(): Platform {
+    return fakePlat({
+      pathEnv: () => '',
+      homeDir: () => path.join(process.cwd(), 'no-such-grok-home'),
+      workspaceFolders: () => [],
+    });
+  }
+
+  it('keeps one CLI when the session is idle', async () => {
+    bindPlatform(quietPlat());
+    const controller = new GrokController();
+    let cleared = false;
+    const agent = {
+      sessionId: 'session-1',
+      clearSession() {
+        cleared = true;
+        this.sessionId = undefined;
+      },
+      dispose() {},
+    } as unknown as GrokAgent;
+    controller.agent = agent;
+    controller.currentSessionId = 'session-1';
+    controller.status = 'ready';
+
+    await controller.newSession();
+
+    assert.equal(cleared, true);
+    assert.equal(controller.agent, agent);
+    controller.dispose();
+  });
+
+  it('opens a second CLI slot while another session is still prompting', async () => {
+    bindPlatform(quietPlat());
+    const controller = new GrokController();
+    let releasePrompt: (() => void) | undefined;
+    let promptStarted: (() => void) | undefined;
+    let loaded = false;
+    let cleared = false;
+    const started = new Promise<void>((resolve) => {
+      promptStarted = resolve;
+    });
+    const agent = {
+      sessionId: 'session-1',
+      prompt: async () => {
+        promptStarted?.();
+        await new Promise<void>((resolve) => {
+          releasePrompt = resolve;
+        });
+      },
+      clearSession() {
+        cleared = true;
+      },
+      loadSession: async () => {
+        loaded = true;
+      },
+      cancelTurn() {
+        releasePrompt?.();
+      },
+      dispose() {},
+    } as unknown as GrokAgent;
+    controller.agent = agent;
+    controller.currentSessionId = 'session-1';
+    controller.status = 'ready';
+
+    const pending = controller.send('hello');
+    await started;
+    await controller.newSession();
+
+    assert.equal(cleared, false);
+    assert.equal(controller.agent, undefined);
+    assert.equal(controller.currentSessionId, undefined);
+
+    await controller.loadSession('session-1');
+
+    assert.equal(loaded, false);
+    assert.equal(controller.agent, agent);
+    assert.equal(controller.currentSessionId, 'session-1');
+    assert.equal(controller.status, 'streaming');
+
+    releasePrompt?.();
+    await pending;
     controller.dispose();
   });
 });

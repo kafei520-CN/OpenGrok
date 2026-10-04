@@ -29,6 +29,48 @@ export function resolveWorkspacePath(root: string, relOrAbs: string): string | u
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
     return undefined;
   }
+  let current = base;
+  for (const segment of rel.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) {
+        return undefined;
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        break;
+      }
+      return undefined;
+    }
+  }
+  let realBase: string;
+  try {
+    realBase = fs.realpathSync(base);
+  } catch {
+    return undefined;
+  }
+  let probe = normalized;
+  let realProbe: string | undefined;
+  while (!realProbe) {
+    try {
+      realProbe = fs.realpathSync(probe);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        return undefined;
+      }
+      const parent = path.dirname(probe);
+      if (parent === probe) {
+        return undefined;
+      }
+      probe = parent;
+    }
+  }
+  const realRel = path.relative(realBase, realProbe);
+  if (realRel.startsWith('..') || path.isAbsolute(realRel)) {
+    return undefined;
+  }
   return normalized;
 }
 

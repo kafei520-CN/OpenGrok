@@ -5,6 +5,7 @@ import {
   emptyParked,
   lastAssistantInterrupted,
   liveAssistant,
+  nextSessionRunId,
   overlayLiveSessions,
   resolveIncomingSessionId,
   sessionIsLive,
@@ -16,6 +17,11 @@ import {
 } from './liveSessions';
 
 describe('live sessions', () => {
+  it('does not reuse a run id after restoring an older session', () => {
+    assert.equal(nextSessionRunId(8, 3), 9);
+    assert.equal(nextSessionRunId(8, 8), 9);
+  });
+
   it('treats the current streaming session as live', () => {
     assert.equal(sessionIsLive('a', 'a', 'streaming', new Map()), true);
     assert.equal(sessionIsLive('a', 'a', 'ready', new Map()), false);

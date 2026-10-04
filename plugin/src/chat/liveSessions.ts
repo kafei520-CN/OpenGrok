@@ -66,6 +66,10 @@ export const PROMPT_IDLE_QUIET_MS = 3_000;
 export const PROMPT_IDLE_POLLS = 2;
 export const ROSTER_WATCH_MS = 3_000;
 
+export function nextSessionRunId(lastIssued: number, restoredRunId: number): number {
+  return Math.max(lastIssued, restoredRunId) + 1;
+}
+
 /** 还在往外写的那条助手消息。排队的用户气泡可以排在它后面。 */
 export function liveAssistant(messages: ChatMessage[]): ChatMessage | undefined {
   for (let i = messages.length - 1; i >= 0; i -= 1) {

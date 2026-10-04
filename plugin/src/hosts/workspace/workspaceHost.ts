@@ -132,14 +132,25 @@ export async function saveWorkspaceFile(
   if (bus.busyFile?.(resolved) || bus.busyFile?.(relOrAbs)) {
     return;
   }
+  let currentText: string | undefined;
   try {
     const raw = await plat().readFile(resolved);
     const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
     if (bytes.includes(0)) {
       return;
     }
-  } catch {
-    // create on save
+    currentText = new TextDecoder('utf-8').decode(bytes);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      return;
+    }
+  }
+  if (
+    (currentText === undefined && hash !== '') ||
+    (currentText !== undefined && fileHash(currentText) !== hash)
+  ) {
+    bus.broadcast({ type: 'workspaceSaveResult', path: resolved, ok: false, conflict: true });
+    return;
   }
   if (smallEditLimit('', text) !== 'ok') {
     return;

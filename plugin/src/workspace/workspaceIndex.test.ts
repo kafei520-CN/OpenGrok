@@ -16,9 +16,23 @@ import {
 
 describe('workspace index', () => {
   it('rejects paths that escape the workspace root', () => {
-    const root = path.resolve('/work/app');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-ws-'));
     assert.equal(resolveWorkspacePath(root, '../secret'), undefined);
     assert.ok(resolveWorkspacePath(root, 'src/a.ts')?.endsWith(`src${path.sep}a.ts`));
+  });
+
+  it('rejects paths that escape through a symbolic link', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-ws-'));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-outside-'));
+    fs.writeFileSync(path.join(outside, 'secret.txt'), 'secret');
+    try {
+      fs.symlinkSync(outside, path.join(root, 'linked'), 'junction');
+    } catch {
+      t.skip('symbolic links are unavailable');
+      return;
+    }
+    assert.equal(resolveWorkspacePath(root, path.join('linked', 'secret.txt')), undefined);
+    assert.equal(resolveWorkspacePath(root, path.join('linked', 'new.txt')), undefined);
   });
 
   it('hashes file text stably', () => {

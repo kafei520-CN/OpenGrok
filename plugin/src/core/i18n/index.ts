@@ -1326,7 +1326,7 @@ export const ZH: Record<StringKey, string> = {
   attach: '附加',
   attachPick: '相册和文件',
   dropFiles: '拖入文件或文件夹以引用',
-  quoteInChat: '引���到对话',
+  quoteInChat: '引用到对话',
   modeAsk: '问答',
   modePlan: '计划',
   modeAgent: '代理',

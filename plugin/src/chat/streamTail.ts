@@ -24,19 +24,50 @@ export function cursorFromMessage(message: ChatMessage): StreamDeltaCursor {
   };
 }
 
-/** tools/steps/error/images 是否变化；不含正文，避免长输出反复全量序列化。 */
+/** tools/error/images 是否变化；不含正文，避免长输出反复全量序列化。 */
 export function streamMetaStamp(message: ChatMessage): string {
-  const tools = message.tools
-    .map(
-      (tool) =>
-        `${tool.id}:${tool.status}:${tool.title}:${tool.detail?.length ?? 0}:${tool.output?.length ?? 0}`,
-    )
-    .join('|');
-  const steps = (message.steps ?? []).map((step) => `${step.status}:${step.content}`).join('|');
-  const err = message.error
-    ? `${message.error.message}:${message.error.retrying ? 1 : 0}:${message.error.attempt ?? ''}`
-    : '';
-  return `${tools}\n${steps}\n${err}\n${message.images?.length ?? 0}`;
+  const fields = message.tools.flatMap((tool) => [
+    tool.id,
+    tool.title,
+    tool.status,
+    tool.kind,
+    tool.detail,
+    tool.output,
+    tool.command,
+    tool.startedAt,
+    tool.endedAt,
+  ]);
+  fields.push(
+    message.error?.message,
+    message.error?.code,
+    message.error?.retrying === undefined ? undefined : String(message.error.retrying),
+    message.error?.attempt === undefined ? undefined : String(message.error.attempt),
+    message.error?.maxAttempts === undefined ? undefined : String(message.error.maxAttempts),
+  );
+  for (const image of message.images ?? []) {
+    fields.push(image.mimeType, image.data, image.uri);
+  }
+  return hashFields(fields);
+}
+
+function hashFields(fields: Array<string | undefined>): string {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (const field of fields) {
+    const value = field ?? '';
+    const length = field === undefined ? 0xffffffff : value.length;
+    for (let shift = 0; shift < 32; shift += 8) {
+      const byte = (length >>> shift) & 0xff;
+      first = Math.imul(first ^ byte, 0x01000193);
+      second = Math.imul(second ^ byte, 0x85ebca6b);
+    }
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      first = Math.imul(first ^ code, 0x01000193);
+      second = Math.imul(second ^ code, 0x85ebca6b);
+    }
+  }
+  return `${(first >>> 0).toString(16)}:${(second >>> 0).toString(16)}`;
 }
 
 /** 把当前助手消息压成 IPC 增量；edits 只带路径和行数，不带文件正文。 */

@@ -6,7 +6,7 @@ import {
   resolveSessionAuthMethodId,
 } from '../billing/authMethods';
 import { AUTH_METHODS } from '../core/constants';
-import { GrokAgent } from '../agent/agent';
+import { GrokAgent, parseSessionUpdate } from '../agent/agent';
 import { defaultAppName } from '../agent/heroApp';
 import {
   addActiveFile,
@@ -220,6 +220,7 @@ import {
   emptyParked,
   lastAssistantInterrupted,
   liveAssistant,
+  nextSessionRunId,
   markAssistantStopped,
   overlayLiveSessions,
   resolveIncomingSessionId,
@@ -231,6 +232,9 @@ import {
 
 export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   agent?: GrokAgent;
+  /** 每个还占着自己 CLI 的会话。前台那个同时也在 `agent`。 */
+  private readonly sessionAgents = new Map<string, GrokAgent>();
+  private readonly agentBindings = new WeakMap<GrokAgent, { sessionId?: string }>();
   status: ChatStatus = 'connecting';
   messages: ChatMessage[] = [];
   attachments: Attachment[] = [];
@@ -257,6 +261,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   plugins: PluginItem[] = [];
   ogPlugins: OgPluginInfo[] = [];
   private ogPluginWatch?: { close(): void };
+  private pluginWatchToken = 0;
   hooks: HookItem[] = [];
   marketplace: MarketplacePlugin[] = [];
   workflows: WorkflowItem[] = [];
@@ -327,6 +332,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private parkedRecent: string[] = [];
   private promptRuns = new Map<string, { run: number; at: number }>();
   private promptSessionId?: string;
+  private preparingSend?: { sessionId: string; sessionOp: number };
   /** prompt 已经收尾，迟到的 token 不能再把会话点亮。 */
   private settledRuns = new Set<number>();
   private settledRunBySession = new Map<string, number>();
@@ -362,6 +368,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   /** grok.com / cached_token id to restore after a relay turn used xai.api_key. */
   private sessionAuthMethodId?: string;
   private runGen = 0;
+  private runSerial = 0;
   private goalFinishTimer?: ReturnType<typeof setTimeout>;
   private agentGen = 0;
   private sessionOp = 0;
@@ -443,6 +450,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   dispose(): void {
     this.wantAgent = false;
+    this.pluginWatchToken += 1;
+    this.ogPluginWatch?.close();
+    this.ogPluginWatch = undefined;
     abortClientRpcs(this, 'cancel');
     this.flushEmitTimer();
     drawers.stopDashboardPoll(this);
@@ -627,11 +637,16 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   async newSession(): Promise<void> {
     this.sessionOp += 1;
     this.settleCurrentLane();
+    const detached = this.detachBusyAgent();
     this.parkForeground();
     trimParkedSessions(this.parked, undefined, this.parkedRecent);
+    this.releaseIdleSessionAgents();
     this.clearGoalFinishTimer();
     this.goal = undefined;
-    this.agent?.clearSession();
+    if (!detached && this.agent) {
+      this.unclaimAgent(this.agent);
+      this.agent.clearSession();
+    }
     this.messages = [];
     this.journal.clear();
     this.workspaceImages.clear();
@@ -802,11 +817,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   async send(text: string, opts?: { hidden?: boolean; queued?: QueuedPrompt }): Promise<void> {
+    const sessionOp = this.sessionOp;
     const trimmed = text.trim();
     if (!trimmed && this.attachments.length === 0 && !opts?.queued?.attachments.length) {
       return;
     }
     await this.ensureAgent();
+    if (sessionOp !== this.sessionOp) {
+      return;
+    }
     if (!readGrokSettings().useTerminal && isSlashCommandInput(trimmed)) {
       plat().warn(tr('settingsTerminalOff'));
       return;
@@ -823,6 +842,9 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!agent.sessionId) {
       try {
         await this.createSession(agent);
+        if (sessionOp !== this.sessionOp) {
+          return;
+        }
         this.currentSessionId = agent.sessionId;
       } catch (error) {
         this.fail('Could not create a session', error);
@@ -833,31 +855,57 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (!sid) {
       return;
     }
-    if (this.status === 'streaming') {
+    if (
+      this.status === 'streaming' ||
+      (this.preparingSend?.sessionId === sid && this.preparingSend.sessionOp === sessionOp)
+    ) {
       if (this.modeId === 'goal') {
         return;
       }
-      const queued = makeQueuedPrompt(trimmed, this.attachments, `user-queue-${++this.turn}`);
+      const queued =
+        opts?.queued ?? makeQueuedPrompt(trimmed, this.attachments, `user-queue-${++this.turn}`);
       this.queue = [...this.queue, queued];
-      this.messages = [
-        ...this.messages,
-        {
-          id: queued.id,
-          role: 'user',
-          text: trimmed,
-          tools: [],
-          createdAt: new Date().toISOString(),
-          ...packUserMedia(queued.attachments),
-        },
-      ];
-      this.attachments = [];
+      if (!this.messages.some((item) => item.id === queued.id && item.role === 'user')) {
+        this.messages = [
+          ...this.messages,
+          {
+            id: queued.id,
+            role: 'user',
+            text: trimmed,
+            tools: [],
+            createdAt: new Date().toISOString(),
+            ...packUserMedia(queued.attachments),
+          },
+        ];
+      }
+      if (!opts?.queued) {
+        this.attachments = [];
+      }
       // 正在流式时 emit 会发空快照，新的用户气泡到不了界面上。
       this.streamPosted = false;
       this.emit();
       return;
     }
-    await this.prefireCompactIfNeeded();
-    if (this.status !== 'ready') {
+    const preparation = { sessionId: sid, sessionOp };
+    const preparationRunGen = this.runGen;
+    this.preparingSend = preparation;
+    try {
+      await this.prefireCompactIfNeeded();
+    } catch (error) {
+      if (this.preparingSend === preparation) {
+        this.preparingSend = undefined;
+      }
+      throw error;
+    }
+    if (
+      sessionOp !== this.sessionOp ||
+      preparationRunGen !== this.runGen ||
+      this.status !== 'ready' ||
+      agent.sessionId !== sid
+    ) {
+      if (this.preparingSend === preparation) {
+        this.preparingSend = undefined;
+      }
       return;
     }
     let outgoing = trimmed;
@@ -865,15 +913,44 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       outgoing = this.prepareGoalPrompt(trimmed);
       this.emit();
     }
-    await this.applySelectedCustomModel(agent);
+    await this.applySelectedCustomModel(agent, sessionOp);
+    if (
+      sessionOp !== this.sessionOp ||
+      preparationRunGen !== this.runGen ||
+      agent.sessionId !== sid
+    ) {
+      if (this.preparingSend === preparation) {
+        this.preparingSend = undefined;
+      }
+      return;
+    }
     this.error = undefined;
-    const run = ++this.runGen;
     const queued = opts?.queued;
     const media = queued ? queued.attachments : this.attachments;
     const existing = queued
       ? this.messages.find((item) => item.id === queued.id && item.role === 'user')
       : undefined;
-    const blocks = await buildPromptBlocks(outgoing, media);
+    let blocks: Awaited<ReturnType<typeof buildPromptBlocks>>;
+    try {
+      blocks = await buildPromptBlocks(outgoing, media);
+    } catch (error) {
+      if (this.preparingSend === preparation) {
+        this.preparingSend = undefined;
+      }
+      throw error;
+    }
+    if (
+      sessionOp !== this.sessionOp ||
+      preparationRunGen !== this.runGen ||
+      agent.sessionId !== sid
+    ) {
+      if (this.preparingSend === preparation) {
+        this.preparingSend = undefined;
+      }
+      return;
+    }
+    const run = (this.runSerial = nextSessionRunId(this.runSerial, this.runGen));
+    this.runGen = run;
     const now = new Date().toISOString();
     const packed = packUserMedia(media);
     const userMessage: ChatMessage = existing
@@ -911,11 +988,15 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     const startedAt = Date.now();
     this.promptRuns.set(sid, { run, at: startedAt });
+    this.claimAgent(agent, sid);
     this.lastSessionActivityAt.set(sid, startedAt);
     this.idleStreak.delete(sid);
     this.promptSessionId = sid;
     this.streamPosted = false;
     this.setStatus('streaming');
+    if (this.preparingSend === preparation) {
+      this.preparingSend = undefined;
+    }
     try {
       await agent.prompt(blocks, { mode: promptModeMeta(this.modeId) }, sid);
       if (this.runBelongs(sid, run)) {
@@ -1163,12 +1244,21 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private dropAgent(): void {
     this.agentGen += 1;
     this.clearReconnectTimer();
-    const agent = this.agent;
+    const agents = new Set<GrokAgent>();
+    if (this.agent) {
+      agents.add(this.agent);
+    }
+    for (const agent of this.sessionAgents.values()) {
+      agents.add(agent);
+    }
     this.agent = undefined;
-    try {
-      agent?.dispose();
-    } catch {
-      /* already dead */
+    this.sessionAgents.clear();
+    for (const agent of agents) {
+      try {
+        agent.dispose();
+      } catch {
+        /* already dead */
+      }
     }
     disposeAllTerminals();
     this.sessionFlow.dispose();
@@ -1257,6 +1347,93 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private cacheCurrent(): void {
     this.parkForeground();
     trimParkedSessions(this.parked, this.currentSessionId, this.parkedRecent);
+    this.releaseIdleSessionAgents();
+  }
+
+  /** 这一轮还在这个 CLI 里跑。切走时留下进程，另一条会话再开一个。 */
+  private detachBusyAgent(): boolean {
+    const id = this.currentSessionId;
+    const agent = this.agent;
+    if (!id || !agent || !this.promptRuns.has(id)) {
+      return false;
+    }
+    this.claimAgent(agent, id);
+    if (this.agent === agent) {
+      this.agent = undefined;
+    }
+    return true;
+  }
+
+  private holdForegroundAgent(): void {
+    const id = this.currentSessionId;
+    const agent = this.agent;
+    if (!id || !agent || this.promptRuns.has(id)) {
+      return;
+    }
+    this.claimAgent(agent, id);
+  }
+
+  private claimAgent(agent: GrokAgent, sessionId: string): void {
+    const binding = this.agentBindings.get(agent) ?? {};
+    binding.sessionId = sessionId;
+    this.agentBindings.set(agent, binding);
+    for (const [id, owned] of this.sessionAgents) {
+      if (owned === agent && id !== sessionId) {
+        this.sessionAgents.delete(id);
+      }
+    }
+    this.sessionAgents.set(sessionId, agent);
+  }
+
+  private unclaimAgent(agent: GrokAgent): void {
+    const binding = this.agentBindings.get(agent);
+    if (binding) {
+      binding.sessionId = undefined;
+    }
+    for (const [id, owned] of this.sessionAgents) {
+      if (owned === agent) {
+        this.sessionAgents.delete(id);
+      }
+    }
+  }
+
+  private isBackgroundAgent(agent: GrokAgent): boolean {
+    if (agent === this.agent) {
+      return false;
+    }
+    for (const owned of this.sessionAgents.values()) {
+      if (owned === agent) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** 正文已经被抽掉、又没在跑的后台 CLI 可以关。正在生成的不动。 */
+  private releaseIdleSessionAgents(): void {
+    const idle: GrokAgent[] = [];
+    for (const [id, agent] of this.sessionAgents) {
+      if (agent === this.agent || this.promptRuns.has(id)) {
+        continue;
+      }
+      const row = this.parked.get(id);
+      if (!row || row.status === 'streaming' || row.messages.length > 0) {
+        continue;
+      }
+      this.sessionAgents.delete(id);
+      const binding = this.agentBindings.get(agent);
+      if (binding) {
+        binding.sessionId = undefined;
+      }
+      idle.push(agent);
+    }
+    for (const agent of idle) {
+      try {
+        agent.dispose();
+      } catch {
+        /* already dead */
+      }
+    }
   }
 
   private runBelongs(sid: string, run: number): boolean {
@@ -1269,6 +1446,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private endTurnOn(sid: string, cue?: NotifyCue): void {
     this.settleLane(sid);
     if (this.currentSessionId === sid) {
+      const parkedRow = this.parked.get(sid);
+      if (parkedRow) {
+        parkedRow.status = 'ready';
+      }
       this.endStreaming(cue);
       return;
     }
@@ -1292,6 +1473,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   private failOn(sid: string, message: string, error?: unknown): void {
     this.settleLane(sid);
     if (this.currentSessionId === sid) {
+      const parkedRow = this.parked.get(sid);
+      if (parkedRow) {
+        parkedRow.status = 'ready';
+        parkedRow.stopped = true;
+      }
       this.fail(message, error);
       return;
     }
@@ -1471,7 +1657,10 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (this.status === 'streaming') {
       return true;
     }
-    for (const row of this.parked.values()) {
+    for (const [id, row] of this.parked) {
+      if (id === this.currentSessionId) {
+        continue;
+      }
       if (row.status === 'streaming') {
         return true;
       }
@@ -1629,6 +1818,14 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (epoch !== this.agentGen) {
       return;
     }
+    const dead = this.agent;
+    if (dead) {
+      for (const [id, owned] of this.sessionAgents) {
+        if (owned === dead) {
+          this.sessionAgents.delete(id);
+        }
+      }
+    }
     this.agent = undefined;
     abortClientRpcs(this, 'cancel');
     disposeAllTerminals();
@@ -1662,6 +1859,33 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     }
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
+  }
+
+  private onBackgroundAgentLost(agent: GrokAgent, error: Error): void {
+    let sessionId: string | undefined;
+    for (const [id, owned] of this.sessionAgents) {
+      if (owned === agent) {
+        sessionId = id;
+      }
+    }
+    if (!sessionId) {
+      return;
+    }
+    this.sessionAgents.delete(sessionId);
+    const binding = this.agentBindings.get(agent);
+    if (binding) {
+      binding.sessionId = undefined;
+    }
+    const claim = this.promptRuns.get(sessionId);
+    if (claim) {
+      this.promptRuns.delete(sessionId);
+      this.failOn(sessionId, error.message);
+      return;
+    }
+    const row = this.parked.get(sessionId);
+    if (row?.status === 'streaming') {
+      this.failOn(sessionId, error.message);
+    }
   }
 
   private scheduleReconnect(error: Error): void {
@@ -2020,7 +2244,22 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     try {
-      await this.agent?.deleteSession(sessionId);
+      const owner = this.sessionAgents.get(sessionId) ?? this.agent;
+      await owner?.deleteSession(sessionId);
+      if (owner && owner !== this.agent) {
+        this.sessionAgents.delete(sessionId);
+        const binding = this.agentBindings.get(owner);
+        if (binding) {
+          binding.sessionId = undefined;
+        }
+        try {
+          owner.dispose();
+        } catch {
+          /* already dead */
+        }
+      } else if (owner) {
+        this.unclaimAgent(owner);
+      }
       await this.journal.dropSession(sessionId);
       this.parked.delete(sessionId);
       this.sessionFlow.discard(sessionId);
@@ -2097,39 +2336,61 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   async loadSession(sessionId: string, sessionCwd?: string): Promise<void> {
-    const agent = this.agent;
-    if (!agent) {
-      return;
-    }
     if (sessionId === this.currentSessionId && !this.restoringSession && !this.replaying) {
       return;
     }
     const op = ++this.sessionOp;
+    this.settleCurrentLane();
+    const detached = this.detachBusyAgent();
+    if (!detached) {
+      this.holdForegroundAgent();
+    }
     this.parkForeground();
     trimParkedSessions(this.parked, sessionId, this.parkedRecent);
+    this.releaseIdleSessionAgents();
     const parked = this.parked.get(sessionId);
-    const restoreMemory = Boolean(parked && parked.messages.length > 0);
-    // 本地已有正文时，把后台合并的增量补上再显示。空会话走 CLI 回放，这段前缀回放里会再来一次。
-    if (!restoreMemory) {
-      this.sessionFlow.dropPending(sessionId);
+    const owned = this.sessionAgents.get(sessionId);
+    if (owned) {
+      this.agent = owned;
     }
-    this.sessionFlow.setMode(sessionId, 'replaying');
     const cwd =
       sessionCwd ??
       this.sessions?.find((row) => row.id === sessionId)?.cwd ??
       parked?.cwd ??
       this.cwd();
+    const sameCli = Boolean(owned && owned.sessionId === sessionId);
+    // 本地已有正文时，把后台合并的增量补上再显示。空会话走 CLI 回放，这段前缀回放里会再来一次。
+    if (!sameCli) {
+      this.sessionFlow.dropPending(sessionId);
+    }
+    this.sessionFlow.setMode(sessionId, 'replaying');
     this.sessionFlow.hold(sessionId);
     this.showRestoreSpinner(sessionId, cwd);
+    if (!this.agent) {
+      await this.start();
+      if (op !== this.sessionOp) {
+        this.abandonSessionLane(sessionId);
+        return;
+      }
+    }
+    const agent = this.agent;
+    if (!agent) {
+      this.abandonSessionLane(sessionId);
+      this.restoringSession = false;
+      return;
+    }
     await new Promise<void>((resolve) => setTimeout(resolve, 16));
     if (op !== this.sessionOp) {
       this.abandonSessionLane(sessionId);
       return;
     }
-    if (restoreMemory && parked) {
-      this.restoreParked(sessionId);
-      this.compactGate = emptyCompactGate();
+    if (sameCli && owned === agent) {
+      if (parked) {
+        this.restoreParked(sessionId);
+      }
+      this.claimAgent(agent, sessionId);
       agent.sessionId = sessionId;
+      this.compactGate = emptyCompactGate();
       this.hideSessionPreview = false;
       this.restoringSession = true;
       this.replaying = false;
@@ -2156,6 +2417,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.replaying = true;
     this.currentSessionId = sessionId;
     this.sessionCwd = cwd;
+    this.claimAgent(agent, sessionId);
     try {
       const result = await agent.loadSession(sessionId, cwd, this.sessionMeta());
       if (op !== this.sessionOp) {
@@ -2163,6 +2425,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       }
       this.models = this.overlayModels(modelsFromResult(result));
       this.currentSessionId = agent.sessionId ?? sessionId;
+      this.claimAgent(agent, this.currentSessionId);
       this.sessionFlow.releaseBuffered(sessionId);
       finalizeReplayTimes(this.messages);
       scrubUserMessages(this.messages);
@@ -2949,8 +3212,13 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   private startOgPluginWatch(): void {
     this.ogPluginWatch?.close();
+    this.ogPluginWatch = undefined;
+    const token = ++this.pluginWatchToken;
     const home = plat().homeDir();
     void ensureOgPluginsDir(home).then((userDir) => {
+      if (token !== this.pluginWatchToken) {
+        return;
+      }
       this.ogPluginWatch?.close();
       this.ogPluginWatch = watchOgPluginDirs(
         [userDir, projectOpengrokPluginsDir(plat().workspaceFolders()[0])].filter(
@@ -3549,16 +3817,25 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       if (hints) {
         logInfo('heavy workspace: skip git status and project layout at session start');
       }
-      spawned = GrokAgent.spawn(
+      const box: { agent?: GrokAgent } = {};
+      box.agent = GrokAgent.spawn(
         {
           cliPath,
           cwd: this.cwd(),
           extensionVersion: plat().extensionVersion(),
           startupHints: hints,
         },
-        (method, params, id) => this.onIncoming(method, params, id),
-        (error) => this.onAgentLost(epoch, error),
+        (method, params, id) => this.onIncoming(box.agent, method, params, id),
+        (error) => {
+          const agent = box.agent;
+          if (agent && this.isBackgroundAgent(agent)) {
+            this.onBackgroundAgentLost(agent, error);
+            return;
+          }
+          this.onAgentLost(epoch, error);
+        },
       );
+      spawned = box.agent;
       if (epoch !== this.agentGen) {
         spawned.dispose();
         return;
@@ -3606,10 +3883,24 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private async onIncoming(
+    agent: GrokAgent | undefined,
     method: string,
     params: unknown,
     id: number | string,
   ): Promise<unknown> {
+    const name = method.startsWith('_') ? method.slice(1) : method;
+    if (
+      name === 'session/update' ||
+      name === 'x.ai/session_notification' ||
+      name === 'x.ai/session/update'
+    ) {
+      const parsed = parseSessionUpdate(params);
+      const bound = agent ? this.agentBindings.get(agent)?.sessionId : undefined;
+      const background = Boolean(agent && bound && this.isBackgroundAgent(agent));
+      const sessionId = background ? bound : (parsed.sessionId ?? bound);
+      this.applyIncomingUpdate(parsed.update, parsed.isReplay, sessionId);
+      return {};
+    }
     return handleIncoming(this, method, params, id);
   }
 
@@ -3924,17 +4215,27 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private async createSession(agent: GrokAgent): Promise<void> {
+    const sessionOp = this.sessionOp;
     const extra = this.sessionMeta();
     const wantedId = this.selectedModelId();
     const wantedEffort = this.selectedEffort();
     const cwd = this.sessionCwd ?? this.cwd();
     const result = await agent.newSession(cwd, extra);
+    if (sessionOp !== this.sessionOp || agent !== this.agent) {
+      return;
+    }
     this.currentSessionId = agent.sessionId ?? result.sessionId;
+    if (this.currentSessionId) {
+      this.claimAgent(agent, this.currentSessionId);
+    }
     this.sessionCwd = cwd;
     this.models = this.overlayModels(modelsFromResult(result));
     if (wantedId) {
       try {
         await this.syncAuthForModel(agent, wantedId);
+        if (sessionOp !== this.sessionOp || agent !== this.agent) {
+          return;
+        }
         if (this.models?.currentId !== wantedId || this.isRelayModel(wantedId)) {
           await agent.setModel(
             wantedId,
@@ -4097,7 +4398,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   /** After grok.com login, put the selected relay on the wire with its own key. */
-  private async applySelectedCustomModel(agent: GrokAgent): Promise<void> {
+  private async applySelectedCustomModel(agent: GrokAgent, sessionOp: number): Promise<void> {
     const modelId = this.selectedModelId();
     if (!modelId || !this.isRelayModel(modelId) || !agent.sessionId) {
       return;
@@ -4105,8 +4406,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const effort = this.selectedEffort();
     try {
       await this.syncAuthForModel(agent, modelId);
+      if (sessionOp !== this.sessionOp || agent !== this.agent) {
+        return;
+      }
       await agent.setModel(modelId, effort ? { reasoningEffort: effort } : undefined);
-      if (this.models) {
+      if (sessionOp === this.sessionOp && agent === this.agent && this.models) {
         this.models = { ...this.models, currentId: modelId };
       }
     } catch (error) {

@@ -166,6 +166,7 @@ export function applyWorkspaceFile(info: {
 export function applyWorkspaceSave(result: {
   path: string;
   ok: boolean;
+  conflict?: boolean;
   hash?: string;
   message?: string;
 }): void {
@@ -179,6 +180,9 @@ export function applyWorkspaceSave(result: {
       if (ui.wsActive === tab.path) {
         ui.wsNotice = '';
       }
+    }
+    if (result.conflict && ui.wsActive === tab.path) {
+      ui.wsNotice = tr('wsConflict');
     }
   }
   render();
@@ -657,7 +661,15 @@ function mainPane(): HTMLElement {
   }
   tabs.append(strip, actions);
   const body = isReviewTab(activeFile()) ? reviewBody() : fileBody(main);
-  main.append(tabs, body);
+  if (ui.wsNotice) {
+    const notice = document.createElement('div');
+    notice.className = 'ws-banner warn';
+    notice.setAttribute('role', 'status');
+    notice.textContent = ui.wsNotice;
+    main.append(tabs, notice, body);
+  } else {
+    main.append(tabs, body);
+  }
   return main;
 }
 

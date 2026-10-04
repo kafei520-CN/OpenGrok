@@ -155,4 +155,22 @@ describe('streamTail', () => {
     const { tail } = buildStreamTail(cursor, next, { status: 'streaming' });
     assert.equal(tail.message.tools[0]?.status, 'done');
   });
+
+  it('resends tool content and images when values change without changing length', () => {
+    const first = assistant({
+      id: 'a1',
+      text: 'x',
+      tools: [{ id: 't1', title: 'read', status: 'running', output: 'old' }],
+      images: [{ mimeType: 'image/png', data: 'old-data' }],
+    });
+    const { cursor } = buildStreamTail(emptyStreamCursor(), first, { status: 'streaming' });
+    const next = assistant({
+      ...first,
+      tools: [{ id: 't1', title: 'read', status: 'running', output: 'new' }],
+      images: [{ mimeType: 'image/png', data: 'new-data' }],
+    });
+    const { tail } = buildStreamTail(cursor, next, { status: 'streaming' });
+    assert.equal(tail.message.tools[0]?.output, 'new');
+    assert.equal(tail.message.images?.[0]?.data, 'new-data');
+  });
 });
