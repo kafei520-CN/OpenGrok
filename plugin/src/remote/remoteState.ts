@@ -48,17 +48,26 @@ export function packedEvents(payload: unknown): unknown[] {
   return packDelivery(payload).map((frame) => JSON.parse(frame) as unknown);
 }
 
-/** Live updates: send a tail the client can merge, never wipe the open transcript. */
+/** Live updates: send a tail the client can merge, never wipe the open transcript.
+ *  A new user turn may be one large image. Keep it even when it blows the soft cap,
+ *  or the bubble never arrives and only a session reload paints it.
+ */
 function packStateUpdate(state: Record<string, unknown>, messages: unknown[]): string[] {
   const tail: unknown[] = [];
   let bytes = 0;
+  let sawUser = false;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const n = byteLen(JSON.stringify(messages[i]));
-    if (tail.length && bytes + n > REMOTE_STATE_SOFT / 2) {
+    const msg = messages[i];
+    const n = byteLen(JSON.stringify(msg));
+    const over = tail.length > 0 && bytes + n > REMOTE_STATE_SOFT / 2;
+    if (over && sawUser) {
       break;
     }
-    tail.unshift(messages[i]);
+    tail.unshift(msg);
     bytes += n;
+    if (isUserMessage(msg)) {
+      sawUser = true;
+    }
   }
   return [
     JSON.stringify({
@@ -154,6 +163,10 @@ function packDiff(row: { type?: string; payload?: { files?: unknown[] } }): stri
     frames.push(JSON.stringify({ type: 'diffMore', files: [files[i]] }));
   }
   return frames;
+}
+
+function isUserMessage(msg: unknown): boolean {
+  return Boolean(msg && typeof msg === 'object' && (msg as { role?: string }).role === 'user');
 }
 
 function byteLen(text: string): number {

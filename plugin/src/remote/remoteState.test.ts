@@ -178,6 +178,36 @@ describe('remote state packing', () => {
     assert.equal(kept?.length, 80);
   });
 
+  it('keeps a large image user turn in a live merge tail', () => {
+    const image = 'a'.repeat(120_000);
+    const messages = [
+      { id: 'old', role: 'assistant', text: 'before', tools: [] },
+      {
+        id: 'user-1',
+        role: 'user',
+        text: 'look',
+        tools: [],
+        images: [{ mimeType: 'image/png', data: image }],
+      },
+      { id: 'assistant-1', role: 'assistant', text: '', tools: [], streaming: true },
+    ];
+    const frames = packDelivery({
+      type: 'state',
+      merge: true,
+      state: { status: 'streaming', messages: messages.slice(-2) },
+    });
+    assert.equal(frames.length, 1);
+    const row = JSON.parse(frames[0] ?? '') as {
+      merge?: boolean;
+      state: { messages: Array<{ id: string }> };
+    };
+    assert.equal(row.merge, true);
+    assert.deepEqual(
+      row.state.messages.map((item) => item.id),
+      ['user-1', 'assistant-1'],
+    );
+  });
+
   it('merges a sent tail onto an already-open transcript', () => {
     const had = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
     const tail = [{ id: 'b', text: 'upd' }, { id: 'c' }, { id: 'd' }];
