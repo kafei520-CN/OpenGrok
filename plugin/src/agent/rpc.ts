@@ -18,18 +18,23 @@ export class RpcError extends Error {
   }
 }
 
-export const MAX_RPC_BUFFER = 4_000_000;
+/** Same ceiling as the CLI line reader (`xai-acp-lib` MAX_LINE_SIZE). */
+export const MAX_RPC_BUFFER = 64 * 1024 * 1024;
 
 export class JsonRpcConnection extends EventEmitter {
   private nextId = 1;
   private buffer = '';
+  /** Drop bytes until the next newline after one line passes `maxBuffer`. */
+  private skipping = false;
   private readonly pending = new Map<number, Pending>();
   private readonly stdin: Writable;
+  private readonly maxBuffer: number;
   private closed = false;
 
-  constructor(stdin: Writable) {
+  constructor(stdin: Writable, maxBuffer = MAX_RPC_BUFFER) {
     super();
     this.stdin = stdin;
+    this.maxBuffer = maxBuffer;
   }
 
   get isClosed(): boolean {
@@ -40,15 +45,27 @@ export class JsonRpcConnection extends EventEmitter {
     if (this.closed) {
       return;
     }
-    this.buffer += chunk.toString('utf8');
+    let text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    if (this.skipping) {
+      const nl = text.indexOf('\n');
+      if (nl < 0) {
+        return;
+      }
+      this.skipping = false;
+      text = text.slice(nl + 1);
+    }
+    if (text) {
+      this.buffer += text;
+    }
     while (true) {
       const idx = this.buffer.indexOf('\n');
       if (idx < 0) {
         break;
       }
-      if (idx > MAX_RPC_BUFFER) {
-        this.overflow('ACP stdout line overflow');
-        return;
+      if (idx > this.maxBuffer) {
+        this.buffer = this.buffer.slice(idx + 1);
+        this.emit('log', 'skipped an oversized ACP stdout line');
+        continue;
       }
       const line = this.buffer.slice(0, idx).trim();
       this.buffer = this.buffer.slice(idx + 1);
@@ -59,8 +76,10 @@ export class JsonRpcConnection extends EventEmitter {
         return;
       }
     }
-    if (this.buffer.length > MAX_RPC_BUFFER) {
-      this.overflow('ACP stdout overflow');
+    if (this.buffer.length > this.maxBuffer) {
+      this.buffer = '';
+      this.skipping = true;
+      this.emit('log', 'skipped an oversized ACP stdout line');
     }
   }
 
@@ -114,12 +133,6 @@ export class JsonRpcConnection extends EventEmitter {
       pending.reject(error ?? new Error('ACP connection closed'));
       this.pending.delete(id);
     }
-  }
-
-  private overflow(reason: string): void {
-    const error = new Error(reason);
-    this.emit('overflow', error);
-    this.close(error);
   }
 
   private write(payload: unknown): void {

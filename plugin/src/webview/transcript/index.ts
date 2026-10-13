@@ -1495,15 +1495,25 @@ function turnId(turn: Turn): string {
   return `${turn.user?.id ?? ''}:${turn.assistant?.id ?? ''}`;
 }
 
+function sigText(value: string | undefined): string {
+  const text = value ?? '';
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${text.length}:${hash >>> 0}`;
+}
+
 function turnSig(turn: Turn, split: boolean): string {
   const a = turn.assistant;
   const sum = totals(a?.edits ?? []);
   return [
     split ? '1' : '0',
     a?.streaming ? '1' : '0',
-    a?.text.length ?? 0,
-    a?.thinking?.length ?? 0,
-    a?.plan?.length ?? 0,
+    sigText(a?.text),
+    sigText(a?.thinking),
+    sigText(a?.plan),
     a?.tools.length ?? 0,
     a?.edits?.length ?? 0,
     sum.added,
@@ -1517,7 +1527,7 @@ function turnSig(turn: Turn, split: boolean): string {
     a?.tools.find((tool) => tool.kind === 'compact')?.status ?? '',
     ui.copiedId === a?.id ? 'c' : '',
     stepsKey(a ? visibleSteps(a) : undefined),
-    turn.user?.text.length ?? 0,
+    sigText(turn.user?.text),
     turn.user?.files?.length ?? 0,
     turn.user?.images?.length ?? 0,
     ui.editingUserId === turn.user?.id ? 'e' : '',
@@ -1810,7 +1820,7 @@ function heroCard(path: string): HTMLElement {
   open.append(openLabel);
   open.addEventListener('click', (event) => {
     event.stopPropagation();
-    post({ type: 'openFile', path });
+    openHero(path);
   });
   const menuBtn = document.createElement('button');
   menuBtn.type = 'button';
@@ -1826,7 +1836,7 @@ function heroCard(path: string): HTMLElement {
   openItem.addEventListener('click', (event) => {
     event.stopPropagation();
     menu.hidden = true;
-    post({ type: 'openFile', path });
+    openHero(path);
   });
   const revealItem = document.createElement('button');
   revealItem.type = 'button';
@@ -1898,10 +1908,9 @@ function openHero(path: string): void {
   if (kind === 'web') {
     const href = /^https?:\/\//i.test(path) ? path : local ? fileHref(local) : '';
     if (!href) {
-      post({ type: 'openFile', path });
       return;
     }
-    void openInDockBrowser(href).catch(() => post({ type: 'openFile', path }));
+    void openInDockBrowser(href).catch(() => post({ type: 'openUrl', url: href }));
     return;
   }
   if (kind === 'image' && local) {

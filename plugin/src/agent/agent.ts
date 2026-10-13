@@ -114,13 +114,6 @@ export class GrokAgent {
     };
 
     rpc.on('log', (message: string) => logWarn(message));
-    rpc.on('overflow', (error: Error) => {
-      logError('ACP stdout overflow', error);
-      lost(error);
-      if (!child.killed) {
-        child.kill();
-      }
-    });
     child.stdout.on('data', (chunk: Buffer) => {
       setImmediate(() => rpc.feed(chunk));
     });
@@ -353,6 +346,7 @@ export class GrokAgent {
     sessionId: string,
     cwd: string,
     extraMeta?: Record<string, unknown>,
+    still?: () => boolean,
   ): Promise<SessionNewResult> {
     const result = (await this.rpc.request('session/load', {
       sessionId,
@@ -360,7 +354,9 @@ export class GrokAgent {
       mcpServers: [],
       _meta: extraMeta,
     })) as SessionNewResult;
-    this.sessionId = result.sessionId ?? sessionId;
+    if (!still || still()) {
+      this.sessionId = result.sessionId ?? sessionId;
+    }
     return result;
   }
 

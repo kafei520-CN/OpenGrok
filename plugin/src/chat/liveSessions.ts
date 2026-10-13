@@ -202,7 +202,7 @@ export function trimParkedSessions(
     if (id === currentId || row.status === 'streaming' || keepFull.has(id)) {
       continue;
     }
-    if (row.messages.length === 0) {
+    if (row.messages.length === 0 || row.queue.length > 0) {
       continue;
     }
     slimParkedRow(row);

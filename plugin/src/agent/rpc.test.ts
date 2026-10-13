@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
 import { describe, it } from 'node:test';
-import { JsonRpcConnection, MAX_RPC_BUFFER, RpcError } from './rpc';
+import { JsonRpcConnection, RpcError } from './rpc';
 
 describe('JsonRpcConnection', () => {
   it('matches responses to request ids', async () => {
@@ -53,24 +53,33 @@ describe('JsonRpcConnection', () => {
     assert.deepEqual(await pending, { ok: true });
   });
 
-  it('parses complete lines then closes on leftover overflow', async () => {
+  it('skips an oversized line and keeps the following response', async () => {
     const stdin = new PassThrough();
-    const conn = new JsonRpcConnection(stdin);
+    const conn = new JsonRpcConnection(stdin, 80);
     const notes: string[] = [];
-    let overflow = false;
+    const logs: string[] = [];
     conn.on('notification', (method: string) => notes.push(method));
-    conn.on('overflow', () => {
-      overflow = true;
-    });
+    conn.on('log', (message: string) => logs.push(message));
     const pending = conn.request('initialize', {});
     conn.feed(
-      Buffer.from(`{"jsonrpc":"2.0","method":"session/update","params":{}}\n${'x'.repeat(MAX_RPC_BUFFER + 1)}`),
+      Buffer.from(
+        `{"jsonrpc":"2.0","method":"session/update","params":{}}\n${'x'.repeat(120)}\n{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n`,
+      ),
     );
     assert.deepEqual(notes, ['session/update']);
-    assert.equal(overflow, true);
-    assert.equal(conn.isClosed, true);
-    await assert.rejects(pending);
-    conn.feed(Buffer.from('{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n'));
+    assert.deepEqual(await pending, { ok: true });
+    assert.equal(conn.isClosed, false);
+    assert.equal(logs.length, 1);
+  });
+
+  it('discards a line that exceeds the cap before its newline', async () => {
+    const stdin = new PassThrough();
+    const conn = new JsonRpcConnection(stdin, 80);
+    const pending = conn.request('initialize', {});
+    conn.feed(Buffer.from('x'.repeat(120)));
+    assert.equal(conn.isClosed, false);
+    conn.feed(Buffer.from(`yyyy\n{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n`));
+    assert.deepEqual(await pending, { ok: true });
   });
 
   it('rejects a request that exceeds its timeout without blocking later calls', async () => {

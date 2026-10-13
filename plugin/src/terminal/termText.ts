@@ -134,3 +134,24 @@ export function termBytes(raw: unknown): Uint8Array | undefined {
 function isBase64Bytes(raw: string): boolean {
   return raw.length >= 8 && raw.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(raw);
 }
+
+/** Keep the newest bytes. ACP outputByteLimit is a byte cap, and the useful text is the tail. */
+export function keepNewestText(
+  current: string,
+  extra: string,
+  limit: number,
+): { text: string; truncated: boolean } {
+  const next = current + extra;
+  if (limit <= 0) {
+    return { text: '', truncated: next.length > 0 };
+  }
+  if (Buffer.byteLength(next) <= limit) {
+    return { text: next, truncated: false };
+  }
+  const buf = Buffer.from(next);
+  let start = Math.max(0, buf.length - limit);
+  while (start < buf.length && (buf[start]! & 0xc0) === 0x80) {
+    start += 1;
+  }
+  return { text: buf.subarray(start).toString('utf8'), truncated: true };
+}

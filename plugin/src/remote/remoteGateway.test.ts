@@ -106,7 +106,7 @@ describe('remote gateway http', () => {
     const cookie = ok.headers.get('set-cookie') ?? '';
     const location = ok.headers.get('location') ?? '';
     assert.match(cookie, /grok_sess=/);
-    assert.match(location, /^\/\?s=[0-9a-f]+$/);
+    assert.equal(location, '/');
     const retryPair = await fetch(`${base}/pair`, {
       method: 'POST',
       headers: {
@@ -117,12 +117,13 @@ describe('remote gateway http', () => {
       redirect: 'manual',
     });
     assert.equal(retryPair.status, 302);
-    const token = new URL(location, base).searchParams.get('s') ?? '';
-    const page = await fetch(`${base}${location}`);
+    const sess = cookie.split(';')[0] ?? '';
+    const page = await fetch(`${base}/`, { headers: { cookie: sess } });
     const html = await page.text();
     assert.match(html, /webview\.js/);
     assert.match(html, /remote-web/);
-    assert.match(html, /\/ws\?s=/);
+    assert.match(html, /"\/ws"/);
+    assert.doesNotMatch(html, /\/ws\?s=/);
     assert.match(html, /ws:\/\/127\.0\.0\.1:/);
     assert.match(html, /frame-src 'self'/);
     assert.match(html, /worker-src 'self' blob:/);
@@ -134,16 +135,16 @@ describe('remote gateway http', () => {
     const diffPage = await fetch(`${base}/diff.html`, { headers: { cookie: cookie.split(';')[0] } });
     assert.match(await diffPage.text(), /diff\.js/);
     const portNum = Number(actualPort);
-    const authed = await wsUpgrade(portNum, `/ws?s=${token}`);
+    const authed = await wsUpgrade(portNum, '/ws', `Cookie: ${sess}\r\n`);
     assert.equal(authed.status, 101);
     await new Promise<void>((resolve) => {
       authed.socket.once('close', () => resolve());
       authed.socket.destroy();
     });
-    const again = await wsUpgrade(portNum, `/ws?s=${token}`);
+    const again = await wsUpgrade(portNum, '/ws', `Cookie: ${sess}\r\n`);
     assert.equal(again.status, 101);
     again.socket.destroy();
-    const denied = await wsUpgrade(portNum, '/ws');
+    const denied = await wsUpgrade(portNum, '/ws', '');
     assert.equal(denied.status, 401);
     denied.socket.destroy();
     await gw.stop();
@@ -270,8 +271,8 @@ describe('remote gateway http', () => {
       body: `code=${live.code}`,
       redirect: 'manual',
     });
-    const token = new URL(paired.headers.get('location') ?? '', 'http://127.0.0.1').searchParams.get('s') ?? '';
-    const session = await openWs(live.port, `/ws?s=${token}`);
+    const sess = (paired.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const session = await openWs(live.port, '/ws', `Cookie: ${sess}\r\n`);
     assert.equal(session.status, 101);
     const first = JSON.parse(await session.nextText()) as { type: string; state?: { status?: string } };
     assert.equal(first.type, 'state');
@@ -316,6 +317,7 @@ function wsUpgrade(
 function openWs(
   port: number,
   pathName: string,
+  extraHeaders = '',
 ): Promise<{
   status: number;
   socket: ReturnType<typeof connect>;
@@ -327,7 +329,7 @@ function openWs(
       const key = randomBytes(16).toString('base64');
       socket.write(
         `GET ${pathName} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\n` +
-          `Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`,
+          `Connection: Upgrade\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n${extraHeaders}\r\n`,
       );
     });
     let buf = Buffer.alloc(0);

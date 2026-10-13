@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { describe, it } from 'node:test';
-import { GrokController, rewindIndexFor } from './controller';
+import { GrokController, messagesBeforePrompt, rewindIndexFor } from './controller';
 import type { GrokAgent } from '../agent/agent';
 import { cancelledPermission } from '../core/permissions';
 import { bindPlatform, type Platform } from '../core/platform';
@@ -337,5 +337,17 @@ describe('rewindIndexFor', () => {
 
   it('ignores user bubbles', () => {
     assert.equal(rewindIndexFor(turns, 'u2'), undefined);
+  });
+
+  it('keeps a note with the earlier turn', () => {
+    const withNote = [
+      { id: 'u1', role: 'user' },
+      { id: 'a1', role: 'assistant' },
+      { id: 'n1', role: 'assistant' },
+      { id: 'u2', role: 'user' },
+      { id: 'a2', role: 'assistant' },
+    ];
+    assert.equal(rewindIndexFor(withNote, 'a2'), 1);
+    assert.equal(messagesBeforePrompt(withNote, 1), 3);
   });
 });

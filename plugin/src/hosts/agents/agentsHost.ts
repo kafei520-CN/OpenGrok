@@ -103,6 +103,9 @@ export async function importAgentFiles(paths: string[]): Promise<number> {
 }
 
 export async function toggleAgent(filePath: string): Promise<void> {
+  if (!(await listedAgentFile(filePath))) {
+    return;
+  }
   if (filePath.endsWith(DISABLED)) {
     await moveFile(filePath, filePath.slice(0, -DISABLED.length));
     return;
@@ -111,7 +114,16 @@ export async function toggleAgent(filePath: string): Promise<void> {
 }
 
 export async function deleteAgent(filePath: string): Promise<void> {
+  if (!(await listedAgentFile(filePath))) {
+    return;
+  }
   await plat().deleteFile(filePath, true);
+}
+
+async function listedAgentFile(filePath: string): Promise<boolean> {
+  const os = plat().os();
+  const rows = await listAgents();
+  return rows.some((row) => row.filePath && row.scope !== 'builtin' && sameFsPath(row.filePath, filePath, os));
 }
 
 async function collectAgents(

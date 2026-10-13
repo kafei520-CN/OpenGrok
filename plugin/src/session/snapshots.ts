@@ -138,6 +138,9 @@ export function planRevert(list: FileSnapshot[]): RevertPlan[] {
     }
   }
   return [...byPath.values()].map((snap) => {
+    if (snap.source === 'tool') {
+      return { action: 'skip' as const, absPath: snap.absPath, reason: 'missing-original' as const };
+    }
     if (!snap.existed) {
       return { action: 'delete', absPath: snap.absPath };
     }

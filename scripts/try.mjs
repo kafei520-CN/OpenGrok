@@ -223,6 +223,7 @@ function startElectron() {
     if (restarting) {
       return;
     }
+    console.error(`OpenGrok exited (${code ?? 0}).`);
     process.exit(code ?? 0);
   });
 }
@@ -234,11 +235,17 @@ function scheduleRestart() {
   clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
     restarting = true;
-    stop(electronChild);
-    setTimeout(() => {
+    const previous = electronChild;
+    stop(previous);
+    const start = () => {
       restarting = false;
       startElectron();
-    }, 400);
+    };
+    if (!previous || previous.exitCode != null) {
+      setTimeout(start, 300);
+      return;
+    }
+    previous.once('exit', () => setTimeout(start, 300));
   }, 400);
 }
 
@@ -254,11 +261,27 @@ if (compiled.status !== 0) {
 
 const esbuild = spawn(process.execPath, [path.join(root, 'esbuild.mjs'), '--watch'], {
   cwd: root,
-  stdio: 'inherit',
+  stdio: ['ignore', 'pipe', 'inherit'],
   env: electronEnv(),
 });
 
+let markWatchReady = () => {};
+const watchReady = new Promise((resolve) => {
+  markWatchReady = resolve;
+});
+let watchBuf = '';
+esbuild.stdout.on('data', (chunk) => {
+  const text = chunk.toString();
+  process.stdout.write(text);
+  watchBuf = (watchBuf + text).slice(-200);
+  if (watchBuf.includes('watching')) {
+    markWatchReady();
+  }
+});
+esbuild.stdout.on('end', () => markWatchReady());
+
 esbuild.on('exit', (code) => {
+  markWatchReady();
   if (!electronChild) {
     process.exit(code ?? 1);
   }
@@ -266,12 +289,13 @@ esbuild.on('exit', (code) => {
 
 console.log('launching...');
 ensureDevElectron()
-  .then((bin) => {
+  .then(async (bin) => {
     electronBin = bin;
+    await watchReady;
     startElectron();
     setTimeout(() => {
       allowRestart = true;
-    }, 2000);
+    }, 1500);
   })
   .catch((error) => {
     console.error(error);

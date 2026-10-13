@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
+import { resolveLocale, t } from '../plugin/src/core/i18n';
 import { DEFAULT_DESKTOP_THEME } from '../plugin/src/settings/theme';
 import {
   attachUpdater,
@@ -70,6 +71,7 @@ type AppState = {
   bounds?: { x: number; y: number; width: number; height: number };
   pet?: PetState;
   autoUpdate?: boolean;
+  debug?: boolean;
 };
 
 type HostRequest = {
@@ -90,6 +92,8 @@ let lastAgentStatus = '';
 let lastPetPayload: { mood: string; headline: string } = { mood: 'idle', headline: '' };
 let petDoneTimer: ReturnType<typeof setTimeout> | undefined;
 let isQuitting = false;
+let sidecarCrashes = 0;
+let sidecarCrashWindow = 0;
 
 const DEFAULT_PET: PetState = {
   enabled: false,
@@ -281,6 +285,26 @@ function createWindow(): BrowserWindow {
   });
   win.on('unmaximize', syncChrome);
   win.on('resized', syncChrome);
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !input.control || !input.shift || input.alt || input.meta) {
+      return;
+    }
+    if (input.key.toLowerCase() !== 'd') {
+      return;
+    }
+    event.preventDefault();
+    setDebugMode(!debugOn());
+  });
+  win.webContents.on('devtools-closed', () => {
+    if (!debugOn()) {
+      return;
+    }
+    writeState({ debug: false });
+    refreshTrayMenu();
+    if (!win.isDestroyed()) {
+      win.webContents.send('grok-debug', false);
+    }
+  });
   return win;
 }
 
@@ -534,6 +558,7 @@ function createPetWindow(): BrowserWindow {
     title: 'OpenGrok pet',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      additionalArguments: ['--opengrok-role=pet'],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -716,6 +741,13 @@ function buildTrayMenu() {
     },
     { type: 'separator' },
     {
+      label: t(shellLocale(), debugOn() ? 'debugTrayOff' : 'debugMode'),
+      click: () => {
+        showMainWindow();
+        setDebugMode(!debugOn());
+      },
+    },
+    {
       label: '检查更新',
       click: () => {
         showMainWindow();
@@ -725,6 +757,80 @@ function buildTrayMenu() {
     { type: 'separator' },
     { label: '退出', click: () => quitApp() },
   ]);
+}
+
+function debugOn(): boolean {
+  return readState().debug === true;
+}
+
+function shellLocale() {
+  let setting: string | undefined;
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(dataDir(), 'settings.json'), 'utf8')) as {
+      locale?: unknown;
+    };
+    if (typeof raw.locale === 'string') {
+      setting = raw.locale;
+    }
+  } catch {
+    setting = undefined;
+  }
+  return resolveLocale(setting, app.getLocale());
+}
+
+function refreshTrayMenu(): void {
+  tray?.setContextMenu(buildTrayMenu());
+}
+
+function debugLog(line: string): void {
+  if (!debugOn()) {
+    return;
+  }
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  win.webContents.send('grok-debug-log', line);
+}
+
+function revealMainWindow(): void {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  win.focus();
+}
+
+function applyDebugMode(): void {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  if (debugOn()) {
+    if (!win.webContents.isDevToolsOpened()) {
+      win.webContents.openDevTools({ mode: 'detach', activate: false });
+    }
+    revealMainWindow();
+    return;
+  }
+  if (win.webContents.isDevToolsOpened()) {
+    win.webContents.closeDevTools();
+  }
+}
+
+function setDebugMode(on: boolean): boolean {
+  writeState({ debug: on });
+  applyDebugMode();
+  refreshTrayMenu();
+  const win = mainWindow;
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('grok-debug', on);
+  }
+  return on;
 }
 
 function openPetSettings(): void {
@@ -883,6 +989,7 @@ function startSidecar(cwd: string): void {
     try {
       msg = JSON.parse(trimmed) as Record<string, unknown>;
     } catch {
+      debugLog(trimmed);
       return;
     }
     if (msg['type'] === 'host' && typeof msg['id'] === 'number') {
@@ -895,25 +1002,38 @@ function startSidecar(cwd: string): void {
     const text = chunk.toString('utf8').trim();
     if (text) {
       console.error(text);
+      debugLog(text);
     }
   });
   child.on('exit', (code) => {
-    if (sidecar === child) {
-      sidecar = undefined;
+    if (sidecar !== child) {
+      return;
     }
-    if (code && code !== 0) {
+    sidecar = undefined;
+    if (isQuitting) {
+      return;
+    }
+    if (code) {
       sendUi({
-        type: 'state',
-        state: {
-          status: 'error',
-          error: `OpenGrok agent exited (${code}).`,
-          messages: [],
-          attachments: [],
-          commands: [],
-          locale: 'zh-CN',
-        },
+        type: 'hostError',
+        error: `OpenGrok agent exited (${code}).`,
       });
     }
+    const now = Date.now();
+    if (now - sidecarCrashWindow > 60_000) {
+      sidecarCrashes = 0;
+      sidecarCrashWindow = now;
+    }
+    if (sidecarCrashes >= 2) {
+      return;
+    }
+    sidecarCrashes += 1;
+    const cwd = readState().cwd || defaultCwd();
+    setTimeout(() => {
+      if (!sidecar && !isQuitting) {
+        startSidecar(cwd);
+      }
+    }, 400);
   });
 }
 
@@ -1038,7 +1158,18 @@ async function runHost(method: string, params: Record<string, unknown>): Promise
       return true;
     case 'deleteFile':
       if (typeof params['path'] === 'string') {
-        fs.rmSync(params['path'], { force: true });
+        const filePath = params['path'];
+        if (params['useTrash'] === false) {
+          fs.rmSync(filePath, { force: true });
+        } else {
+          try {
+            await shell.trashItem(filePath);
+          } catch (error) {
+            if (fs.existsSync(filePath)) {
+              throw error;
+            }
+          }
+        }
       }
       return true;
     case 'refresh':
@@ -1093,6 +1224,7 @@ function openPrompt(config: unknown): Promise<unknown> {
       backgroundColor: '#12171f',
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
+        additionalArguments: ['--opengrok-role=prompt'],
         contextIsolation: true,
         sandbox: false,
       },
@@ -1124,36 +1256,55 @@ async function pickProject(): Promise<void> {
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  app.quit();
+  console.error('OpenGrok is already running.');
+  app.exit(0);
 } else {
   app.on('second-instance', () => {
     showMainWindow();
   });
   void app.whenReady().then(() => {
-    if (process.platform === 'win32') {
-      app.setAppUserModelId('cn.mckafei.opengrok');
+    try {
+      if (process.platform === 'win32') {
+        app.setAppUserModelId('cn.mckafei.opengrok');
+      }
+      mainWindow = createWindow();
+      revealMainWindow();
+      console.log('OpenGrok window ready');
+      watchTryReload(mainWindow);
+      mainWindow.webContents.on('did-finish-load', () => {
+        startSidecar(readState().cwd || defaultCwd());
+        notifyPetSettings();
+        showPetWindow();
+        applyDebugMode();
+      });
+      mainWindow.webContents.on('did-fail-load', (_event, code, description) => {
+        console.error(`OpenGrok page failed to load (${code}): ${description}`);
+      });
+      setTimeout(() => {
+        try {
+          writeState({ cwd: defaultCwd() });
+          seedOfficeSkills();
+          seedTheme();
+          attachUpdater({
+            getWindow: () => mainWindow,
+            prepareQuit: () => {
+              isQuitting = true;
+            },
+            getAuto: () => readState().autoUpdate !== false,
+            setAuto: (on) => writeState({ autoUpdate: on }),
+            packaged: () => app.isPackaged,
+            version: () => VERSION,
+          });
+          createTray();
+        } catch (error) {
+          console.error(error);
+        }
+      }, 0);
+    } catch (error) {
+      console.error(error);
     }
-    writeState({ cwd: defaultCwd() });
-    seedOfficeSkills();
-    seedTheme();
-    attachUpdater({
-      getWindow: () => mainWindow,
-      prepareQuit: () => {
-        isQuitting = true;
-      },
-      getAuto: () => readState().autoUpdate !== false,
-      setAuto: (on) => writeState({ autoUpdate: on }),
-      packaged: () => app.isPackaged,
-      version: () => VERSION,
-    });
-    createTray();
-    mainWindow = createWindow();
-    watchTryReload(mainWindow);
-    mainWindow.webContents.on('did-finish-load', () => {
-      startSidecar(readState().cwd || defaultCwd());
-      notifyPetSettings();
-      showPetWindow();
-    });
+  }).catch((error: unknown) => {
+    console.error(error);
   });
 }
 
@@ -1174,10 +1325,21 @@ app.on('before-quit', () => {
   stopSidecar();
 });
 
+function sameWindow(
+  sender: ElectronNS.WebContents,
+  win: { id: number; isDestroyed(): boolean } | undefined,
+): boolean {
+  if (!win || win.isDestroyed()) {
+    return false;
+  }
+  const found = BrowserWindow.fromWebContents(sender);
+  return Boolean(found && found.id === win.id);
+}
+
 ipcMain.on(
   'grok-ui',
   (
-    _event,
+    event,
     message: {
       type?: string;
       enabled?: boolean;
@@ -1187,8 +1349,12 @@ ipcMain.on(
       eyeColor?: string;
       expression?: string;
       bubbles?: boolean;
+      key?: string;
     },
   ) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   if (message?.type === 'pickProject') {
     void pickProject();
     return;
@@ -1219,15 +1385,24 @@ ipcMain.on(
     applyPetPatch(patch);
     return;
   }
+  if (message?.type === 'updateSetting' && message.key === 'locale') {
+    setTimeout(() => refreshTrayMenu(), 80);
+  }
   sendSidecar({ type: 'ui', message });
 });
 
-ipcMain.on('pet-ready', () => {
+ipcMain.on('pet-ready', (event) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   petWindow?.webContents.send('pet-config', petConfigPayload());
   petWindow?.webContents.send('pet-status', lastPetPayload);
 });
 
-ipcMain.on('pet-move', (_event, delta: { dx?: number; dy?: number }) => {
+ipcMain.on('pet-move', (event, delta: { dx?: number; dy?: number }) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   const win = petWindow;
   if (!win || win.isDestroyed()) {
     return;
@@ -1236,30 +1411,46 @@ ipcMain.on('pet-move', (_event, delta: { dx?: number; dy?: number }) => {
   win.setPosition(Math.round(x + Number(delta?.dx ?? 0)), Math.round(y + Number(delta?.dy ?? 0)));
 });
 
-ipcMain.on('pet-end-move', () => {
+ipcMain.on('pet-end-move', (event) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   savePetBounds();
 });
 
-ipcMain.on('pet-ignore', (_event, ignore: boolean) => {
-  if (!petWindow || petWindow.isDestroyed()) {
+ipcMain.on('pet-ignore', (event, ignore: boolean) => {
+  const win = petWindow;
+  if (!win || !sameWindow(event.sender, win)) {
     return;
   }
-  petWindow.setIgnoreMouseEvents(Boolean(ignore), { forward: true });
+  win.setIgnoreMouseEvents(Boolean(ignore), { forward: true });
 });
 
-ipcMain.on('pet-fit', (_event, opts: { bubble?: boolean; size?: number }) => {
+ipcMain.on('pet-fit', (event, opts: { bubble?: boolean; size?: number }) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   fitPetWindow(opts);
 });
 
-ipcMain.on('pet-click', () => {
+ipcMain.on('pet-click', (event) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   showMainWindow();
 });
 
-ipcMain.on('pet-dblclick', () => {
+ipcMain.on('pet-dblclick', (event) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   hidePetWindow(true);
 });
 
-ipcMain.on('pet-menu', () => {
+ipcMain.on('pet-menu', (event) => {
+  if (!sameWindow(event.sender, petWindow)) {
+    return;
+  }
   const pet = readPet();
   Menu.buildFromTemplate([
     { label: '打开 OpenGrok', click: () => showMainWindow() },
@@ -1270,11 +1461,16 @@ ipcMain.on('pet-menu', () => {
   ]).popup({ window: petWindow });
 });
 
-ipcMain.handle('og-term-shells', () => labShells().map(({ id, label }) => ({ id, label })));
+ipcMain.handle('og-term-shells', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return [];
+  }
+  return labShells().map(({ id, label }) => ({ id, label }));
+});
 
 ipcMain.handle('og-term-start', (event, opts: { shellId?: string; cwd?: string; cols?: number; rows?: number }) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win) {
+  if (!win || !sameWindow(event.sender, mainWindow)) {
     return { ok: false, error: '没有窗口' };
   }
   return labShellStart(
@@ -1286,17 +1482,24 @@ ipcMain.handle('og-term-start', (event, opts: { shellId?: string; cwd?: string; 
   );
 });
 
-ipcMain.on('og-term-write', (_event, data: unknown) => {
-  if (typeof data === 'string') {
-    labShellWrite(data);
+ipcMain.on('og-term-write', (event, data: unknown) => {
+  if (!sameWindow(event.sender, mainWindow) || typeof data !== 'string') {
+    return;
   }
+  labShellWrite(data);
 });
 
-ipcMain.on('og-term-resize', (_event, opts: { cols?: number; rows?: number }) => {
+ipcMain.on('og-term-resize', (event, opts: { cols?: number; rows?: number }) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   labShellResize(Number(opts?.cols) || 0, Number(opts?.rows) || 0);
 });
 
-ipcMain.on('og-term-kill', () => {
+ipcMain.on('og-term-kill', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   labShellStop();
 });
 
@@ -1330,6 +1533,9 @@ const CDP_METHODS = new Set([
 ]);
 
 ipcMain.handle('og-cdp', async (event, webContentsId: unknown, method: unknown, params: unknown) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return { ok: false, error: '没有窗口' };
+  }
   const guestId = Number(webContentsId);
   const command = typeof method === 'string' ? method : '';
   if (!CDP_METHODS.has(command)) {
@@ -1363,7 +1569,10 @@ ipcMain.handle('og-cdp', async (event, webContentsId: unknown, method: unknown, 
   }
 });
 
-ipcMain.on('og-browser-res', (_event, msg: { id?: number; result?: unknown }) => {
+ipcMain.on('og-browser-res', (event, msg: { id?: number; result?: unknown }) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   const id = Number(msg?.id);
   const done = browserWait.get(id);
   if (!done) {
@@ -1373,7 +1582,10 @@ ipcMain.on('og-browser-res', (_event, msg: { id?: number; result?: unknown }) =>
   done(msg.result);
 });
 
-ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: string; surface?: string }) => {
+ipcMain.on('grok-chrome', (event, next: { background?: string; foreground?: string; surface?: string }) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   const win = mainWindow;
   if (!win || win.isDestroyed()) {
     return;
@@ -1401,7 +1613,10 @@ ipcMain.on('grok-chrome', (_event, next: { background?: string; foreground?: str
   applyTitleBarOverlay(win, { background, foreground, surface });
 });
 
-ipcMain.on('grok-window', (_event, action: 'min' | 'max' | 'close') => {
+ipcMain.on('grok-window', (event, action: 'min' | 'max' | 'close') => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   const win = mainWindow;
   if (!win) {
     return;
@@ -1421,19 +1636,68 @@ ipcMain.on('grok-window', (_event, action: 'min' | 'max' | 'close') => {
   hideToTray();
 });
 
-ipcMain.handle('grok-maximized', () => Boolean(mainWindow?.isMaximized()));
+ipcMain.handle('grok-maximized', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return false;
+  }
+  return Boolean(mainWindow?.isMaximized());
+});
 
-ipcMain.handle('grok-update-state', () => updateSnapshot());
-ipcMain.handle('grok-update-check', () => checkForUpdates());
-ipcMain.handle('grok-update-download', () => downloadUpdate());
-ipcMain.handle('grok-update-install', () => {
+ipcMain.handle('grok-update-state', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return { kind: 'idle', auto: false, packaged: false };
+  }
+  return updateSnapshot();
+});
+ipcMain.handle('grok-update-check', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return { kind: 'idle', auto: false, packaged: false };
+  }
+  return checkForUpdates();
+});
+ipcMain.handle('grok-update-download', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return { kind: 'idle', auto: false, packaged: false };
+  }
+  return downloadUpdate();
+});
+ipcMain.handle('grok-update-install', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return;
+  }
   installUpdate();
 });
-ipcMain.handle('grok-update-auto', (_event, on: unknown) => setAutoUpdate(on === true));
+ipcMain.handle('grok-debug-state', (event) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return false;
+  }
+  return debugOn();
+});
+ipcMain.handle('grok-debug-set', (event, on: unknown) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return false;
+  }
+  return setDebugMode(on === true);
+});
 
-ipcMain.handle('grok-prompt-config', () => promptConfig);
+ipcMain.handle('grok-update-auto', (event, on: unknown) => {
+  if (!sameWindow(event.sender, mainWindow)) {
+    return { kind: 'idle', auto: false, packaged: false };
+  }
+  return setAutoUpdate(on === true);
+});
 
-ipcMain.on('grok-prompt-result', (_event, value: unknown) => {
+ipcMain.handle('grok-prompt-config', (event) => {
+  if (!sameWindow(event.sender, promptWindow)) {
+    return undefined;
+  }
+  return promptConfig;
+});
+
+ipcMain.on('grok-prompt-result', (event, value: unknown) => {
+  if (!sameWindow(event.sender, promptWindow)) {
+    return;
+  }
   promptResolve?.(value);
   promptResolve = undefined;
   promptWindow?.close();

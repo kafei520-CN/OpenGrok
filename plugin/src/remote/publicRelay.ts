@@ -510,7 +510,7 @@ export async function listenPublicRelay(opts: {
   const banned = new Set((opts.bannedIps ?? []).map((ip) => normalizeIp(ip)).filter(Boolean));
   const state = {
     publicHost: opts.publicHost,
-    officialToken: opts.officialToken || BUNDLED_RELAY_TOKEN,
+    officialToken: opts.officialToken ?? BUNDLED_RELAY_TOKEN,
     customToken: opts.customToken ?? '',
     legacyToken: opts.token ?? '',
     maxFrameBytes: opts.maxFrameBytes ?? DEFAULT_MAX_FRAME,
@@ -713,7 +713,7 @@ function upgradeHost(
   },
   pluginIp: string,
 ): void {
-  const token = bearerToken(head.headers.authorization) || queryToken(head.url);
+  const token = bearerToken(head.headers.authorization);
   const kind = hostKind(token, ctx.state);
   if (!kind) {
     writeHttp(socket, 401, 'auth');
@@ -832,16 +832,27 @@ class HostSession {
     const id = (this.nextId += 1);
     this.streams.set(id, { sock: browser, ip });
     this.send(MUX_OPEN, id);
-    if (first.length) {
-      this.send(MUX_DATA, id, first);
-    }
-    browser.on('data', (chunk) => this.send(MUX_DATA, id, chunk));
     const close = (): void => {
       if (!this.streams.delete(id)) {
         return;
       }
       this.send(MUX_CLOSE, id);
     };
+    let seen = 0;
+    const forward = (chunk: Buffer) => {
+      seen += chunk.length;
+      if (seen > maxFileBytes) {
+        writeHttp(browser, 413, landingPage(false, '文件超过服务端上限。'));
+        close();
+        browser.destroy();
+        return;
+      }
+      this.send(MUX_DATA, id, chunk);
+    };
+    if (first.length) {
+      forward(first);
+    }
+    browser.on('data', (chunk) => forward(chunk));
     browser.on('close', close);
     browser.on('error', () => {
       close();
@@ -989,14 +1000,6 @@ function bearerToken(raw: string | undefined): string {
   const value = String(raw ?? '');
   const match = /^Bearer\s+(\S+)/i.exec(value);
   return match?.[1] ?? '';
-}
-
-function queryToken(url: string): string {
-  const cut = url.indexOf('?');
-  if (cut < 0) {
-    return '';
-  }
-  return new URLSearchParams(url.slice(cut)).get('token') ?? '';
 }
 
 function cookieValue(raw: string | undefined, name: string): string | undefined {

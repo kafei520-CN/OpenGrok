@@ -27,7 +27,11 @@ export function safeSkillDirName(raw: string): string {
     .replace(/[<>:"/\\|?*\u0000]/g, '-')
     .trim()
     .replace(/\s+/g, '-');
-  return cleaned.slice(0, 80) || 'skill';
+  const name = cleaned.slice(0, 80);
+  if (!name || name === '.' || name === '..') {
+    return 'skill';
+  }
+  return name;
 }
 
 export function globalSkillsDir(): string {
@@ -98,7 +102,7 @@ export async function importSkillFolders(paths: string[]): Promise<number> {
 }
 
 export async function toggleSkill(dirPath: string): Promise<void> {
-  if (isBundledSkillDir(dirPath)) {
+  if (isBundledSkillDir(dirPath) || !(await listedSkillDir(dirPath))) {
     return;
   }
   const on = path.join(dirPath, SKILL_FILE);
@@ -113,10 +117,16 @@ export async function toggleSkill(dirPath: string): Promise<void> {
 }
 
 export async function deleteSkill(dirPath: string): Promise<void> {
-  if (isBundledSkillDir(dirPath)) {
+  if (isBundledSkillDir(dirPath) || !(await listedSkillDir(dirPath))) {
     return;
   }
   await fs.rm(dirPath, { recursive: true, force: true });
+}
+
+async function listedSkillDir(dirPath: string): Promise<boolean> {
+  const os = plat().os();
+  const rows = await listSkills();
+  return rows.some((row) => row.scope !== 'bundled' && sameFsPath(row.dirPath, dirPath, os));
 }
 
 function isBundledSkillDir(dirPath: string): boolean {
@@ -273,6 +283,21 @@ async function extractZip(zipPath: string, dest: string): Promise<void> {
   }
   await fs.mkdir(dest, { recursive: true });
   await execFileAsync('tar', ['-xf', zipPath, '-C', dest], { windowsHide: true });
+  await assertNoSymlinks(dest);
+}
+
+async function assertNoSymlinks(root: string): Promise<void> {
+  const names = await fs.readdir(root);
+  for (const name of names) {
+    const full = path.join(root, name);
+    const stat = await fs.lstat(full);
+    if (stat.isSymbolicLink()) {
+      throw new Error(`unsafe skill zip link: ${name}`);
+    }
+    if (stat.isDirectory()) {
+      await assertNoSymlinks(full);
+    }
+  }
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

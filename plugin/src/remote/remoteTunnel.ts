@@ -350,7 +350,7 @@ export class ReverseTunnel {
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr = `${stderr}${chunk.toString('utf8')}`.slice(-4000);
       if (this.strict === 'accept-new' && BAD_STRICT.test(stderr)) {
-        this.strict = 'no';
+        this.error = 'hostkey';
       }
       const msg = classifySshError(stderr);
       if (msg) {

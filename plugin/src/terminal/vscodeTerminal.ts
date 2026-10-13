@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { AgentTerminal, AgentTerminalExit, AgentTerminalSpawn } from '../core/platform';
 import { spawnWindowsAware, TermStreamDecoder } from './termSpawn';
+import { keepNewestText } from './termText';
 
 export function createVscodeAgentTerminal(opts: AgentTerminalSpawn): AgentTerminal {
   return new VscodeAgentTerminal(opts);
@@ -137,16 +138,14 @@ class VscodeAgentTerminal implements AgentTerminal {
   }
 
   private push(text: string): void {
-    if (this.truncated) {
+    if (!text) {
       return;
     }
-    const next = this.output + text;
-    if (Buffer.byteLength(next) > this.limit) {
-      this.output = next.slice(0, this.limit);
+    const kept = keepNewestText(this.output, text, this.limit);
+    this.output = kept.text;
+    if (kept.truncated) {
       this.truncated = true;
-      return;
     }
-    this.output = next;
   }
 
   private finish(exit: AgentTerminalExit): void {

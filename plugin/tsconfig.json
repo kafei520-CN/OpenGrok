@@ -12,6 +12,7 @@
     "sourceMap": true,
     "declaration": false,
     "moduleResolution": "node",
+    "resolveJsonModule": true,
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],

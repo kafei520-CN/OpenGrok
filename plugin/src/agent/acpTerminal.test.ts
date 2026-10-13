@@ -13,7 +13,7 @@ function fakePlat(): Platform {
     pathEnv: () => '',
     os: () => process.platform,
     language: () => 'en',
-    getConfig: (_key, fallback) => fallback,
+    getConfig: (key, fallback) => (key === 'useTerminal' ? true : fallback),
     setConfig: async () => {},
     getState: (_key, fallback) => fallback,
     setState: async () => {},
@@ -101,6 +101,18 @@ describe('acp terminal', () => {
     await assert.rejects(
       () => handleTerminalMethod('terminal/output', { terminalId: created.terminalId }),
       /terminal not found/,
+    );
+  });
+
+  it('refuses to spawn when useTerminal is off', async () => {
+    const base = fakePlat();
+    bindPlatform({
+      ...base,
+      getConfig: (key, fallback) => (key === 'useTerminal' ? false : base.getConfig(key, fallback)),
+    });
+    await assert.rejects(
+      () => handleTerminalMethod('terminal/create', { command: 'echo' }),
+      /disabled/,
     );
   });
 });

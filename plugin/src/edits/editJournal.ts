@@ -39,6 +39,10 @@ export class EditJournal {
   private turns: StoredTurnDiff[] = [];
   private loadedFor?: string;
   private hydrateJob?: Promise<void>;
+  private loadGen = 0;
+  private loadJob?: Promise<void>;
+  private loadJobFor?: string;
+  private flushChain: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly host: {
@@ -55,10 +59,13 @@ export class EditJournal {
     this.snapshots.clear();
     this.turns = [];
     this.loadedFor = undefined;
+    this.loadGen += 1;
+    this.loadJob = undefined;
+    this.loadJobFor = undefined;
   }
 
   resolvePath(filePath: string): string | undefined {
-    if (!filePath) {
+    if (!filePath || filePath.split(/[\\/]/).includes('..')) {
       return undefined;
     }
     if (/^[A-Za-z]:[\\/]/.test(filePath) || filePath.startsWith('/')) {
@@ -140,7 +147,10 @@ export class EditJournal {
           source: 'disk',
         };
       }
-    } catch {
+    } catch (error) {
+      if (!isMissingFile(error)) {
+        return;
+      }
       snap = {
         absPath: abs,
         displayPath: this.host.displayPath(abs),
@@ -174,7 +184,7 @@ export class EditJournal {
       addSnapshot(current, {
         absPath: abs,
         displayPath: this.host.displayPath(abs),
-        existed: previous.length > 0,
+        existed: true,
         previous,
         source: 'tool',
       }),
@@ -545,16 +555,49 @@ export class EditJournal {
     if (this.loadedFor === sessionId) {
       return;
     }
-    this.loadedFor = sessionId;
-    this.turns = await readStoredTurns(sessionId);
-  }
-
-  private async flushTurns(): Promise<void> {
-    const sessionId = this.host.sessionId();
-    if (!sessionId) {
+    if (this.loadJob && this.loadJobFor === sessionId) {
+      await this.loadJob;
       return;
     }
-    await writeStoredTurns(sessionId, this.turns);
+    const gen = this.loadGen;
+    const job = (async () => {
+      const turns = await readStoredTurns(sessionId);
+      if (gen !== this.loadGen || this.host.sessionId() !== sessionId) {
+        return;
+      }
+      this.turns = turns;
+      this.loadedFor = sessionId;
+    })();
+    this.loadJob = job;
+    this.loadJobFor = sessionId;
+    try {
+      await job;
+    } finally {
+      if (this.loadJob === job) {
+        this.loadJob = undefined;
+        this.loadJobFor = undefined;
+      }
+    }
+  }
+
+  private flushTurns(): Promise<void> {
+    const sessionId = this.host.sessionId();
+    if (!sessionId) {
+      return Promise.resolve();
+    }
+    const gen = this.loadGen;
+    const turns = this.turns;
+    const write = this.flushChain.then(async () => {
+      if (gen !== this.loadGen || this.host.sessionId() !== sessionId) {
+        return;
+      }
+      await writeStoredTurns(sessionId, turns);
+    });
+    this.flushChain = write.then(
+      () => undefined,
+      () => undefined,
+    );
+    return write;
   }
 
   private async restoreFile(absPath: string, previous: string): Promise<void> {
@@ -569,4 +612,12 @@ export class EditJournal {
 function isInside(root: string, filePath: string): boolean {
   const rel = path.relative(root, filePath);
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+function isMissingFile(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as { code?: string }).code;
+  return code === 'ENOENT' || code === 'FileNotFound';
 }

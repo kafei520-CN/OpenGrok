@@ -197,7 +197,7 @@ export async function requestToolPermission(host: ReverseHost, params: unknown):
   }
   dismissPermissions(host);
   const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const askGate = askModeBlocksMutation(host.modeId, parsed.toolKind);
+  const askGate = askModeBlocksMutation(host.modeId, parsed.toolKind, parsed.title);
   host.permission = {
     requestId,
     title: askGate ? tr('askModeBlocked') : parsed.title,

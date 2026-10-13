@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
-contextBridge.exposeInMainWorld('opengrok', {
+const roleArg = process.argv.find((arg) => arg.startsWith('--opengrok-role='));
+const role = roleArg?.slice('--opengrok-role='.length) || 'main';
+
+if (role === 'main') contextBridge.exposeInMainWorld('opengrok', {
   post(message: unknown) {
     ipcRenderer.send('grok-ui', message);
   },
@@ -50,6 +53,22 @@ contextBridge.exposeInMainWorld('opengrok', {
       handler(state);
     });
   },
+  debugState(): Promise<boolean> {
+    return ipcRenderer.invoke('grok-debug-state');
+  },
+  setDebug(on: boolean): Promise<boolean> {
+    return ipcRenderer.invoke('grok-debug-set', on);
+  },
+  onDebug(handler: (on: boolean) => void) {
+    ipcRenderer.on('grok-debug', (_event, on: boolean) => {
+      handler(on === true);
+    });
+  },
+  onDebugLog(handler: (line: string) => void) {
+    ipcRenderer.on('grok-debug-log', (_event, line: string) => {
+      handler(line);
+    });
+  },
   termShells(): Promise<Array<{ id: string; label: string }>> {
     return ipcRenderer.invoke('og-term-shells');
   },
@@ -79,7 +98,7 @@ contextBridge.exposeInMainWorld('opengrok', {
   },
 });
 
-contextBridge.exposeInMainWorld('opengrokPet', {
+if (role === 'pet') contextBridge.exposeInMainWorld('opengrokPet', {
   ready() {
     ipcRenderer.send('pet-ready');
   },
@@ -112,7 +131,7 @@ contextBridge.exposeInMainWorld('opengrokPet', {
   },
 });
 
-contextBridge.exposeInMainWorld('opengrokPrompt', {
+if (role === 'prompt') contextBridge.exposeInMainWorld('opengrokPrompt', {
   result(value: unknown) {
     ipcRenderer.send('grok-prompt-result', value);
   },

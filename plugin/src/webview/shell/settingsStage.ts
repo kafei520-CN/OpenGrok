@@ -1153,6 +1153,7 @@ function aboutPane(): HTMLElement {
   const blocks = [card('', [hero, p(tr('appTag')), p(tr('setUnofficial')), p(tr('setAboutLicense'))])];
   if (isDesktop()) {
     blocks.push(updateCard());
+    blocks.push(debugCard());
   }
   el.append(...blocks);
   return el;
@@ -1176,6 +1177,9 @@ function deskApi():
       installUpdate: () => Promise<void>;
       setAutoUpdate: (on: boolean) => Promise<DeskUpdate>;
       onUpdate: (handler: (state: DeskUpdate) => void) => void;
+      debugState?: () => Promise<boolean>;
+      setDebug?: (on: boolean) => Promise<boolean>;
+      onDebug?: (handler: (on: boolean) => void) => void;
     }
   | undefined {
   return (window as unknown as { opengrok?: ReturnType<typeof deskApi> }).opengrok;
@@ -1239,6 +1243,27 @@ function updateCard(): HTMLElement {
     void api.updateState().then(paint);
   }
   return card(tr('updateTitle'), [status, autoWrap, actions([check, download, install])]);
+}
+
+function debugCard(): HTMLElement {
+  const status = document.createElement('p');
+  status.className = 'og-update-status';
+  const wrap = document.createElement('div');
+  const paint = (on: boolean) => {
+    status.textContent = on ? tr('debugOn') : tr('debugOff');
+    wrap.replaceChildren(
+      toggle(tr('debugMode'), tr('debugModeHint'), on, () => {
+        void deskApi()?.setDebug?.(!on);
+      }),
+    );
+  };
+  paint(false);
+  const api = deskApi();
+  if (api?.debugState) {
+    api.onDebug?.(paint);
+    void api.debugState().then(paint);
+  }
+  return card(tr('debugTitle'), [status, wrap]);
 }
 
 const DEFAULT_BG = '#ffffff';

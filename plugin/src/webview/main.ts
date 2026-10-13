@@ -63,6 +63,7 @@ function watchRestore(): void {
 
 type HostMsg = {
   type: string;
+  error?: string;
   state?: ChatState;
   files?: unknown;
   payload?: Parameters<typeof openWorkspaceReview>[0];
@@ -136,6 +137,14 @@ function onHostMessage(data: HostMsg | null | undefined): void {
     }
     return;
   }
+  if (data.type === 'hostError') {
+    if (typeof data.error === 'string' && data.error) {
+      ui.state.status = 'error';
+      ui.state.error = data.error;
+      render();
+    }
+    return;
+  }
   if (data.type === 'dockRun' && typeof data.command === 'string' && data.command) {
     void runInDockTerminal(data.command);
     return;
@@ -184,6 +193,12 @@ function onHostMessage(data: HostMsg | null | undefined): void {
       ui.chosenModelId = undefined;
       ui.chosenEffort = undefined;
       ui.stickToBottom = true;
+      ui.editingUserId = undefined;
+      ui.editDraft = '';
+      ui.editsExpanded.clear();
+      ui.workOpen.clear();
+      ui.stepsOpen.clear();
+      ui.termOpen.clear();
     }
     if (ui.review) {
       incoming.settingsOpen = false;

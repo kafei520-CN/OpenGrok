@@ -71,6 +71,11 @@
         if (og.maximized) {
           og.maximized().then(setMax);
         }
+        if (og.onDebugLog) {
+          og.onDebugLog(function (line) {
+            console.debug('[opengrok]', line);
+          });
+        }
       })();
     </script>
     <script>

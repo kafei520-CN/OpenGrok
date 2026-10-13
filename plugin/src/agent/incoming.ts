@@ -103,6 +103,10 @@ export async function handleIncoming(
     return writeWorkspaceFile(params);
   }
   if (isTerminalMethod(name)) {
+    const normalized = name.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    if (normalized === 'terminal/create' && controller.allowsFileWrites && !controller.allowsFileWrites()) {
+      throw new Error('Ask mode is read-only. Switch to Agent mode to run a terminal.');
+    }
     return handleTerminalMethod(name, params);
   }
   if (id === '') {

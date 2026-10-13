@@ -265,8 +265,8 @@ export class NodePlatform implements Platform {
     await this.opts.request('refresh', { path: filePath });
   }
 
-  async deleteFile(filePath: string, _useTrash = true): Promise<void> {
-    const handled = await this.opts.request('deleteFile', { path: filePath });
+  async deleteFile(filePath: string, useTrash = true): Promise<void> {
+    const handled = await this.opts.request('deleteFile', { path: filePath, useTrash });
     if (handled) {
       return;
     }

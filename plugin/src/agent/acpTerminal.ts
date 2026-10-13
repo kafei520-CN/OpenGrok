@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { plat, type AgentTerminal, type AgentTerminalExit, type AgentTerminalSpawn } from '../core/platform';
 import { asObject, asString } from '../core/wire';
 import { spawnWindowsAware, TermStreamDecoder } from '../terminal/termSpawn';
+import { keepNewestText } from '../terminal/termText';
 
 const terms = new Map<string, AgentTerminal>();
 
@@ -20,6 +21,9 @@ export function isTerminalMethod(name: string): boolean {
 export async function handleTerminalMethod(name: string, params: unknown): Promise<unknown> {
   const op = terminalOp(name);
   if (op === 'terminal/create') {
+    if (plat().getConfig('useTerminal', false) !== true) {
+      throw new Error('Terminal tools are disabled in Settings.');
+    }
     return createTerm(params);
   }
   const id = terminalIdOf(params);
@@ -180,16 +184,14 @@ class ProcessTerminal implements AgentTerminal {
   }
 
   protected push(text: string): void {
-    if (this.truncated) {
+    if (!text) {
       return;
     }
-    const next = this.output + text;
-    if (Buffer.byteLength(next) > this.limit) {
-      this.output = next.slice(0, this.limit);
+    const kept = keepNewestText(this.output, text, this.limit);
+    this.output = kept.text;
+    if (kept.truncated) {
       this.truncated = true;
-      return;
     }
-    this.output = next;
   }
 
   protected finish(exit: AgentTerminalExit): void {

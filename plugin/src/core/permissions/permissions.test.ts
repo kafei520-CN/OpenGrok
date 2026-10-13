@@ -54,11 +54,14 @@ describe('permissions', () => {
     assert.equal(askModeBlocksMutation('ask', 'execute'), true);
     assert.equal(askModeBlocksMutation('ask', 'read'), false);
     assert.equal(askModeBlocksMutation('default', 'edit'), false);
+    assert.equal(askModeBlocksMutation('ask', 'other', 'search_replace'), true);
+    assert.equal(askModeBlocksMutation('ask', 'other', 'run_terminal_cmd'), true);
   });
 
   it('denies terminal tools when the switch is off', () => {
     assert.equal(isTerminalToolKind('execute'), true);
     assert.equal(isTerminalToolKind('read', 'run_terminal_cmd'), true);
+    assert.equal(isTerminalToolKind('read', 'show terminal output'), false);
     assert.equal(shouldDenyTerminal({ useTerminal: false }, 'execute'), true);
     assert.equal(shouldDenyTerminal({ useTerminal: true }, 'execute'), false);
     const denied = denyTerminalPermission(
@@ -98,6 +101,16 @@ describe('permissions', () => {
       { optionId: 'always', name: 'Always', kind: 'allow_always' },
     ]);
     assert.equal(picked?.optionId, 'yes');
+    const camel = pickAllowOption([
+      { optionId: 'no', name: 'Reject', kind: 'RejectOnce' },
+      { optionId: 'yes', name: 'Allow', kind: 'AllowOnce' },
+      { optionId: 'always', name: 'Always', kind: 'AllowAlways' },
+    ]);
+    assert.equal(camel?.optionId, 'yes');
+    assert.equal(
+      pickAllowOption([{ optionId: 'no', name: 'Reject', kind: 'reject_once' }]),
+      undefined,
+    );
   });
 
   it('maps ACP option kinds to short i18n keys', () => {

@@ -96,6 +96,9 @@ export async function importRuleFiles(paths: string[]): Promise<number> {
 }
 
 export async function toggleRule(filePath: string): Promise<void> {
+  if (!(await rulePathAllowed(filePath))) {
+    return;
+  }
   if (filePath.endsWith(DISABLED)) {
     await moveFile(filePath, filePath.slice(0, -DISABLED.length));
     return;
@@ -104,7 +107,16 @@ export async function toggleRule(filePath: string): Promise<void> {
 }
 
 export async function deleteRule(filePath: string): Promise<void> {
+  if (!(await rulePathAllowed(filePath))) {
+    return;
+  }
   await plat().deleteFile(filePath, true);
+}
+
+async function rulePathAllowed(filePath: string): Promise<boolean> {
+  const os = plat().os();
+  const rows = await listRules();
+  return rows.some((row) => sameFsPath(row.filePath, filePath, os));
 }
 
 async function collectRules(

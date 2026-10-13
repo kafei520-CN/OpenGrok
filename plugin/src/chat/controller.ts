@@ -844,7 +844,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   async openLoginUrl(): Promise<void> {
-    const url = this.loginView?.url;
+    const url = externalPageUrl(this.loginView?.url);
     if (url) {
       await plat().openExternal(url);
     }
@@ -1607,7 +1607,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       modeId: parked.modeId,
       models: this.models,
       commands: this.commands,
-      meter: this.meter,
+      meter: new ContextMeter({
+        replaying: () => true,
+        fetchInfo: async () => undefined,
+        emit: () => {},
+      }),
       rememberFile: async () => {},
       capturePrevious: () => {},
       displayPath: (filePath: string) => this.displayPath(filePath),
@@ -2390,7 +2394,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
 
   async rewindTo(index: number): Promise<void> {
     await this.agent?.rewindTo(index);
-    this.messages = this.messages.slice(0, Math.max(0, index * 2));
+    this.messages = this.messages.slice(0, messagesBeforePrompt(this.messages, index));
     this.journal.trimStoredTurns();
     this.note(`Rewound to turn ${index}.`);
   }
@@ -2505,6 +2509,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       if (parked) {
         this.restoreParked(sessionId);
       }
+      this.journal.clear();
+      void this.journal.hydrateFromGit();
       this.claimAgent(agent, sessionId);
       agent.sessionId = sessionId;
       this.compactGate = emptyCompactGate();
@@ -2536,7 +2542,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     this.sessionCwd = cwd;
     this.claimAgent(agent, sessionId);
     try {
-      const result = await agent.loadSession(sessionId, cwd, this.sessionMeta());
+      const result = await agent.loadSession(sessionId, cwd, this.sessionMeta(), () => op === this.sessionOp);
       if (op !== this.sessionOp) {
         return;
       }
@@ -3850,15 +3856,25 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   private async fireCronJob(job: CronJob): Promise<void> {
-    this.cronJobs = this.cronJobs.map((row) => (row.id === job.id ? markJobRan(row) : row));
-    this.persistCronJobs();
-    this.emit();
+    if (this.status === 'streaming' && this.modeId === 'goal') {
+      return;
+    }
+    const queuedBefore = this.queue.length;
+    const wasReady = this.status === 'ready';
     try {
       plat().info(tr('cronFired', { title: job.title }));
       await this.send(job.prompt);
     } catch (error) {
       logWarn(`cron ${job.id}: ${error instanceof Error ? error.message : error}`);
+      return;
     }
+    const accepted = this.queue.length > queuedBefore || (wasReady && this.status === 'streaming');
+    if (!accepted) {
+      return;
+    }
+    this.cronJobs = this.cronJobs.map((row) => (row.id === job.id ? markJobRan(row) : row));
+    this.persistCronJobs();
+    this.emit();
   }
 
   async sendNow(index = 0): Promise<void> {
@@ -4172,13 +4188,18 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       try {
         const info = await agent.getAuthUrl();
         if (info.url) {
+          const url = externalPageUrl(info.url);
           this.loginView = {
             ...this.loginView,
             url: info.url,
             mode: info.mode,
           };
           this.emit();
-          await plat().openExternal(info.url);
+          if (url) {
+            await plat().openExternal(url);
+          } else {
+            logWarn(`refused auth url: ${info.url}`);
+          }
           return;
         }
       } catch (error) {
@@ -4244,7 +4265,17 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     const settings = readGrokSettings();
     const extra: Record<string, unknown> = { ...sessionPermissionMeta(settings) };
     if (!settings.useTerminal) {
-      extra.disallowedTools = ['bash', 'execute', 'terminal', 'run_terminal_command'];
+      extra.disallowedTools = [
+        'bash',
+        'execute',
+        'terminal',
+        'shell',
+        'run_terminal_command',
+        'run_terminal_cmd',
+        'Bash',
+        'Shell',
+        'PowerShell',
+      ];
     }
     const mcpServers = imageMcpServersMeta();
     if (plat().browserDock) {
@@ -4607,7 +4638,29 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 }
 
-/** Keep this assistant turn, or drop it when it is already the latest. */
+/** Messages to keep when `promptIndex` user prompts stay. Notes between turns stay with the earlier prompt. */
+export function messagesBeforePrompt(messages: Array<{ role: string }>, promptIndex: number): number {
+  if (promptIndex <= 0) {
+    return 0;
+  }
+  let seen = 0;
+  for (let i = 0; i < messages.length; i += 1) {
+    if (messages[i]?.role !== 'user') {
+      continue;
+    }
+    seen += 1;
+    if (seen === promptIndex) {
+      let end = i + 1;
+      while (end < messages.length && messages[end]?.role !== 'user') {
+        end += 1;
+      }
+      return end;
+    }
+  }
+  return messages.length;
+}
+
+/** Prompt index to keep. Counts user turns, so notes and compact cards do not shift it. */
 export function rewindIndexFor(
   messages: Array<{ id: string; role: string }>,
   messageId: string,
@@ -4616,18 +4669,23 @@ export function rewindIndexFor(
   if (idx < 0 || messages[idx]?.role !== 'assistant') {
     return undefined;
   }
-  const keep = (idx + 1) >> 1;
-  let last: { id: string; role: string } | undefined;
+  let usersBefore = 0;
+  for (let i = 0; i < idx; i += 1) {
+    if (messages[i]?.role === 'user') {
+      usersBefore += 1;
+    }
+  }
+  let lastAssistant = -1;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i]?.role === 'assistant') {
-      last = messages[i];
+      lastAssistant = i;
       break;
     }
   }
-  if (last?.id === messageId) {
-    return Math.max(0, keep - 1);
+  if (lastAssistant === idx) {
+    return Math.max(0, usersBefore - 1);
   }
-  return keep;
+  return usersBefore;
 }
 
 function stepsStamp(steps: ChatMessage['steps']): string {
@@ -4641,6 +4699,16 @@ async function isGitCwd(cwd: string): Promise<boolean> {
     }
   }
   return false;
+}
+
+function externalPageUrl(raw: string | undefined): string | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  if (/^https?:/i.test(raw) || raw.toLowerCase().startsWith('mailto:')) {
+    return raw;
+  }
+  return undefined;
 }
 
 function sleep(ms: number): Promise<void> {

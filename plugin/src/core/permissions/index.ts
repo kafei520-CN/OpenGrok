@@ -18,28 +18,29 @@ export function isAskSessionMode(modeId?: string): boolean {
   return modeId === 'ask';
 }
 
-export function isEditToolKind(kind?: string): boolean {
+const EDIT_NAMES = ['search_replace', 'hashline_edit', 'apply_patch', 'multiedit'];
+
+export function isEditToolKind(kind?: string, title?: string): boolean {
   const value = (kind ?? '').toLowerCase();
-  return value === 'edit' || value === 'write' || value === 'delete' || value === 'move';
+  if (value === 'edit' || value === 'write' || value === 'delete' || value === 'move') {
+    return true;
+  }
+  const text = (title ?? '').toLowerCase();
+  return EDIT_NAMES.some((name) => text.includes(name));
 }
 
 /** File edits and shell — the mutations Ask mode must not run. */
 export function isTerminalToolKind(kind?: string, title?: string): boolean {
   const value = (kind ?? '').toLowerCase();
+  if (value === 'execute' || value === 'terminal' || value === 'shell' || value === 'bash') {
+    return true;
+  }
   const text = `${value} ${title ?? ''}`.toLowerCase();
-  return (
-    value === 'execute' ||
-    value === 'terminal' ||
-    value === 'shell' ||
-    value === 'bash' ||
-    text.includes('terminal') ||
-    text.includes('run_terminal') ||
-    /\bbash\b/.test(text)
-  );
+  return text.includes('run_terminal') || /\bbash\b/.test(text);
 }
 
 export function isMutatingToolKind(kind?: string, title?: string): boolean {
-  return isEditToolKind(kind) || isTerminalToolKind(kind, title);
+  return isEditToolKind(kind, title) || isTerminalToolKind(kind, title);
 }
 
 export function terminalToolsEnabled(settings: { useTerminal?: boolean }): boolean {
@@ -54,8 +55,8 @@ export function shouldDenyTerminal(
   return !terminalToolsEnabled(settings) && isTerminalToolKind(toolKind, title);
 }
 
-export function askModeBlocksMutation(modeId: string | undefined, toolKind?: string): boolean {
-  return isAskSessionMode(modeId) && isMutatingToolKind(toolKind);
+export function askModeBlocksMutation(modeId: string | undefined, toolKind?: string, title?: string): boolean {
+  return isAskSessionMode(modeId) && isMutatingToolKind(toolKind, title);
 }
 
 export function askModeGateOptions(): PermissionOption[] {
@@ -65,21 +66,45 @@ export function askModeGateOptions(): PermissionOption[] {
   ];
 }
 
+function permissionRank(kind: string, once: string, always: string, prefix: string): number | undefined {
+  const value = normalizePermissionKind(kind);
+  if (value === once) {
+    return 0;
+  }
+  if (value === always) {
+    return 1;
+  }
+  if (value.startsWith(prefix)) {
+    return 2;
+  }
+  return undefined;
+}
+
+function pickRankedOption(
+  options: PermissionOption[],
+  once: string,
+  always: string,
+  prefix: string,
+): PermissionOption | undefined {
+  let best: PermissionOption | undefined;
+  let bestRank = 3;
+  for (const option of options) {
+    const rank = permissionRank(option.kind, once, always, prefix);
+    if (rank === undefined || rank >= bestRank) {
+      continue;
+    }
+    best = option;
+    bestRank = rank;
+  }
+  return best;
+}
+
 export function pickAllowOption(options: PermissionOption[]): PermissionOption | undefined {
-  return (
-    options.find((option) => option.kind === 'allow_once') ??
-    options.find((option) => option.kind === 'allow_always') ??
-    options.find((option) => option.kind.startsWith('allow')) ??
-    options[0]
-  );
+  return pickRankedOption(options, 'allow_once', 'allow_always', 'allow');
 }
 
 export function pickRejectOption(options: PermissionOption[]): PermissionOption | undefined {
-  return (
-    options.find((option) => option.kind === 'reject_once') ??
-    options.find((option) => option.kind === 'reject_always') ??
-    options.find((option) => option.kind.startsWith('reject'))
-  );
+  return pickRankedOption(options, 'reject_once', 'reject_always', 'reject');
 }
 
 export function denyTerminalPermission(
@@ -99,7 +124,7 @@ export function shouldAutoApprove(
   modeId?: string,
   title?: string,
 ): boolean {
-  if (askModeBlocksMutation(modeId, toolKind)) {
+  if (askModeBlocksMutation(modeId, toolKind, title)) {
     return false;
   }
   if (shouldDenyTerminal(settings, toolKind, title)) {

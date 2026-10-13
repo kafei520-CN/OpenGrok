@@ -20,6 +20,8 @@ describe('skills files', () => {
   it('sanitizes skill directory names', () => {
     assert.equal(safeSkillDirName('Review PR'), 'Review-PR');
     assert.equal(safeSkillDirName('foo:bar'), 'foo-bar');
+    assert.equal(safeSkillDirName('..'), 'skill');
+    assert.equal(safeSkillDirName('.'), 'skill');
   });
 
   it('rejects zip members that escape the extract root', () => {

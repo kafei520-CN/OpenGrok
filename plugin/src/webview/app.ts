@@ -44,6 +44,8 @@ export const ui = {
   dashDraft: '',
   dashTarget: undefined as string | undefined,
   agentsTab: 'agents' as 'agents' | 'personas',
+  editingUserId: undefined as string | undefined,
+  editDraft: '',
   editsExpanded: new Set<string>(),
   copiedId: undefined as string | undefined,
   copiedTimer: undefined as ReturnType<typeof setTimeout> | undefined,

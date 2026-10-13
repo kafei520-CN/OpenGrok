@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     live = await listenPublicRelay({
       port,
       bind: process.env.GROK_RELAY_BIND?.trim() || '0.0.0.0',
-      officialToken: BUNDLED_RELAY_TOKEN,
+      officialToken: process.env.GROK_RELAY_OFFICIAL === '0' ? '' : BUNDLED_RELAY_TOKEN,
       customToken: cfg.hostKey,
       publicHost: cfg.publicHost,
       maxFrameBytes: cfg.maxFrameBytes,
