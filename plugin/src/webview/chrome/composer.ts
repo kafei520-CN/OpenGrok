@@ -252,7 +252,7 @@ function fillComposerBar(bar: HTMLElement, input: HTMLTextAreaElement): void {
     send.innerHTML = iconStop();
     send.addEventListener('click', () => post({ type: 'cancel' }));
   } else {
-    send.innerHTML = isDesktop() ? iconSend() : iconStar('14');
+    send.innerHTML = iconSend();
     send.addEventListener('click', () => sendFrom(input));
   }
   releaseByClass('picker-menu');

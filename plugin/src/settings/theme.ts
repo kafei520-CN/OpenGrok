@@ -59,7 +59,6 @@ export const THEME_PRESETS: Array<{
   { id: 'sunset', primary: '#fdba74', secondary: '#f59e0b', background: '#1a140f' },
   { id: 'rose', primary: '#fda4af', secondary: '#fb7185', background: '#1a1014' },
   { id: 'ember', primary: '#fcd34d', secondary: '#f97316', background: '#1a150c' },
-  { id: 'endfield', primary: '#fff936', secondary: '#ffffff', background: '#191919' },
 ];
 
 const SURFACE_VARS = [
@@ -118,7 +117,7 @@ export function normalizeTheme(raw: unknown): ThemeColors {
       : undefined;
   const customPath = wallpaper === 'custom' ? wallpaperPath : undefined;
   const kind = wallpaper === 'custom' && !customPath ? undefined : wallpaper;
-  const surface = surfaceKind(value.surface);
+  const surface = surfaceKind(value.surface === 'endfield' ? 'glass' : value.surface);
   const manual = kind && value.wallpaperScale != null;
   return {
     primary: parseHex(value.primary) ?? DEFAULT_THEME.primary,

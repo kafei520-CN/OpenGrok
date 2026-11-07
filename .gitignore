@@ -3,6 +3,7 @@ dist/
 plugin/dist/
 release/
 .electron-dev/
+.electron-dev-cache/
 *.log
 .DS_Store
 参考文件夹

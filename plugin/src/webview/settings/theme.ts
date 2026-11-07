@@ -31,7 +31,6 @@ const PRESET_KEYS: Record<string, StringKey> = {
   sunset: 'themePresetSunset',
   rose: 'themePresetRose',
   ember: 'themePresetEmber',
-  endfield: 'themePresetEndfield',
 };
 
 export function themeNavRow(): HTMLElement {
@@ -231,7 +230,6 @@ function surfaceCard(initial: ThemeColors): HTMLElement {
     ['flat', tr('themeSurfaceFlat')],
     ['glass', tr('themeSurfaceGlass')],
     ['solid', tr('themeSurfaceSolid')],
-    ['endfield', tr('themeSurfaceEndfield')],
   ] as const) {
     const btn = document.createElement('button');
     btn.type = 'button';

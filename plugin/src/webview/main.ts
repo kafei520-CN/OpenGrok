@@ -667,13 +667,13 @@ function syncDesktopChrome(): void {
         setChrome?: (chrome: {
           background: string;
           foreground: string;
-          surface?: 'glass' | 'solid' | 'endfield';
+          surface?: 'glass' | 'solid';
         }) => void;
       };
     }
   ).opengrok;
   const raw = document.getElementById('app')?.dataset.surface;
-  const surface = raw === 'solid' || raw === 'endfield' || raw === 'glass' ? raw : 'glass';
+  const surface = raw === 'solid' || raw === 'glass' ? raw : 'glass';
   host?.setChrome?.({ background, foreground, surface });
 }
 

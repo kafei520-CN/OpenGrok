@@ -180,7 +180,7 @@ const TITLEBAR_H = 52;
 type TitleChrome = {
   background: string;
   foreground: string;
-  surface: 'glass' | 'solid' | 'endfield';
+  surface: 'glass' | 'solid';
 };
 
 if (process.platform === 'win32') {
@@ -231,19 +231,80 @@ function syncMaximizedChrome(win: BrowserWindow): void {
   win.webContents.send('grok-maximized', on, inset);
 }
 
+function windowPlacement(saved?: { x: number; y: number; width: number; height: number }): {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  maximize: boolean;
+} {
+  const width = saved?.width ?? 1280;
+  const height = saved?.height ?? 840;
+  if (saved?.x == null || saved?.y == null) {
+    return { width, height, maximize: false };
+  }
+  const area = screen.getDisplayMatching({
+    x: saved.x,
+    y: saved.y,
+    width: saved.width,
+    height: saved.height,
+  }).workArea;
+  const maximize = saved.width >= area.width - 32 && saved.height >= area.height - 32;
+  const nextWidth = Math.max(960, Math.min(saved.width, area.width));
+  const nextHeight = Math.max(640, Math.min(saved.height, area.height));
+  return {
+    x: Math.min(Math.max(saved.x, area.x), area.x + area.width - nextWidth),
+    y: Math.min(Math.max(saved.y, area.y), area.y + area.height - nextHeight),
+    width: nextWidth,
+    height: nextHeight,
+    maximize,
+  };
+}
+
+function presentWindow(win: BrowserWindow, chrome: TitleChrome, maximize: boolean): void {
+  if (win.isDestroyed()) {
+    return;
+  }
+  if (maximize && !win.isMaximized()) {
+    win.maximize();
+  }
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.show();
+  win.focus();
+  if (chrome.surface !== 'glass') {
+    return;
+  }
+  // Acrylic plus a transparent color in the constructor can leave the window iconic and off-screen.
+  setTimeout(() => {
+    if (win.isDestroyed()) {
+      return;
+    }
+    try {
+      win.setBackgroundMaterial('acrylic');
+    } catch {
+      return;
+    }
+    win.setBackgroundColor('#00000000');
+    applyTitleBarOverlay(win, chrome);
+  }, 80);
+}
+
 function createWindow(): BrowserWindow {
-  const bounds = readState().bounds;
+  const place = windowPlacement(readState().bounds);
   const chrome = readThemeChrome();
   const win = new BrowserWindow({
-    width: bounds?.width ?? 1280,
-    height: bounds?.height ?? 840,
-    x: bounds?.x,
-    y: bounds?.y,
+    width: place.width,
+    height: place.height,
+    x: place.x,
+    y: place.y,
     minWidth: 960,
     minHeight: 640,
+    show: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: overlayFill(chrome),
+      color: chrome.background,
       symbolColor: chrome.foreground,
       height: TITLEBAR_H,
     },
@@ -252,8 +313,8 @@ function createWindow(): BrowserWindow {
     // transparent: true uses per-pixel alpha and blocks Windows 11 DWM corners.
     roundedCorners: true,
     hasShadow: true,
-    backgroundColor: chrome.surface === 'glass' ? '#00000000' : chrome.background,
-    backgroundMaterial: chrome.surface === 'glass' ? 'acrylic' : 'none',
+    backgroundColor: chrome.background,
+    backgroundMaterial: 'none',
     title: APP_NAME,
     icon: iconPath(),
     webPreferences: {
@@ -264,6 +325,16 @@ function createWindow(): BrowserWindow {
       webviewTag: true,
     },
   });
+  let presented = false;
+  const present = () => {
+    if (presented) {
+      return;
+    }
+    presented = true;
+    presentWindow(win, chrome, place.maximize);
+  };
+  win.once('ready-to-show', present);
+  setTimeout(present, 1500);
   win.setAlwaysOnTop(false);
   win.setMenuBarVisibility(false);
   void win.loadFile(path.join(rootDir(), 'desktop', 'index.html'));
@@ -907,7 +978,7 @@ function readThemeChrome(): TitleChrome {
     const row = theme as { background?: unknown; surface?: unknown };
     const background = row.background;
     const surface =
-      row.surface === 'solid' || row.surface === 'endfield' ? row.surface : 'glass';
+      row.surface === 'solid' ? row.surface : 'glass';
     if (typeof background === 'string' && /^#[0-9a-f]{6}$/i.test(background)) {
       const hex = background.toLowerCase();
       return { background: hex, foreground: contrastFg(hex), surface };
@@ -1268,7 +1339,6 @@ if (!gotLock) {
         app.setAppUserModelId('cn.mckafei.opengrok');
       }
       mainWindow = createWindow();
-      revealMainWindow();
       console.log('OpenGrok window ready');
       watchTryReload(mainWindow);
       mainWindow.webContents.on('did-finish-load', () => {
@@ -1600,7 +1670,7 @@ ipcMain.on('grok-chrome', (event, next: { background?: string; foreground?: stri
       ? next.foreground.toLowerCase()
       : fallback.foreground;
   const surface =
-    next?.surface === 'solid' || next?.surface === 'endfield' || next?.surface === 'glass'
+    next?.surface === 'solid' || next?.surface === 'glass'
       ? next.surface
       : 'glass';
   const glass = surface === 'glass';

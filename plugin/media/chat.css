@@ -3220,7 +3220,7 @@ textarea:focus-visible {
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 10px;
+  border-radius: 50%;
   background: var(--fg);
   color: var(--bg);
   cursor: pointer;
@@ -5913,9 +5913,7 @@ html.ws-dragging .ws-chat {
 #app[data-surface='glass'] .trace .tool-row,
 #app[data-surface='glass'] .trace .tool-row[data-kind],
 #app[data-surface='glass'] .trace .tool-row.completed:not(.failed),
-#app[data-surface='glass'] .trace .tool-row.failed,
-#app[data-surface='endfield'] .trace .tool-row,
-#app[data-surface='endfield'] .trace .tool-row.completed:not(.failed) {
+#app[data-surface='glass'] .trace .tool-row.failed {
   border: none;
   background: transparent;
   box-shadow: none;

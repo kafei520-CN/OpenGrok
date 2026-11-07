@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +7,6 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 delete process.env.ELECTRON_RUN_AS_NODE;
 process.env.OPENGROK_TRY = '1';
 
-const require = createRequire(import.meta.url);
 const DEV_DIR = path.join(root, '.electron-dev');
 const exeName = process.platform === 'win32' ? 'electron.exe' : 'electron';
 
@@ -122,8 +120,17 @@ function downloadZip(url, dest) {
   return result.status === 0 && fs.existsSync(dest) && fs.statSync(dest).size > 1_000_000;
 }
 
+function extractZip(zipPath, dest) {
+  // Node 24.16+ stalls extract-zip after the first zip entry, so the window never opens.
+  const tar = process.platform === 'win32' ? 'tar.exe' : 'tar';
+  console.log(`extracting ${path.basename(zipPath)}`);
+  const result = spawnSync(tar, ['-xf', zipPath, '-C', dest], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(`Could not extract ${path.basename(zipPath)} with ${tar}.`);
+  }
+}
+
 async function downloadOfficialElectron(version) {
-  const extract = require('extract-zip');
   const cacheDir = path.join(root, '.electron-dev-cache');
   fs.mkdirSync(cacheDir, { recursive: true });
   const zipPath = path.join(cacheDir, electronZipName(version));
@@ -152,7 +159,7 @@ async function downloadOfficialElectron(version) {
   }
   fs.rmSync(DEV_DIR, { recursive: true, force: true });
   fs.mkdirSync(DEV_DIR, { recursive: true });
-  await extract(zipPath, { dir: DEV_DIR });
+  extractZip(zipPath, DEV_DIR);
 }
 
 async function ensureDevElectron() {
@@ -198,11 +205,18 @@ let electronChild;
 let restarting = false;
 let restartTimer;
 let allowRestart = false;
+let openTimer;
+let openTries = 0;
 
 function electronEnv() {
   const env = { ...process.env, OPENGROK_TRY: '1' };
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
+}
+
+function clearOpenTimer() {
+  clearTimeout(openTimer);
+  openTimer = undefined;
 }
 
 function startElectron() {
@@ -212,26 +226,65 @@ function startElectron() {
   if (electronChild && electronChild.exitCode == null && !restarting) {
     return;
   }
+  openTries += 1;
+  const attempt = openTries;
   console.log(`launching ${electronBin}`);
+  // electron.exe is a GUI binary, so an inherited console swallows its stdout on Windows.
   electronChild = spawn(electronBin, ['.'], {
     cwd: root,
     env: electronEnv(),
-    stdio: 'inherit',
+    stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: false,
   });
-  electronChild.on('exit', (code) => {
+  let readyBuf = '';
+  const forward = (chunk) => {
+    readyBuf = (readyBuf + chunk.toString()).slice(-400);
+    if (readyBuf.includes('OpenGrok window ready')) {
+      clearOpenTimer();
+    }
+    process.stdout.write(chunk);
+  };
+  electronChild.stdout.on('data', forward);
+  electronChild.stderr.on('data', forward);
+  const child = electronChild;
+  child.on('exit', (code) => {
+    clearOpenTimer();
     if (restarting) {
       return;
     }
     console.error(`OpenGrok exited (${code ?? 0}).`);
     process.exit(code ?? 0);
   });
+  // A fresh Electron often never reaches the window. Killing it and starting once more does.
+  clearOpenTimer();
+  openTimer = setTimeout(() => {
+    if (electronChild !== child || child.exitCode != null || attempt >= 2) {
+      if (electronChild === child && child.exitCode == null && attempt >= 2) {
+        console.error('OpenGrok still has no window.');
+      }
+      return;
+    }
+    console.error('OpenGrok did not open a window. Starting it again.');
+    restarting = true;
+    stop(child);
+    const again = () => {
+      restarting = false;
+      startElectron();
+    };
+    if (child.exitCode != null) {
+      setTimeout(again, 400);
+      return;
+    }
+    child.once('exit', () => setTimeout(again, 400));
+  }, 8000);
 }
 
 function scheduleRestart() {
   if (!allowRestart) {
     return;
   }
+  openTries = 0;
+  clearOpenTimer();
   clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
     restarting = true;

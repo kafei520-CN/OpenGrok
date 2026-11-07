@@ -1,5 +1,6 @@
 import { totals } from '../../edits/edits';
 import { formatDuration, toolKindLabel, turnSourceText } from '../../core/i18n';
+import { toolRowLabel } from './toolLabel';
 import { permissionButtonClass, permissionLabelKey } from '../../core/permissions';
 import { permissionActions, permissionNeedsCancel, permissionTarget } from '../../core/permissions/permissionView';
 import { renderTermHtml } from '../../terminal/termAnsi';
@@ -963,14 +964,7 @@ function toolHasBody(tool: ChatMessage['tools'][number]): boolean {
 }
 
 function toolHead(tool: ChatMessage['tools'][number]): string {
-  const kind = toolKindLabel(loc(), tool.kind);
-  if (isTermTool(tool) || tool.kind === 'compact') {
-    return kind;
-  }
-  if (tool.detail) {
-    return `${kind} · ${fileName(tool.detail)}`;
-  }
-  return tool.title || kind;
+  return toolRowLabel(tool, loc());
 }
 
 function fillToolBody(body: HTMLElement, tool: ChatMessage['tools'][number]): void {

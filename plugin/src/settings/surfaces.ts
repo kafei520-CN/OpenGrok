@@ -8,9 +8,9 @@ import type { ThemeColors } from '../core/types';
  * 3. writing `#app[data-surface='id']` rules in plugin/media/surfaces.css
  *
  * `glass` / `solid` keep their historical CSS in chat.css + workbench.css.
- * New packs (endfield and anything after) live entirely in surfaces.css.
+ * Extra packs live entirely in surfaces.css.
  */
-export const SURFACE_IDS = ['glass', 'solid', 'endfield'] as const;
+export const SURFACE_IDS = ['glass', 'solid'] as const;
 export type SurfaceId = (typeof SURFACE_IDS)[number];
 
 export type SurfacePack = {
@@ -50,20 +50,6 @@ export const SURFACES: readonly SurfacePack[] = [
     framed: true,
     opaqueChrome: true,
   },
-  {
-    id: 'endfield',
-    labelKey: 'themeSurfaceEndfield',
-    appearanceKey: 'themeSurfaceEndfield',
-    tone: 'endfield',
-    frost: false,
-    framed: true,
-    opaqueChrome: true,
-    theme: {
-      primary: '#fff936',
-      secondary: '#ffffff',
-      background: '#191919',
-    },
-  },
 ];
 
 const PACKS = Object.fromEntries(SURFACES.map((pack) => [pack.id, pack])) as Record<
@@ -72,7 +58,7 @@ const PACKS = Object.fromEntries(SURFACES.map((pack) => [pack.id, pack])) as Rec
 >;
 
 export function isSurfaceId(raw: unknown): raw is SurfaceId {
-  return raw === 'glass' || raw === 'solid' || raw === 'endfield';
+  return raw === 'glass' || raw === 'solid';
 }
 
 export function surfaceKind(raw: unknown): SurfaceId | undefined {

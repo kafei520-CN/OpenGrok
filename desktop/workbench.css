@@ -175,9 +175,7 @@ html.opengrok body {
 }
 
 html.opengrok:has(#app[data-surface='solid']),
-html.opengrok:has(#app[data-surface='solid']) body,
-html.opengrok:has(#app[data-surface='endfield']),
-html.opengrok:has(#app[data-surface='endfield']) body {
+html.opengrok:has(#app[data-surface='solid']) body {
   background: var(--bg) !important;
 }
 
@@ -206,8 +204,7 @@ html.opengrok.maximized #app[data-surface='glass'] {
   gap: 0;
 }
 
-html.opengrok.maximized #app[data-surface='solid'],
-html.opengrok.maximized #app[data-surface='endfield'] {
+html.opengrok.maximized #app[data-surface='solid'] {
   padding-top: var(--og-max-inset);
 }
 
@@ -1756,8 +1753,7 @@ html.opengrok .og-side-skills {
 html.opengrok #app .msg.assistant > .md.answer,
 html.opengrok #app[data-surface='glass'] .msg.assistant > .md.answer,
 html.opengrok #app[data-surface='glass'][data-wp-kind='image'] .msg.assistant > .md.answer,
-html.opengrok #app[data-surface='glass'][data-wp-kind='video'] .msg.assistant > .md.answer,
-html.opengrok #app[data-surface='endfield'] .msg.assistant > .md.answer {
+html.opengrok #app[data-surface='glass'][data-wp-kind='video'] .msg.assistant > .md.answer {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;

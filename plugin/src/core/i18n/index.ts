@@ -168,7 +168,7 @@ export function turnSourceText(
 }
 
 export function toolKindLabel(locale: UiLocale, kind?: string): string {
-  switch (kind) {
+  switch ((kind ?? '').toLowerCase()) {
     case 'read':
       return t(locale, 'toolRead');
     case 'edit':
@@ -179,11 +179,32 @@ export function toolKindLabel(locale: UiLocale, kind?: string): string {
     case 'terminal':
       return t(locale, 'toolTerminal');
     case 'search':
+    case 'grep':
+    case 'web_search':
+    case 'websearch':
       return t(locale, 'toolSearch');
     case 'delete':
       return t(locale, 'toolDelete');
     case 'compact':
       return t(locale, 'toolCompact');
+    case 'list':
+    case 'list_dir':
+    case 'listdir':
+      return t(locale, 'toolList');
+    case 'fetch':
+    case 'web_fetch':
+    case 'webfetch':
+      return t(locale, 'toolFetch');
+    case 'skill':
+      return t(locale, 'toolSkill');
+    case 'memory':
+    case 'memory_search':
+    case 'memory_get':
+      return t(locale, 'toolMemory');
+    case 'image':
+    case 'image_gen':
+    case 'imagine':
+      return t(locale, 'toolImage');
     default:
       return t(locale, 'toolGeneric');
   }

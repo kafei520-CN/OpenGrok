@@ -11,14 +11,14 @@ import {
 } from './surfaces';
 
 describe('surface packs', () => {
-  it('registers glass, solid, and endfield', () => {
+  it('registers glass and solid', () => {
     assert.deepEqual(
       SURFACES.map((pack) => pack.id),
-      ['glass', 'solid', 'endfield'],
+      ['glass', 'solid'],
     );
-    assert.equal(isSurfaceId('endfield'), true);
+    assert.equal(isSurfaceId('endfield'), false);
     assert.equal(isSurfaceId('flat'), false);
-    assert.equal(surfaceKind('endfield'), 'endfield');
+    assert.equal(surfaceKind('endfield'), undefined);
     assert.equal(surfaceKind('nope'), undefined);
   });
 
@@ -28,10 +28,6 @@ describe('surface packs', () => {
     assert.equal(opaqueChrome('glass'), false);
     assert.equal(frostSurface('solid'), false);
     assert.equal(opaqueChrome('solid'), true);
-    assert.equal(frostSurface('endfield'), false);
-    assert.equal(opaqueChrome('endfield'), true);
-    assert.equal(getSurface('endfield')?.theme?.background, '#191919');
-    assert.equal(getSurface('endfield')?.theme?.primary, '#fff936');
-    assert.equal(getSurface('endfield')?.theme?.secondary, '#ffffff');
+    assert.equal(getSurface('endfield'), undefined);
   });
 });
