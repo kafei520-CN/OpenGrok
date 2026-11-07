@@ -189,16 +189,56 @@ function parseQuotedFile(body: string): CodeRef | undefined {
   if (isNumericPath(norm)) {
     return undefined;
   }
-  if (hasFileExt(text) || /^[A-Za-z]:[\\/]/.test(text) || /[/\\]/.test(text) || /^\.\.?[\\/]/.test(text)) {
-    if (!hasFileExt(text) && /[/\\]/.test(text)) {
-      const folder = text.replace(/[/\\]+$/, '').replace(/\\/g, '/');
-      return { kind: 'folder', name: fileName(folder), path: `${folder}/` };
+  return quotedFileRef(text, line);
+}
+
+const BARE_FILES = new Set([
+  'makefile',
+  'dockerfile',
+  'containerfile',
+  'jenkinsfile',
+  'gemfile',
+  'rakefile',
+  'procfile',
+  'license',
+  'licence',
+  'readme',
+  'changelog',
+  'authors',
+  'contributing',
+  'copying',
+  'notice',
+]);
+
+/** Explicit `@File` marks. Dotfiles and extensionless names are still files. */
+function quotedFileRef(text: string, line?: number): CodeRef | undefined {
+  const trimmed = text.replace(/[/\\]+$/, '');
+  const trailing = trimmed.length !== text.length;
+  if (!trailing && isChipFile(trimmed || text)) {
+    return { kind: 'file', name: fileName(trimmed || text), path: text, line };
+  }
+  if (/[/\\]/.test(text)) {
+    const folder = (trimmed || text).replace(/\\/g, '/');
+    if (!folder || isNumericPath(folder)) {
+      return undefined;
     }
-    if (hasFileExt(text) || /^[A-Za-z]:[\\/]/.test(text)) {
-      return { kind: 'file', name: fileName(text), path: text, line };
-    }
+    return { kind: 'folder', name: fileName(folder), path: `${folder}/` };
   }
   return undefined;
+}
+
+function isChipFile(text: string): boolean {
+  const base = text.replace(/[/\\]+$/, '').replace(/\\/g, '/').split('/').pop() ?? '';
+  if (!base || base === '.' || base === '..') {
+    return false;
+  }
+  if (base.startsWith('.') && base.length > 1 && !base.endsWith('.')) {
+    return true;
+  }
+  if (hasFileExt(text) || /^[a-z0-9]{1,12}$/i.test(extOf(text))) {
+    return true;
+  }
+  return BARE_FILES.has(base.toLowerCase());
 }
 
 function parseQuotedLine(body: string): CodeRef | undefined {

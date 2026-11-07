@@ -80,6 +80,22 @@ describe('inline file links', () => {
     assert.equal(linkInlineFilePaths('see @plugin/src/foo.ts and 1/5 and @File:"1/5"', stash), 'see @plugin/src/foo.ts and 1/5 and @File:"1/5"');
   });
 
+  it('chips dotfiles and extensionless names', () => {
+    const slots: string[] = [];
+    const stash = (html: string) => {
+      slots.push(html);
+      return `\u0000${slots.length - 1}\u0000`;
+    };
+    linkInlineFilePaths('@File:".gitignore"\n@File:"Makefile"\n@File:"src/.env"\n@File:"plugin/src"', stash);
+    assert.match(slots[0] ?? '', /data-path="\.gitignore"/);
+    assert.match(slots[0] ?? '', /class="md-file"/);
+    assert.doesNotMatch(slots[0] ?? '', /md-dir/);
+    assert.match(slots[1] ?? '', /data-path="Makefile"/);
+    assert.match(slots[2] ?? '', /data-path="src\/\.env"/);
+    assert.match(slots[3] ?? '', /md-dir/);
+    assert.match(slots[3] ?? '', /data-path="plugin\/src\/"/);
+  });
+
   it('does not treat fractions or unmarked paths as files', () => {
     const slots: string[] = [];
     const stash = (html: string) => {
