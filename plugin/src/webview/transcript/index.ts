@@ -1,6 +1,7 @@
 import { totals } from '../../edits/edits';
 import { formatDuration, toolKindLabel, turnSourceText } from '../../core/i18n';
 import { toolRowLabel } from './toolLabel';
+import { setUserReveal, syncUserRail } from './userRailView';
 import { permissionButtonClass, permissionLabelKey } from '../../core/permissions';
 import { permissionActions, permissionNeedsCancel, permissionTarget } from '../../core/permissions/permissionView';
 import { renderTermHtml } from '../../terminal/termAnsi';
@@ -217,12 +218,14 @@ function patchTranscript(): void {
     revealSteps(ui.state.messages);
     scrollTranscript();
     syncWorkClock();
+    syncUserRail();
     return;
   }
   syncTranscript(transcript);
   dockPrompts(transcript);
   revealSteps(ui.state.messages);
   scrollTranscript();
+  syncUserRail();
   syncWorkClock();
 }
 
@@ -291,6 +294,28 @@ function paintOpenTail(transcript: HTMLElement, grouped: Turn[]): void {
   const start = tailStart(grouped.length);
   paintTurnRange(transcript, grouped, start, grouped.length);
   queueViewportFill(transcript);
+}
+
+setUserReveal((id) => {
+  const transcript = document.getElementById('transcript');
+  if (transcript) {
+    ensureUserPainted(transcript, id);
+  }
+});
+
+function ensureUserPainted(transcript: HTMLElement, userId: string): void {
+  const escape = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(userId) : userId.replace(/"/g, '\\"');
+  if (transcript.querySelector(`[data-user-id="${escape}"]`)) {
+    return;
+  }
+  const grouped = groupTurns(ui.state.messages);
+  const index = grouped.findIndex((turn) => turn.user?.id === userId);
+  if (index < 0) {
+    return;
+  }
+  cancelHistoryPaint();
+  clearTurns(transcript);
+  paintTurnRange(transcript, grouped, index, grouped.length);
 }
 
 function clearTurns(transcript: HTMLElement): void {
@@ -1387,6 +1412,7 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
     { passive: true },
   );
   node.addEventListener('wheel', noteHold, { passive: true });
+  bindComposerScroll(node);
   node.addEventListener(
     'keydown',
     (event) => {
@@ -1407,6 +1433,11 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
   node.addEventListener(
     'scroll',
     () => {
+      syncUserRail();
+      const composer = document.getElementById('composer-wrap');
+      if (composer) {
+        syncComposerClearance(node, composer);
+      }
       if (scrollState.pinLock) {
         return;
       }
@@ -1451,6 +1482,49 @@ function bindTranscriptScroll(el?: HTMLElement | null): void {
     { passive: true },
   );
   watchTranscriptSize(node);
+}
+
+function bindComposerScroll(transcript: HTMLElement): void {
+  const composer = document.getElementById('composer-wrap');
+  if (!isDesktop() || !composer) {
+    return;
+  }
+  const sync = () => syncComposerClearance(transcript, composer);
+  sync();
+  if (composer.dataset.scrollBound === '1') {
+    return;
+  }
+  composer.dataset.scrollBound = '1';
+  const observer = new ResizeObserver(sync);
+  observer.observe(composer);
+  composer.addEventListener(
+    'wheel',
+    (event) => {
+      const text = event.target instanceof Element ? event.target.closest('textarea') : null;
+      if (text instanceof HTMLTextAreaElement && text.scrollHeight > text.clientHeight + 1) {
+        const atTop = text.scrollTop <= 0 && event.deltaY < 0;
+        const atEnd = text.scrollTop + text.clientHeight >= text.scrollHeight - 1 && event.deltaY > 0;
+        if (!atTop && !atEnd) {
+          return;
+        }
+      }
+      transcript.scrollTop += event.deltaY;
+    },
+    { passive: true },
+  );
+}
+
+function syncComposerClearance(transcript: HTMLElement, composer: HTMLElement): void {
+  const card = document.getElementById('composer-card') ?? composer;
+  const view = transcript.getBoundingClientRect();
+  const box = card.getBoundingClientRect();
+  const overlap = Math.max(0, view.bottom - box.top);
+  const clearance = Math.ceil(overlap + 16);
+  if (transcript.dataset.clearance === String(clearance)) {
+    return;
+  }
+  transcript.dataset.clearance = String(clearance);
+  transcript.style.paddingBottom = `${clearance}px`;
 }
 
 function watchTranscriptSize(node: HTMLElement): void {
@@ -1594,6 +1668,7 @@ function syncUserBubble(node: HTMLElement, user: ChatMessage | undefined): void 
 function userBubble(message: ChatMessage): HTMLElement {
   const el = document.createElement('article');
   el.className = 'msg user';
+  el.dataset.userId = message.id;
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   const editing = ui.editingUserId === message.id;

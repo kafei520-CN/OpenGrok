@@ -3819,7 +3819,7 @@ html.opengrok #app[data-surface='glass'] .transcript,
 html.opengrok #app[data-surface='glass'] .home,
 html.opengrok #app[data-surface='solid'] .transcript,
 html.opengrok #app[data-surface='solid'] .home {
-  padding-bottom: 168px;
+  padding-bottom: 240px;
 }
 
 html.opengrok #app.ws-on[data-surface='glass'] #composer-wrap,

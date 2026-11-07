@@ -595,6 +595,151 @@ textarea:focus-visible {
   margin: 10px 0 4px;
 }
 
+.user-rail {
+  position: absolute;
+  top: 50%;
+  height: min(220px, 42%);
+  transform: translateY(-50%);
+  z-index: 6;
+  width: 28px;
+  pointer-events: auto;
+}
+
+.user-rail[data-side='end'] {
+  right: 10px;
+}
+
+.user-rail[data-side='start'] {
+  left: 10px;
+}
+
+.user-rail-tick,
+.user-rail-pop {
+  pointer-events: auto;
+}
+
+.user-rail-knob {
+  position: absolute;
+  right: 0;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--ice);
+  transform: translateY(-50%);
+  transition: top 220ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.user-rail[data-side='start'] .user-rail-knob {
+  right: auto;
+  left: 0;
+}
+
+.user-rail-tick {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.user-rail-tick i,
+.user-rail-row i {
+  width: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 28%, transparent);
+}
+
+.user-rail-row.on i {
+  width: 18px;
+  height: 3px;
+  background: var(--ice);
+}
+
+.user-rail-pop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: none;
+  flex-direction: column;
+  width: min(280px, 72vw);
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--elev);
+  color: var(--muted);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+}
+
+.user-rail.open .user-rail-pop {
+  display: flex;
+}
+
+.user-rail[data-side='end'] .user-rail-pop {
+  right: calc(100% - 8px);
+}
+
+.user-rail[data-side='start'] .user-rail-pop {
+  left: calc(100% - 8px);
+}
+
+.user-rail-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: end;
+  cursor: pointer;
+}
+
+.user-rail-row span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-rail-row i {
+  flex: 0 0 auto;
+}
+
+.user-rail[data-side='start'] .user-rail-tick {
+  justify-content: flex-start;
+}
+
+.user-rail-row.on {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.user-rail-row:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
 .turn {
   display: flex;
   flex-direction: column;
