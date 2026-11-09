@@ -37,7 +37,7 @@ export const ui = {
   sessionsMode: readSessionsMode(vscode.getState()),
   draft: '',
   editingGoal: false,
-  menu: undefined as 'slash' | 'files' | undefined,
+  menu: undefined as 'slash' | 'files' | 'skills' | undefined,
   picker: undefined as 'mode' | 'model' | 'effort' | undefined,
   composerFocused: false,
   moreOpen: false,

@@ -806,6 +806,7 @@ export type WebviewToHost =
   | { type: 'rewindTo'; index: number }
   | { type: 'rewindTurn'; messageId: string }
   | { type: 'searchFiles'; query: string }
+  | { type: 'refreshSkills' }
   | { type: 'pickFile'; path: string }
   | { type: 'copyLast' }
   | { type: 'copyText'; text: string }

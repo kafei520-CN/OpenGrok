@@ -578,13 +578,14 @@ export class GrokAgent {
     });
   }
 
-  async rewindTo(index: number): Promise<void> {
+  async rewindTo(index: number, opts?: { force?: boolean }): Promise<void> {
     if (!this.sessionId) {
       return;
     }
     await this.extMethod(EXT.rewindExecute, {
       sessionId: this.sessionId,
       targetPromptIndex: index,
+      ...(opts?.force ? { force: true } : {}),
     });
   }
 

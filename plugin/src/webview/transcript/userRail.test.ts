@@ -21,25 +21,32 @@ describe('user message rail', () => {
       ]),
       [
         { id: 'u1', label: '请使用 Python-pptx 脚本生成' },
+        { id: 'u2', label: '…' },
         { id: 'u3', label: '图片.png' },
       ],
     );
   });
 
-  it('maps the top of the transcript to the first mark and the bottom to the last', () => {
-    assert.equal(activeRailIndex(3, 0, 900), 0);
-    assert.equal(activeRailIndex(3, 450, 900), 1);
-    assert.equal(activeRailIndex(3, 900, 900), 2);
-    assert.equal(activeRailIndex(0, 0, 0), -1);
+  it('keeps the current tick until the next conversation is entered', () => {
+    const tops = [0, 100, 800];
+    assert.equal(activeRailIndex(tops, 0, 900), 0);
+    assert.equal(activeRailIndex(tops, 99, 900), 0);
+    assert.equal(activeRailIndex(tops, 100, 900), 1);
+    assert.equal(activeRailIndex(tops, 799, 900), 1);
+    assert.equal(activeRailIndex(tops, 900, 900), 2);
+    assert.equal(activeRailIndex([0, 50, 100, 900], 200, 900), 2);
+    assert.equal(activeRailIndex([], 0, 0), -1);
     assert.equal(scrollReach(864, 264, 180), 780);
-    assert.equal(activeRailIndex(10, 780, 780), 9);
+    assert.equal(activeRailIndex([0, 80, 160, 240, 320, 400, 480, 560, 640, 780], 780, 780), 9);
   });
 
   it('maps a painted tail onto that tail, not the unpainted prefix', () => {
-    assert.deepEqual(paintedMarkSpan([-1, -1, 0, 400, 900]), { from: 2, to: 5 });
-    assert.equal(activeRailIndex(5, 0, 900, 2, 5), 2);
-    assert.equal(activeRailIndex(5, 900, 900, 2, 5), 4);
-    assert.equal(activeRailIndex(5, 450, 900, 2, 5), 3);
+    const tops = [-1, -1, 0, 400, 900];
+    assert.deepEqual(paintedMarkSpan(tops), { from: 2, to: 5 });
+    assert.equal(activeRailIndex(tops, 0, 900), 2);
+    assert.equal(activeRailIndex(tops, 200, 900), 2);
+    assert.equal(activeRailIndex(tops, 400, 900), 3);
+    assert.equal(activeRailIndex(tops, 900, 900), 4);
   });
 
   it('continues the next segment from the middle of this one', () => {
@@ -54,9 +61,10 @@ describe('user message rail', () => {
     assert.equal(railSegment(23, 22, 13).end - railSegment(23, 22, 13).start, 10);
   });
 
-  it('puts the first dash on the top edge and the last dash on the bottom edge', () => {
+  it('keeps an even gap between dashes', () => {
     assert.equal(evenTickCenter(0, 10, 100), 0);
     assert.equal(evenTickCenter(9, 10, 100), 100);
+    assert.equal(evenTickCenter(1, 10, 90), 10);
     assert.equal(evenTickCenter(0, 1, 100), 0);
   });
 

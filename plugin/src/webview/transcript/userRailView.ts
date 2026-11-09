@@ -2,7 +2,6 @@ import { ui } from '../app';
 import {
   activeRailIndex,
   evenTickCenter,
-  paintedMarkSpan,
   railEdge,
   railSegment,
   scrollReach,
@@ -42,15 +41,14 @@ export function syncUserRail(): void {
   }
   const rail = ensureRail(body);
   const tops = marks.map((mark) => userTop(transcript, mark.id));
-  const span = paintedMarkSpan(tops);
   const reach = scrollReach(
     Math.max(0, transcript.scrollHeight - transcript.clientHeight),
     Number.parseFloat(transcript.style.paddingBottom) || 0,
     composerOverlap(transcript),
   );
-  const active = Math.max(0, activeRailIndex(marks.length, transcript.scrollTop, reach, span.from, span.to));
+  const active = activeRailIndex(tops, transcript.scrollTop, reach);
   const previous = rail.dataset.segmentStart === undefined ? undefined : Number(rail.dataset.segmentStart);
-  const segment = railSegment(marks.length, active, previous);
+  const segment = railSegment(marks.length, Math.max(0, active), previous);
   rail.dataset.segmentStart = String(segment.start);
   const shown = marks.slice(segment.start, segment.end).map((mark, index) => ({ mark, index }));
   const rowSig = marks.map((mark) => `${mark.id}\t${mark.label}`).join('\n');
@@ -68,7 +66,7 @@ export function syncUserRail(): void {
     paintTicks(rail, shown);
   }
   sizeRows(rail);
-  markActive(rail, marks[active]?.id);
+  markActive(rail, active >= 0 ? marks[active]?.id : undefined);
   placeTicks(rail);
 }
 
@@ -209,15 +207,16 @@ function sizeRows(rail: HTMLElement): void {
 }
 
 function placeTicks(rail: HTMLElement): void {
-  const ticks = rail.querySelectorAll<HTMLElement>('.user-rail-tick');
+  const ticks = [...rail.querySelectorAll<HTMLElement>('.user-rail-tick')];
   const height = rail.clientHeight;
   ticks.forEach((tick, index) => {
     tick.hidden = false;
     tick.style.top = `${evenTickCenter(index, ticks.length, height)}px`;
   });
   const active = rail.querySelector<HTMLElement>('.user-rail-tick.on');
-  const index = active ? Math.max(0, [...ticks].indexOf(active)) : 0;
+  const index = active ? Math.max(0, ticks.indexOf(active)) : 0;
   const knob = ensureKnob(rail);
+  knob.hidden = false;
   knob.style.top = `${evenTickCenter(index, ticks.length, height)}px`;
 }
 

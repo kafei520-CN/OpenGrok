@@ -209,6 +209,9 @@ async function dispatchUiCore(controller: GrokController, message: WebviewToHost
     case 'searchFiles':
       await controller.searchFiles(message.query);
       return;
+    case 'refreshSkills':
+      void controller.refreshSkillCatalog();
+      return;
     case 'pickFile':
       controller.pickFile(message.path);
       return;

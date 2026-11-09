@@ -15,11 +15,7 @@ export function userRailMarks(messages: RailMessage[]): RailMark[] {
     if (message.role !== 'user') {
       continue;
     }
-    const label = railLabel(message);
-    if (!label) {
-      continue;
-    }
-    marks.push({ id: message.id, label });
+    marks.push({ id: message.id, label: railLabel(message) || '…' });
   }
   return marks;
 }
@@ -71,15 +67,6 @@ export function railSegment(
   return { start, end: start + page };
 }
 
-/** First mark on the top edge, last mark on the bottom edge. */
-export function evenTickCenter(index: number, count: number, height: number): number {
-  if (count <= 1 || height <= 0) {
-    return 0;
-  }
-  const slot = Math.min(Math.max(index, 0), count - 1);
-  return (slot / (count - 1)) * height;
-}
-
 /** Inclusive painted range. A missing mark is negative, not offset 0. */
 export function paintedMarkSpan(tops: number[]): { from: number; to: number } {
   let from = -1;
@@ -108,35 +95,49 @@ export function scrollReach(maxScroll: number, padding: number, overlap: number)
   return Math.max(0, maxScroll - extra);
 }
 
+/** Even slots. The gap does not follow message height. */
+export function evenTickCenter(index: number, count: number, height: number): number {
+  if (count <= 1 || height <= 0) {
+    return 0;
+  }
+  const slot = Math.min(Math.max(index, 0), count - 1);
+  return (slot / (count - 1)) * height;
+}
+
 /**
- * Top of the scroll range is the first painted mark.
- * Bottom of the scroll range is the last painted mark.
- * Message offsets are not the scale: one edge never meets both ends.
+ * Stay on this conversation until the next one's top reaches the viewport.
+ * Scroll percentage does not move the highlight early.
+ * The top of the scroll range is the first painted mark. The bottom is the last.
  */
 export function activeRailIndex(
-  count: number,
+  tops: number[],
   scrollTop: number,
   maxScroll = Number.POSITIVE_INFINITY,
-  from = 0,
-  to = count,
 ): number {
-  if (count <= 0 || to <= from) {
+  const painted = tops
+    .map((top, index) => ({ index, top }))
+    .filter((item) => item.top >= 0);
+  if (!painted.length) {
     return -1;
   }
-  const end = Math.min(count, to) - 1;
-  const start = Math.max(0, Math.min(from, end));
-  if (start === end) {
-    return start;
+  const first = painted[0];
+  const last = painted[painted.length - 1];
+  if (painted.length === 1 || scrollTop <= 1) {
+    return first.index;
   }
   const reach = Number.isFinite(maxScroll) ? Math.max(0, maxScroll) : 0;
-  if (scrollTop <= 1 || reach <= 1) {
-    return start;
+  if (reach > 1 && scrollTop >= reach - 1) {
+    return last.index;
   }
-  if (scrollTop >= reach - 1) {
-    return end;
+  let current = first.index;
+  for (const item of painted) {
+    if (item.top <= scrollTop) {
+      current = item.index;
+    } else {
+      break;
+    }
   }
-  const t = scrollTop / reach;
-  return start + Math.round(t * (end - start));
+  return current;
 }
 
 /**

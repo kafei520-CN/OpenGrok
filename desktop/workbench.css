@@ -4116,6 +4116,28 @@ html.opengrok #grok-floats .og-account-menu {
   overflow: visible;
 }
 
+html.opengrok #grok-floats .menu.skill-menu.pin,
+html.opengrok #grok-floats[data-surface='glass'] .menu.skill-menu.pin,
+html.opengrok #grok-floats[data-surface='solid'] .menu.skill-menu.pin {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+html.opengrok #grok-floats .menu.skill-menu.pin::-webkit-scrollbar {
+  width: 8px;
+}
+
+html.opengrok #grok-floats .menu.skill-menu.pin::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--fg) 32%, transparent);
+  border-radius: 8px;
+}
+
+html.opengrok #grok-floats .menu.skill-menu.pin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 html.opengrok #og-settings.wp-editor,
 html.opengrok #app[data-surface='solid'] #og-settings.wp-editor {
   position: relative;

@@ -3,6 +3,7 @@ import { looksLikeFilePath } from '../../edits/edits';
 import { effortLabel, modelDisplayName } from '../../core/i18n';
 import { lerpInt, liveEditSummary, type LiveEditSummary } from '../../edits/liveEdits';
 import { FALLBACK_COMMANDS, filterCommands } from '../../chat/prompt/slash';
+import { filterSkills, insertSkillToken, type SkillHit } from '../../chat/prompt/skillRef';
 import type { Attachment, ChatState, ModelOption } from '../../core/types';
 import { jumpBottomKind } from './scroll';
 import { canSend, canType, isBooting, isDesktop, isRemoteWeb, loc, post, render, tr, turnBusy, ui } from '../app';
@@ -67,6 +68,9 @@ let menuKey = '';
 let pendingEffortModel: string | undefined;
 let pendingBarWheel: HTMLElement | undefined;
 let fileSearchTimer: ReturnType<typeof setTimeout> | undefined;
+let skillRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+let skillIndex = 0;
+let skillQuery = '';
 
 export function patchComposer(): void {
   if (!document.getElementById('composer-wrap')) {
@@ -100,7 +104,8 @@ export function patchComposer(): void {
     ui.menu = undefined;
   }
   const menuSlot = document.getElementById('composer-menu-slot');
-  const nextMenuKey = `${ui.menu ?? ''}:${ui.draft}:${(ui.state.fileHits ?? []).length}:${slashCommandsEnabled() ? '1' : '0'}`;
+  const skillKey = (ui.state.skills ?? []).map((row) => `${row.name}:${row.enabled ? 1 : 0}`).join(',');
+  const nextMenuKey = `${ui.menu ?? ''}:${ui.draft}:${(ui.state.fileHits ?? []).length}:${slashCommandsEnabled() ? '1' : '0'}:${skillKey}:${skillIndex}`;
   if (menuSlot && nextMenuKey !== menuKey) {
     menuKey = nextMenuKey;
     menuSlot.replaceChildren();
@@ -109,6 +114,10 @@ export function patchComposer(): void {
       pinComposerMenu(slashMenu(), input);
     } else if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'files') {
       pinComposerMenu(fileMenu(), input);
+    } else if (!isBooting() && !ui.state.settingsOpen && ui.menu === 'skills') {
+      const menu = skillMenu();
+      pinComposerMenu(menu, input);
+      revealMenuItem(menu);
     }
   }
   const card = document.getElementById('composer-card');
@@ -194,8 +203,20 @@ function bindComposerInput(input: HTMLTextAreaElement): void {
       }
       fileSearchTimer = setTimeout(() => post({ type: 'searchFiles', query }), 160);
       render();
+    } else if (last.startsWith('#')) {
+      const query = last.slice(1);
+      if (query !== skillQuery) {
+        skillQuery = query;
+        skillIndex = 0;
+      }
+      ui.menu = 'skills';
+      ui.picker = undefined;
+      requestSkills();
+      render();
     } else if (ui.menu) {
       ui.menu = undefined;
+      skillQuery = '';
+      skillIndex = 0;
       render();
     }
   });
@@ -223,6 +244,20 @@ function bindComposerInput(input: HTMLTextAreaElement): void {
         render();
       }
       return;
+    }
+    if (ui.menu === 'skills' && !event.isComposing && event.keyCode !== 229) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveSkill(event.key === 'ArrowDown' ? 1 : -1);
+        return;
+      }
+      if ((event.key === 'Enter' && !event.shiftKey && !event.altKey) || event.key === 'Tab') {
+        if (skillHits().length) {
+          event.preventDefault();
+          acceptSkill();
+          return;
+        }
+      }
     }
     const sendKey = ui.state.multiline
       ? event.key === 'Enter' && (event.shiftKey || event.altKey)
@@ -757,6 +792,102 @@ function pinComposerMenu(el: HTMLElement, input: HTMLElement): void {
 
 function slashCommandsEnabled(): boolean {
   return Boolean(ui.state.settings?.useTerminal);
+}
+
+function requestSkills(): void {
+  if (skillRefreshTimer) {
+    return;
+  }
+  skillRefreshTimer = setTimeout(() => {
+    skillRefreshTimer = undefined;
+    post({ type: 'refreshSkills' });
+  }, 160);
+}
+
+function skillHits(): SkillHit[] {
+  const last = (ui.draft.split(/\s+/).pop() ?? '').replace(/^#/, '');
+  return filterSkills(ui.state.skills ?? [], last);
+}
+
+function moveSkill(delta: number): void {
+  const hits = skillHits();
+  if (!hits.length) {
+    return;
+  }
+  skillIndex = (skillIndex + delta + hits.length) % hits.length;
+  render();
+}
+
+function acceptSkill(token?: string): void {
+  const picked = token ?? skillHits()[skillIndex]?.token;
+  if (!picked) {
+    return;
+  }
+  ui.draft = insertSkillToken(ui.draft, picked);
+  ui.menu = undefined;
+  skillIndex = 0;
+  skillQuery = '';
+  ui.wantFocus = true;
+  render();
+}
+
+function skillMenu(): HTMLElement {
+  const hits = skillHits();
+  if (skillIndex >= hits.length) {
+    skillIndex = 0;
+  }
+  const el = document.createElement('div');
+  el.className = 'menu composer-suggest skill-menu';
+  el.addEventListener('click', (event) => event.stopPropagation());
+  el.addEventListener(
+    'wheel',
+    (event) => {
+      event.stopPropagation();
+    },
+    { passive: true },
+  );
+  if (!hits.length) {
+    const empty = document.createElement('div');
+    empty.className = 'menu-item';
+    empty.textContent = (ui.state.skills ?? []).some((row) => row.enabled) ? tr('skillMenuNone') : tr('skillMenuEmpty');
+    el.append(empty);
+    return el;
+  }
+  hits.forEach((skill, index) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = index === skillIndex ? 'menu-item on' : 'menu-item';
+    item.setAttribute('aria-selected', index === skillIndex ? 'true' : 'false');
+    const detail = skill.description || skillScopeLabel(skill.scope);
+    item.innerHTML = `<code>#${escapeHtml(skill.token)}</code> <span>${escapeHtml(detail)}</span>`;
+    item.addEventListener('click', () => acceptSkill(skill.token));
+    el.append(item);
+  });
+  return el;
+}
+
+function skillScopeLabel(scope: string | undefined): string {
+  if (scope === 'project') {
+    return tr('skillScopeProject');
+  }
+  if (scope === 'bundled') {
+    return tr('skillScopeBundled');
+  }
+  return tr('skillScopeGlobal');
+}
+
+function revealMenuItem(menu: HTMLElement): void {
+  const on = menu.querySelector('.menu-item.on');
+  if (!(on instanceof HTMLElement)) {
+    return;
+  }
+  const top = on.offsetTop;
+  const bottom = top + on.offsetHeight;
+  if (top < menu.scrollTop) {
+    menu.scrollTop = top;
+  } else if (bottom > menu.scrollTop + menu.clientHeight) {
+    menu.scrollTop = bottom - menu.clientHeight;
+  }
 }
 
 function slashMenu(): HTMLElement {

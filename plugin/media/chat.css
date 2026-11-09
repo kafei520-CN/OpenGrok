@@ -606,11 +606,29 @@ textarea:focus-visible {
 }
 
 .user-rail[data-side='end'] {
-  right: 10px;
+  /* Sit on the window edge. The scrollbar is behind this column. */
+  right: 4px;
 }
 
 .user-rail[data-side='start'] {
-  left: 10px;
+  left: 4px;
+}
+
+.user-rail[data-side='end']::before,
+.user-rail[data-side='start']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+}
+
+.user-rail[data-side='end']::before {
+  right: 100%;
+}
+
+.user-rail[data-side='start']::before {
+  left: 100%;
 }
 
 .user-rail-tick,
@@ -683,6 +701,7 @@ textarea:focus-visible {
   background: var(--elev);
   color: var(--muted);
   box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+  z-index: 3;
 }
 
 .user-rail.open .user-rail-pop {
@@ -690,11 +709,11 @@ textarea:focus-visible {
 }
 
 .user-rail[data-side='end'] .user-rail-pop {
-  right: calc(100% - 8px);
+  right: calc(100% + 12px);
 }
 
 .user-rail[data-side='start'] .user-rail-pop {
-  left: calc(100% - 8px);
+  left: calc(100% + 12px);
 }
 
 .user-rail-row {
@@ -3436,6 +3455,7 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
+.menu-item.on,
 .menu-item:hover {
   background: var(--hover);
 }
