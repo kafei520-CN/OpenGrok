@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import * as path from 'node:path';
 
 const minify = process.argv.includes('--minify');
@@ -81,7 +81,42 @@ if (watch) {
   process.stdout.write('watching\n');
   await new Promise(() => {});
 } else {
-  await Promise.all(jobs.map((job) => esbuild.build(job)));
+  await Promise.all(jobs.map((job) => buildPublished(job)));
+}
+
+/** Write beside the live bundle, then swap. A reader never sees a half-written file. */
+async function buildPublished(job) {
+  if (!job.outfile) {
+    await esbuild.build(job);
+    return;
+  }
+  const outfile = job.outfile;
+  const tmp = `${outfile}.building`;
+  rmSync(tmp, { force: true });
+  rmSync(`${tmp}.map`, { force: true });
+  await esbuild.build({ ...job, outfile: tmp });
+  publishFile(tmp, outfile);
+  publishFile(`${tmp}.map`, `${outfile}.map`);
+}
+
+function publishFile(from, to) {
+  if (!existsSync(from)) {
+    return;
+  }
+  const bak = `${to}.bak`;
+  rmSync(bak, { force: true });
+  if (existsSync(to)) {
+    renameSync(to, bak);
+  }
+  try {
+    renameSync(from, to);
+  } catch (error) {
+    if (!existsSync(to) && existsSync(bak)) {
+      renameSync(bak, to);
+    }
+    throw error;
+  }
+  rmSync(bak, { force: true });
 }
 
 function copyXterm() {

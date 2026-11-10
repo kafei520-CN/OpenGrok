@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import { describe, it } from 'node:test';
-import { GrokController, messagesBeforePrompt, rewindIndexFor } from './controller';
+import { GrokController, editRewindIndex, messagesBeforePrompt, rewindIndexFor } from './controller';
 import type { GrokAgent } from '../agent/agent';
 import { cancelledPermission } from '../core/permissions';
 import { bindPlatform, type Platform } from '../core/platform';
@@ -349,5 +349,52 @@ describe('rewindIndexFor', () => {
     ];
     assert.equal(rewindIndexFor(withNote, 'a2'), 1);
     assert.equal(messagesBeforePrompt(withNote, 1), 3);
+  });
+
+  it('does not drop the previous visible turn when a hidden prompt advanced the index', () => {
+    const hidden = [
+      { id: 'u1', role: 'user', promptIndex: 0 },
+      { id: 'a1', role: 'assistant' },
+      { id: 'u2', role: 'user', promptIndex: 2 },
+      { id: 'a2', role: 'assistant' },
+      { id: 'u3', role: 'user', promptIndex: 4 },
+      { id: 'a3', role: 'assistant' },
+    ];
+    assert.equal(rewindIndexFor(hidden, 'a1'), 2);
+    assert.equal(rewindIndexFor(hidden, 'a2'), 4);
+    assert.equal(rewindIndexFor(hidden, 'a3'), 4);
+    assert.equal(messagesBeforePrompt(hidden, 2), 2);
+    assert.equal(messagesBeforePrompt(hidden, 4), 4);
+  });
+});
+
+describe('editRewindIndex', () => {
+  const messages = [
+    { role: 'user', text: '预览网格有问题' },
+    { role: 'assistant', text: '看预览' },
+    { role: 'user', text: '这个问题存在吗' },
+    { role: 'assistant', text: '地图扫描报错' },
+    { role: 'user', text: '修复这个问题' },
+  ];
+  const points = [
+    { index: 0, preview: '预览网格有问题' },
+    { index: 1, preview: 'Background task abc completed' },
+    { index: 2, preview: '这个问题存在吗' },
+    { index: 3, preview: '修复这个问题' },
+  ];
+
+  it('keeps the error turn when a hidden prompt sits between user messages', () => {
+    assert.equal(editRewindIndex(messages, 4, points), 3);
+    assert.equal(editRewindIndex(messages, 4), 2);
+  });
+
+  it('uses the prompt index stamped on that user message', () => {
+    assert.equal(editRewindIndex([{ role: 'user', text: '修复这个问题', promptIndex: 7 }], 0), 7);
+  });
+
+  it('matches a truncated rewind preview', () => {
+    const text = '截图说的是跨进新区块时，地图会一口气把刚加载的区块都扫掉，画面顿一下。';
+    const preview = `${text.slice(0, 57)}...`;
+    assert.equal(editRewindIndex([{ role: 'user', text }], 0, [{ index: 5, preview }]), 5);
   });
 });

@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { plat } from '../../core/platform';
 import type { ChatMessage } from '../../core/types';
+import { stripDeprecatedText } from '../deprecatedTurn';
 
 export const WRAP_UP_RULE_FILE = 'opengrok-wrap-up.md';
 export const BROWSER_RULE_FILE = 'opengrok-browser.md';
@@ -91,6 +92,7 @@ const HIDDEN_RULE_MARKS = [WRAP_UP_MARK, '# OpenGrok browser'];
 
 /** CLI may have glued a builtin rule onto a user turn. Cut it before display. */
 export function stripWrapUpText(text: string): string {
+  text = stripDeprecatedText(text);
   let cut = text.length;
   for (const mark of HIDDEN_RULE_MARKS) {
     const idx = text.indexOf(mark);

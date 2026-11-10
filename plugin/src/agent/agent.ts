@@ -569,11 +569,7 @@ export class GrokAgent {
             : typeof obj['index'] === 'number'
               ? obj['index']
               : i,
-        preview:
-          asString(obj['preview']) ??
-          asString(obj['text']) ??
-          asString(obj['prompt']) ??
-          `Turn ${i + 1}`,
+        preview: rewindPointPreview(obj) ?? `Turn ${i + 1}`,
       };
     });
   }
@@ -688,6 +684,54 @@ export class GrokAgent {
   }
 }
 
+function contentChunkMeta(content: unknown): Record<string, unknown> {
+  const blocks = Array.isArray(content) ? content : content ? [content] : [];
+  for (const block of blocks) {
+    const meta = asObject(asObject(block)['_meta'] ?? asObject(block)['meta']);
+    if (hasTurnMeta(meta)) {
+      return meta;
+    }
+  }
+  return {};
+}
+
+/** ACP flattens `ContentChunk` into the session update, so `promptIndex` sits on `update._meta`. */
+function turnChunkMeta(update: Record<string, unknown>): Record<string, unknown> {
+  const updateMeta = asObject(update['_meta'] ?? update['meta']);
+  if (hasTurnMeta(updateMeta)) {
+    return updateMeta;
+  }
+  return contentChunkMeta(update['content']);
+}
+
+function hasTurnMeta(meta: Record<string, unknown>): boolean {
+  return (
+    meta['promptIndex'] !== undefined ||
+    meta['prompt_index'] !== undefined ||
+    meta['hideFromScrollback'] === true ||
+    meta['hide_from_scrollback'] === true
+  );
+}
+
+function metaPromptIndex(meta: Record<string, unknown>): number | undefined {
+  return asNum(meta['promptIndex']) ?? asNum(meta['prompt_index']);
+}
+
+function metaHidden(meta: Record<string, unknown>): boolean {
+  return meta['hideFromScrollback'] === true || meta['hide_from_scrollback'] === true;
+}
+
+export function rewindPointPreview(item: unknown): string | undefined {
+  const obj = asObject(item);
+  return (
+    asString(obj['prompt_preview']) ??
+    asString(obj['promptPreview']) ??
+    asString(obj['preview']) ??
+    asString(obj['text']) ??
+    asString(obj['prompt'])
+  );
+}
+
 export function parseSessionUpdate(params: unknown): {
   sessionId?: string;
   isReplay: boolean;
@@ -757,6 +801,8 @@ export function parseSessionUpdate(params: unknown): {
         update['todos'] ??
         asObject(update['plan'])['entries'],
       objective: asString(update['objective']),
+      promptIndex: metaPromptIndex(turnChunkMeta(update)),
+      hideFromScrollback: metaHidden(turnChunkMeta(update)),
     },
   };
 }

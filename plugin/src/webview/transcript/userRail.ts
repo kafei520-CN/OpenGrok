@@ -5,6 +5,7 @@ export type RailMessage = {
   role: string;
   text?: string;
   files?: { label?: string; path?: string }[];
+  deprecated?: boolean;
 };
 
 const LABEL_MAX = 28;
@@ -12,7 +13,7 @@ const LABEL_MAX = 28;
 export function userRailMarks(messages: RailMessage[]): RailMark[] {
   const marks: RailMark[] = [];
   for (const message of messages) {
-    if (message.role !== 'user') {
+    if (message.role !== 'user' || message.deprecated) {
       continue;
     }
     marks.push({ id: message.id, label: railLabel(message) || '…' });

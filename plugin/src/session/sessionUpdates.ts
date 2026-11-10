@@ -188,6 +188,22 @@ function applySteps(
   assistant.steps = next;
 }
 
+function stampUserPrompt(session: SessionView, promptIndex: number | undefined): void {
+  if (promptIndex === undefined) {
+    return;
+  }
+  for (let i = session.messages.length - 1; i >= 0; i -= 1) {
+    const message = session.messages[i];
+    if (message?.role !== 'user') {
+      continue;
+    }
+    if (message.promptIndex === undefined) {
+      message.promptIndex = promptIndex;
+    }
+    return;
+  }
+}
+
 export function applySessionUpdate(session: SessionView, update: SessionUpdate): void {
   const replay = session.replaying;
   const kind = update.sessionUpdate;
@@ -226,7 +242,11 @@ export function applySessionUpdate(session: SessionView, update: SessionUpdate):
     return;
   }
   if (kind === 'user_message_chunk') {
+    if (update.hideFromScrollback) {
+      return;
+    }
     if (!replay) {
+      stampUserPrompt(session, update.promptIndex);
       return;
     }
     const text = textFromContent(update.content);
@@ -247,6 +267,7 @@ export function applySessionUpdate(session: SessionView, update: SessionUpdate):
         createdAt: isoFromMs(update.turnStartMs ?? update.agentTimestampMs) ?? new Date().toISOString(),
       });
     }
+    stampUserPrompt(session, update.promptIndex);
     session.emitUnlessReplaying();
     return;
   }

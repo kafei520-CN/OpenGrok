@@ -393,4 +393,4 @@
   api?.ready();
   setIgnore(true);
 })();
-//# sourceMappingURL=pet.js.map
+//# sourceMappingURL=pet.js.building.map

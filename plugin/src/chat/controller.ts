@@ -91,6 +91,14 @@ import {
   type HostAction,
 } from './prompt/slash';
 import { skillPromptText } from './prompt/skillRef';
+import {
+  applyDeprecated,
+  deprecateClickedTurn,
+  conversationRecall,
+  deprecatedNotice,
+  persistDeprecated,
+  readDeprecated,
+} from './deprecatedTurn';
 import { listSkills } from '../hosts/skills/skillsHost';
 import { browserMcpServersMeta } from '../core/runtime/browserTool';
 import { imageMcpServersMeta } from '../core/runtime/imageTool';
@@ -1016,6 +1024,14 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         return;
       }
       outgoing = skillPromptText(outgoing, this.skills);
+    }
+    if (!opts?.hidden) {
+      const recall = [deprecatedNotice(this.messages), conversationRecall(this.messages)]
+        .filter(Boolean)
+        .join('\n\n');
+      if (recall) {
+        outgoing = `${outgoing}\n\n${recall}`;
+      }
     }
     await this.applySelectedCustomModel(agent, sessionOp);
     if (
@@ -2417,8 +2433,8 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 
   async rewindTurn(messageId: string): Promise<void> {
-    const index = rewindIndexFor(this.messages, messageId);
-    if (index === undefined) {
+    const target = this.messages.find((item) => item.id === messageId);
+    if (!target || target.role !== 'assistant') {
       return;
     }
     if (!(await plat().confirm(tr('rewindConfirm'), tr('rewindAction')))) {
@@ -2427,11 +2443,11 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     if (this.status === 'streaming') {
       this.cancelTurn();
     }
-    try {
-      await this.rewindTo(index);
-    } catch (error) {
-      this.fail('Rewind failed', error);
+    if (!deprecateClickedTurn(this.messages, messageId)) {
+      return;
     }
+    void persistDeprecated(this.currentSessionId, this.messages);
+    this.emit();
   }
 
   async resumePicker(): Promise<void> {
@@ -2571,6 +2587,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       scrubUserMessages(this.messages);
       applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
       applyStoredUserMedia(this.messages, readStoredUserMedia(this.currentSessionId));
+      applyDeprecated(this.messages, readDeprecated(this.currentSessionId));
       applyRestoredTurnModels(this.messages, this.models);
       this.status = 'ready';
       this.error = undefined;
@@ -2598,6 +2615,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
         scrubUserMessages(this.messages);
         applyStoredTurnModels(this.messages, readStoredTurnModels(this.currentSessionId));
         applyStoredUserMedia(this.messages, readStoredUserMedia(this.currentSessionId));
+        applyDeprecated(this.messages, readDeprecated(this.currentSessionId));
         applyRestoredTurnModels(this.messages, this.models);
         void persistTurnModels(this.currentSessionId, this.messages);
         void persistUserMedia(this.currentSessionId, this.messages);
@@ -2691,6 +2709,19 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
     await this.journal.revert(messageId);
   }
 
+  private async editCutIndex(userIdx: number): Promise<number> {
+    const stored = this.messages[userIdx]?.promptIndex;
+    if (typeof stored === 'number') {
+      return stored;
+    }
+    try {
+      const points = await this.agent?.rewindPoints();
+      return editRewindIndex(this.messages, userIdx, points);
+    } catch {
+      return editRewindIndex(this.messages, userIdx);
+    }
+  }
+
   async editUserPrompt(messageId: string, text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -2701,7 +2732,7 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
       return;
     }
     const later = this.messages.slice(userIdx + 1);
-    const promptIndex = this.messages.slice(0, userIdx).filter((item) => item.role === 'user').length;
+    const promptIndex = await this.editCutIndex(userIdx);
     if (this.status === 'streaming') {
       this.cancelTurn();
     }
@@ -4691,8 +4722,91 @@ export class GrokController implements SlashRuntime, SettingsHost, ReverseHost {
   }
 }
 
-/** Messages to keep when `promptIndex` user prompts stay. Notes between turns stay with the earlier prompt. */
-export function messagesBeforePrompt(messages: Array<{ role: string }>, promptIndex: number): number {
+/** CLI cut for replacing the user message at `userIdx`. Keeps every prompt before that turn. */
+export function editRewindIndex(
+  messages: Array<{ role: string; text?: string; promptIndex?: number }>,
+  userIdx: number,
+  points?: Array<{ index: number; preview?: string }>,
+): number {
+  const target = messages[userIdx];
+  if (typeof target?.promptIndex === 'number') {
+    return target.promptIndex;
+  }
+  if (points?.length) {
+    const matched = matchUserPrompt(messages, userIdx, points);
+    if (matched !== undefined) {
+      return matched;
+    }
+  }
+  return messages.slice(0, userIdx).filter((item) => item.role === 'user').length;
+}
+
+function matchUserPrompt(
+  messages: Array<{ role: string; text?: string }>,
+  userIdx: number,
+  points: Array<{ index: number; preview?: string }>,
+): number | undefined {
+  const ordered = [...points].sort((a, b) => a.index - b.index);
+  let cursor = 0;
+  for (let i = 0; i <= userIdx && i < messages.length; i += 1) {
+    const message = messages[i];
+    if (message?.role !== 'user') {
+      continue;
+    }
+    while (cursor < ordered.length && !previewMatches(message.text ?? '', ordered[cursor]?.preview ?? '')) {
+      cursor += 1;
+    }
+    if (cursor >= ordered.length) {
+      return undefined;
+    }
+    if (i === userIdx) {
+      return ordered[cursor]?.index;
+    }
+    cursor += 1;
+  }
+  return undefined;
+}
+
+function previewMatches(text: string, preview: string): boolean {
+  const line = text
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.length > 0);
+  const shown = preview.trim();
+  if (!line || !shown) {
+    return false;
+  }
+  if (shown.endsWith('...')) {
+    return line.startsWith(shown.slice(0, -3));
+  }
+  return line === shown;
+}
+
+/**
+ * Messages to keep when the CLI drops `promptIndex` and everything after it.
+ * A stamped prompt index wins over a visible-bubble count: a hidden prompt
+ * between turns makes those two numbers differ, and counting bubbles cuts early.
+ */
+export function messagesBeforePrompt(
+  messages: Array<{ role: string; promptIndex?: number }>,
+  promptIndex: number,
+): number {
+  const stamped = messages.some(
+    (item) => item.role === 'user' && typeof item.promptIndex === 'number',
+  );
+  if (stamped) {
+    for (let i = 0; i < messages.length; i += 1) {
+      const message = messages[i];
+      if (
+        message?.role === 'user' &&
+        typeof message.promptIndex === 'number' &&
+        message.promptIndex >= promptIndex
+      ) {
+        return i;
+      }
+    }
+    return messages.length;
+  }
   if (promptIndex <= 0) {
     return 0;
   }
@@ -4713,26 +4827,53 @@ export function messagesBeforePrompt(messages: Array<{ role: string }>, promptIn
   return messages.length;
 }
 
-/** Prompt index to keep. Counts user turns, so notes and compact cards do not shift it. */
+/**
+ * CLI prompt index of the first turn to drop.
+ * An earlier assistant keeps its own turn. The latest assistant drops itself.
+ * Hidden prompts advance the CLI index, so the stamp is used instead of the bubble count.
+ */
 export function rewindIndexFor(
-  messages: Array<{ id: string; role: string }>,
+  messages: Array<{ id: string; role: string; promptIndex?: number }>,
   messageId: string,
 ): number | undefined {
   const idx = messages.findIndex((item) => item.id === messageId);
   if (idx < 0 || messages[idx]?.role !== 'assistant') {
     return undefined;
   }
-  let usersBefore = 0;
-  for (let i = 0; i < idx; i += 1) {
-    if (messages[i]?.role === 'user') {
-      usersBefore += 1;
-    }
-  }
   let lastAssistant = -1;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i]?.role === 'assistant') {
       lastAssistant = i;
       break;
+    }
+  }
+  if (lastAssistant === idx) {
+    for (let i = idx - 1; i >= 0; i -= 1) {
+      const message = messages[i];
+      if (message?.role !== 'user') {
+        continue;
+      }
+      if (typeof message.promptIndex === 'number') {
+        return message.promptIndex;
+      }
+      break;
+    }
+  } else {
+    for (let i = idx + 1; i < messages.length; i += 1) {
+      const message = messages[i];
+      if (message?.role !== 'user') {
+        continue;
+      }
+      if (typeof message.promptIndex === 'number') {
+        return message.promptIndex;
+      }
+      break;
+    }
+  }
+  let usersBefore = 0;
+  for (let i = 0; i < idx; i += 1) {
+    if (messages[i]?.role === 'user') {
+      usersBefore += 1;
     }
   }
   if (lastAssistant === idx) {
