@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { StringDecoder } from 'node:string_decoder';
 import type { Writable } from 'node:stream';
 
 type Pending = {
@@ -26,6 +27,11 @@ export class JsonRpcConnection extends EventEmitter {
   private buffer = '';
   /** Drop bytes until the next newline after one line passes `maxBuffer`. */
   private skipping = false;
+  /**
+   * Stdout chunks often end inside a multibyte character. Decoding a chunk on
+   * its own replaces that character with U+FFFD before the JSON line is joined.
+   */
+  private readonly utf8 = new StringDecoder('utf8');
   private readonly pending = new Map<number, Pending>();
   private readonly stdin: Writable;
   private readonly maxBuffer: number;
@@ -45,7 +51,7 @@ export class JsonRpcConnection extends EventEmitter {
     if (this.closed) {
       return;
     }
-    let text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    let text = this.decodeChunk(chunk);
     if (this.skipping) {
       const nl = text.indexOf('\n');
       if (nl < 0) {
@@ -125,6 +131,7 @@ export class JsonRpcConnection extends EventEmitter {
       return;
     }
     this.closed = true;
+    this.utf8.end();
     this.buffer = '';
     for (const [id, pending] of this.pending) {
       if (pending.timer) {
@@ -133,6 +140,14 @@ export class JsonRpcConnection extends EventEmitter {
       pending.reject(error ?? new Error('ACP connection closed'));
       this.pending.delete(id);
     }
+  }
+
+  private decodeChunk(chunk: Buffer | string): string {
+    if (typeof chunk === 'string') {
+      const held = this.utf8.end();
+      return held ? held + chunk : chunk;
+    }
+    return this.utf8.write(chunk);
   }
 
   private write(payload: unknown): void {

@@ -91,4 +91,27 @@ describe('JsonRpcConnection', () => {
     conn.feed(Buffer.from('{"jsonrpc":"2.0","id":2,"result":{"ok":true}}\n'));
     assert.deepEqual(await next, { ok: true });
   });
+
+  it('keeps a chinese character that arrives split across stdout chunks', () => {
+    const stdin = new PassThrough();
+    const line = Buffer.from(
+      '{"jsonrpc":"2.0","id":7,"method":"fs/write_text_file","params":{"path":"a.md","content":"避免跨维度缓存误显示。Mixin 会复制列表"}}\n',
+    );
+    const token = Buffer.from('缓存', 'utf8');
+    const at = line.indexOf(token);
+    assert.ok(at > 0);
+    for (let cut = 1; cut < token.length; cut += 1) {
+      const fresh = new JsonRpcConnection(stdin);
+      const got: string[] = [];
+      fresh.on('request', (_method: string, params: { content?: string }) => {
+        got.push(params.content ?? '');
+      });
+      fresh.feed(line.subarray(0, at + cut));
+      assert.equal(got.length, 0);
+      fresh.feed(line.subarray(at + cut));
+      assert.equal(got.length, 1);
+      assert.equal(got[0].includes('\uFFFD'), false);
+      assert.equal(got[0], '避免跨维度缓存误显示。Mixin 会复制列表');
+    }
+  });
 });
